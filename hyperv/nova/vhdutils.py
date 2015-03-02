@@ -31,7 +31,7 @@ if sys.platform == 'win32':
 
 from xml.etree import ElementTree
 
-from nova.i18n import _
+from hyperv.i18n import _
 from hyperv.nova import constants
 from hyperv.nova import vmutils
 

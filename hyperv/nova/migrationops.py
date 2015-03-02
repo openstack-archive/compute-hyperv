@@ -23,8 +23,8 @@ from oslo_utils import excutils
 from oslo_utils import units
 
 from nova import exception
-from nova.i18n import _, _LE
 from nova.virt import configdrive
+from hyperv.i18n import _, _LE
 from hyperv.nova import imagecache
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmops

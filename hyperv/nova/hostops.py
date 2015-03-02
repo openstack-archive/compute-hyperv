@@ -29,7 +29,7 @@ from oslo_utils import units
 from nova.compute import arch
 from nova.compute import hv_type
 from nova.compute import vm_mode
-from nova.i18n import _
+from hyperv.i18n import _
 from hyperv.nova import constants
 from hyperv.nova import utilsfactory
 

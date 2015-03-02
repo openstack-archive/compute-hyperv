@@ -21,7 +21,8 @@ if sys.platform == 'win32':
 from oslo_log import log as logging
 
 from nova import exception
-from nova.i18n import _, _LE
+
+from hyperv.i18n import _, _LE
 from hyperv.nova import vmutils
 from hyperv.nova import vmutilsv2
 from hyperv.nova import volumeutilsv2

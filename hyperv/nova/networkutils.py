@@ -23,7 +23,7 @@ import uuid
 if sys.platform == 'win32':
     import wmi
 
-from nova.i18n import _
+from hyperv.i18n import _
 from hyperv.nova import vmutils
 
 

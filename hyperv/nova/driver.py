@@ -21,8 +21,8 @@ import platform
 
 from oslo_log import log as logging
 
-from nova.i18n import _
 from nova.virt import driver
+from hyperv.i18n import _
 from hyperv.nova import hostops
 from hyperv.nova import livemigrationops
 from hyperv.nova import migrationops

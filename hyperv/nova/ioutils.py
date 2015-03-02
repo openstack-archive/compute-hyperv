@@ -19,7 +19,7 @@ import os
 from eventlet import patcher
 from oslo_log import log as logging
 
-from nova.i18n import _LE
+from hyperv.i18n import _LE
 
 LOG = logging.getLogger(__name__)
 

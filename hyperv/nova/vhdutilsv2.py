@@ -28,7 +28,7 @@ from xml.etree import ElementTree
 
 from oslo_utils import units
 
-from nova.i18n import _
+from hyperv.i18n import _
 from hyperv.nova import constants
 from hyperv.nova import vhdutils
 from hyperv.nova import vmutils

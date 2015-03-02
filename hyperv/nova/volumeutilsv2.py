@@ -27,7 +27,7 @@ if sys.platform == 'win32':
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from nova.i18n import _
+from hyperv.i18n import _
 from nova import utils
 from hyperv.nova import basevolumeutils
 from hyperv.nova import vmutils

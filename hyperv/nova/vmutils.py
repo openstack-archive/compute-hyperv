@@ -29,7 +29,7 @@ from oslo_config import cfg
 from oslo_log import log as logging
 
 from nova import exception
-from nova.i18n import _, _LW
+from hyperv.i18n import _, _LW
 from hyperv.nova import constants
 from hyperv.nova import hostutils
 

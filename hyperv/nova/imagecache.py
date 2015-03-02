@@ -22,7 +22,7 @@ from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
 
-from nova.i18n import _
+from hyperv.i18n import _
 from nova import utils
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmutils

@@ -32,12 +32,12 @@ from oslo_utils import uuidutils
 
 from nova.api.metadata import base as instance_metadata
 from nova import exception
-from nova.i18n import _, _LI, _LE, _LW
 from nova.openstack.common import fileutils
 from nova.openstack.common import loopingcall
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import hardware
+from hyperv.i18n import _, _LI, _LE, _LW
 from hyperv.nova import constants
 from hyperv.nova import imagecache
 from hyperv.nova import ioutils

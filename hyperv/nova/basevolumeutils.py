@@ -31,8 +31,9 @@ if sys.platform == 'win32':
 from oslo_log import log as logging
 
 from nova import block_device
-from nova.i18n import _LI
 from nova.virt import driver
+
+from hyperv.i18n import _LI
 
 LOG = logging.getLogger(__name__)
 

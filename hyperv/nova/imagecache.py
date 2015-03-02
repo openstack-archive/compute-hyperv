@@ -24,8 +24,8 @@ from oslo_utils import units
 
 from nova.i18n import _
 from nova import utils
-from nova.virt.hyperv import utilsfactory
-from nova.virt.hyperv import vmutils
+from hyperv.nova import utilsfactory
+from hyperv.nova import vmutils
 from nova.virt import images
 
 LOG = logging.getLogger(__name__)

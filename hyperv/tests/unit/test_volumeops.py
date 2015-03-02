@@ -20,11 +20,11 @@ import os
 import mock
 
 from nova import exception
-from nova.tests.unit.virt.hyperv import db_fakes
-from nova.tests.unit.virt.hyperv import test_base
-from nova.virt.hyperv import pathutils
-from nova.virt.hyperv import vmutils
-from nova.virt.hyperv import volumeops
+from hyperv.nova import pathutils
+from hyperv.nova import vmutils
+from hyperv.nova import volumeops
+from hyperv.tests.unit import db_fakes
+from hyperv.tests.unit import test_base
 
 FAKE_TARGET_PORTAL = 'fakeportal:3260'
 FAKE_VOLUME_ID = 'fake_volume_id'

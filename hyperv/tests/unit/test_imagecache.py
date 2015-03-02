@@ -23,8 +23,8 @@ from nova import objects
 from nova import test
 from nova.tests.unit import fake_instance
 from nova.tests.unit.objects import test_flavor
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import imagecache
+from hyperv.nova import constants
+from hyperv.nova import imagecache
 
 CONF = cfg.CONF
 

@@ -25,11 +25,11 @@ from oslo_utils import units
 from nova import exception
 from nova.i18n import _, _LE
 from nova.virt import configdrive
-from nova.virt.hyperv import imagecache
-from nova.virt.hyperv import utilsfactory
-from nova.virt.hyperv import vmops
-from nova.virt.hyperv import vmutils
-from nova.virt.hyperv import volumeops
+from hyperv.nova import imagecache
+from hyperv.nova import utilsfactory
+from hyperv.nova import vmops
+from hyperv.nova import vmutils
+from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 

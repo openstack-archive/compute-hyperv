@@ -21,7 +21,7 @@ if sys.platform == 'win32':
     import wmi
 
 from nova.i18n import _
-from nova.virt.hyperv import constants
+from hyperv.nova import constants
 
 
 class HostUtils(object):

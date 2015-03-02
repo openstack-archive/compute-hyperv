@@ -30,8 +30,8 @@ from oslo_log import log as logging
 
 from nova import exception
 from nova.i18n import _, _LW
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import hostutils
+from hyperv.nova import constants
+from hyperv.nova import hostutils
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)

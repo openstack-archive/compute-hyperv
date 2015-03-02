@@ -14,10 +14,10 @@
 
 import mock
 
-from nova.tests.unit.virt.hyperv import test_vhdutils
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import vhdutilsv2
-from nova.virt.hyperv import vmutils
+from hyperv.nova import constants
+from hyperv.nova import vhdutilsv2
+from hyperv.nova import vmutils
+from hyperv.tests.unit import test_vhdutils
 
 
 class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
@@ -168,7 +168,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
         else:
             self._vhdutils.get_vhd_info.return_value = self._fake_vhd_info
 
-    @mock.patch('nova.virt.hyperv.vhdutils.VHDUtils.get_vhd_format')
+    @mock.patch('hyperv.nova.vhdutils.VHDUtils.get_vhd_format')
     def test_get_vhdx_internal_size(self, mock_get_vhd_format):
         mock_get_vhd_format.return_value = constants.DISK_FORMAT_VHDX
         self._mock_get_vhd_info()

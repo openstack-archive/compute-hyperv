@@ -13,7 +13,7 @@
 #    under the License.
 
 from nova import test
-from nova.virt.hyperv import rdpconsoleutils
+from hyperv.nova import rdpconsoleutils
 
 
 class RDPConsoleUtilsTestCase(test.NoDBTestCase):

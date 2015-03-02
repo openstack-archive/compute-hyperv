@@ -23,13 +23,13 @@ from oslo_log import log as logging
 
 from nova.i18n import _
 from nova.virt import driver
-from nova.virt.hyperv import hostops
-from nova.virt.hyperv import livemigrationops
-from nova.virt.hyperv import migrationops
-from nova.virt.hyperv import rdpconsoleops
-from nova.virt.hyperv import snapshotops
-from nova.virt.hyperv import vmops
-from nova.virt.hyperv import volumeops
+from hyperv.nova import hostops
+from hyperv.nova import livemigrationops
+from hyperv.nova import migrationops
+from hyperv.nova import rdpconsoleops
+from hyperv.nova import snapshotops
+from hyperv.nova import vmops
+from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 

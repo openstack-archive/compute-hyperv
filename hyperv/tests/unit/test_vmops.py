@@ -22,10 +22,10 @@ from oslo_utils import units
 
 from nova import exception
 from nova.tests.unit import fake_instance
-from nova.tests.unit.virt.hyperv import test_base
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import vmops
-from nova.virt.hyperv import vmutils
+from hyperv.nova import constants
+from hyperv.nova import vmops
+from hyperv.nova import vmutils
+from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF
 
@@ -71,7 +71,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         return mock_instance
 
-    @mock.patch('nova.virt.hyperv.imagecache.ImageCache.get_cached_image')
+    @mock.patch('hyperv.nova.imagecache.ImageCache.get_cached_image')
     def _test_create_root_vhd_exception(self, mock_get_cached_image,
                                         vhd_format):
         mock_instance = self._prepare_create_root_vhd_mocks(
@@ -91,7 +91,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._pathutils.remove.assert_called_once_with(
             fake_root_path)
 
-    @mock.patch('nova.virt.hyperv.imagecache.ImageCache.get_cached_image')
+    @mock.patch('hyperv.nova.imagecache.ImageCache.get_cached_image')
     def _test_create_root_vhd_qcow(self, mock_get_cached_image, vhd_format):
         mock_instance = self._prepare_create_root_vhd_mocks(
             use_cow_images=True, vhd_format=vhd_format,
@@ -123,7 +123,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             self._vmops._vhdutils.resize_vhd.assert_called_once_with(
                 fake_root_path, root_vhd_internal_size, is_file_max_size=False)
 
-    @mock.patch('nova.virt.hyperv.imagecache.ImageCache.get_cached_image')
+    @mock.patch('hyperv.nova.imagecache.ImageCache.get_cached_image')
     def _test_create_root_vhd(self, mock_get_cached_image, vhd_format):
         mock_instance = self._prepare_create_root_vhd_mocks(
             use_cow_images=False, vhd_format=vhd_format,
@@ -197,18 +197,18 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.FAKE_FORMAT)
         self.assertEqual(mock.sentinel.FAKE_PATH, response)
 
-    @mock.patch('nova.virt.hyperv.vmops.VMOps.destroy')
-    @mock.patch('nova.virt.hyperv.vmops.VMOps.power_on')
-    @mock.patch('nova.virt.hyperv.vmops.VMOps.attach_config_drive')
-    @mock.patch('nova.virt.hyperv.vmops.VMOps._create_config_drive')
+    @mock.patch('hyperv.nova.vmops.VMOps.destroy')
+    @mock.patch('hyperv.nova.vmops.VMOps.power_on')
+    @mock.patch('hyperv.nova.vmops.VMOps.attach_config_drive')
+    @mock.patch('hyperv.nova.vmops.VMOps._create_config_drive')
     @mock.patch('nova.virt.configdrive.required_by')
-    @mock.patch('nova.virt.hyperv.vmops.VMOps.create_instance')
-    @mock.patch('nova.virt.hyperv.vmops.VMOps.get_image_vm_generation')
-    @mock.patch('nova.virt.hyperv.vmops.VMOps.create_ephemeral_vhd')
-    @mock.patch('nova.virt.hyperv.vmops.VMOps._create_root_vhd')
-    @mock.patch('nova.virt.hyperv.volumeops.VolumeOps.'
+    @mock.patch('hyperv.nova.vmops.VMOps.create_instance')
+    @mock.patch('hyperv.nova.vmops.VMOps.get_image_vm_generation')
+    @mock.patch('hyperv.nova.vmops.VMOps.create_ephemeral_vhd')
+    @mock.patch('hyperv.nova.vmops.VMOps._create_root_vhd')
+    @mock.patch('hyperv.nova.volumeops.VolumeOps.'
                 'ebs_root_in_block_devices')
-    @mock.patch('nova.virt.hyperv.vmops.VMOps._delete_disk_files')
+    @mock.patch('hyperv.nova.vmops.VMOps._delete_disk_files')
     def _test_spawn(self, mock_delete_disk_files,
                     mock_ebs_root_in_block_devices, mock_create_root_vhd,
                     mock_create_ephemeral_vhd, mock_get_image_vm_gen,
@@ -291,7 +291,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._test_spawn(exists=False, boot_from_volume=True,
                          configdrive_required=False, fail=None)
 
-    @mock.patch('nova.virt.hyperv.volumeops.VolumeOps'
+    @mock.patch('hyperv.nova.volumeops.VolumeOps'
                 '.attach_volumes')
     @mock.patch.object(vmops.VMOps, '_attach_drive')
     def _test_create_instance(self, mock_attach_drive, mock_attach_volumes,
@@ -557,20 +557,20 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._test_reboot(vmops.REBOOT_TYPE_HARD,
                           constants.HYPERV_VM_STATE_REBOOT)
 
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._soft_shutdown")
+    @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_reboot_soft(self, mock_soft_shutdown):
         mock_soft_shutdown.return_value = True
         self._test_reboot(vmops.REBOOT_TYPE_SOFT,
                           constants.HYPERV_VM_STATE_ENABLED)
 
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._soft_shutdown")
+    @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_reboot_soft_failed(self, mock_soft_shutdown):
         mock_soft_shutdown.return_value = False
         self._test_reboot(vmops.REBOOT_TYPE_SOFT,
                           constants.HYPERV_VM_STATE_REBOOT)
 
-    @mock.patch("nova.virt.hyperv.vmops.VMOps.power_on")
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._soft_shutdown")
+    @mock.patch("hyperv.nova.vmops.VMOps.power_on")
+    @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_reboot_soft_exception(self, mock_soft_shutdown, mock_power_on):
         mock_soft_shutdown.return_value = True
         mock_power_on.side_effect = vmutils.HyperVException("Expected failure")
@@ -588,7 +588,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             self._vmops.reboot(instance, {}, reboot_type)
             mock_set_state.assert_called_once_with(instance, vm_state)
 
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._wait_for_power_off")
+    @mock.patch("hyperv.nova.vmops.VMOps._wait_for_power_off")
     def test_soft_shutdown(self, mock_wait_for_power_off):
         instance = fake_instance.fake_instance_obj(self.context)
         mock_wait_for_power_off.return_value = True
@@ -615,7 +615,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_shutdown_vm.assert_called_once_with(instance.name)
         self.assertFalse(result)
 
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._wait_for_power_off")
+    @mock.patch("hyperv.nova.vmops.VMOps._wait_for_power_off")
     def test_soft_shutdown_wait(self, mock_wait_for_power_off):
         instance = fake_instance.fake_instance_obj(self.context)
         mock_wait_for_power_off.side_effect = [False, True]
@@ -630,7 +630,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         self.assertTrue(result)
 
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._wait_for_power_off")
+    @mock.patch("hyperv.nova.vmops.VMOps._wait_for_power_off")
     def test_soft_shutdown_wait_timeout(self, mock_wait_for_power_off):
         instance = fake_instance.fake_instance_obj(self.context)
         mock_wait_for_power_off.return_value = False
@@ -656,13 +656,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_power_off_hard(self):
         self._test_power_off(timeout=0)
 
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._soft_shutdown")
+    @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_power_off_exception(self, mock_soft_shutdown):
         mock_soft_shutdown.return_value = False
         self._test_power_off(timeout=1)
 
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._set_vm_state")
-    @mock.patch("nova.virt.hyperv.vmops.VMOps._soft_shutdown")
+    @mock.patch("hyperv.nova.vmops.VMOps._set_vm_state")
+    @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_power_off_soft(self, mock_soft_shutdown, mock_set_state):
         instance = fake_instance.fake_instance_obj(self.context)
         mock_soft_shutdown.return_value = True
@@ -734,7 +734,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.fake_console_log_path,
             mock.sentinel.fake_console_log_archived)
 
-        with mock.patch('nova.virt.hyperv.vmops.open', fake_open, create=True):
+        with mock.patch('hyperv.nova.vmops.open', fake_open, create=True):
             self.assertRaises(vmutils.HyperVException,
                               self._vmops.get_console_output,
                               fake_vm)

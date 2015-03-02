@@ -16,8 +16,8 @@
 from oslo_log import log as logging
 
 from nova.console import type as ctype
-from nova.virt.hyperv import hostops
-from nova.virt.hyperv import utilsfactory
+from hyperv.nova import hostops
+from hyperv.nova import utilsfactory
 
 LOG = logging.getLogger(__name__)
 

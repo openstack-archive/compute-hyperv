@@ -19,8 +19,8 @@ import mock
 
 from nova.compute import task_states
 from nova.tests.unit import fake_instance
-from nova.tests.unit.virt.hyperv import test_base
-from nova.virt.hyperv import snapshotops
+from hyperv.nova import snapshotops
+from hyperv.tests.unit import test_base
 
 
 class SnapshotOpsTestCase(test_base.HyperVBaseTestCase):
@@ -55,7 +55,7 @@ class SnapshotOpsTestCase(test_base.HyperVBaseTestCase):
             self.context, mock.sentinel.IMAGE_ID, image_metadata,
             self._snapshotops._pathutils.open().__enter__())
 
-    @mock.patch('nova.virt.hyperv.snapshotops.SnapshotOps._save_glance_image')
+    @mock.patch('hyperv.nova.snapshotops.SnapshotOps._save_glance_image')
     def _test_snapshot(self, mock_save_glance_image, base_disk_path):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_update = mock.MagicMock()

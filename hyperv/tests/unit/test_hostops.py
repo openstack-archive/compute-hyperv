@@ -20,9 +20,9 @@ from oslo_config import cfg
 from oslo_serialization import jsonutils
 from oslo_utils import units
 
-from nova.tests.unit.virt.hyperv import test_base
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import hostops
+from hyperv.nova import constants
+from hyperv.nova import hostops
+from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF
 

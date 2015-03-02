@@ -29,8 +29,8 @@ from oslo_utils import excutils
 from nova import exception
 from nova.i18n import _, _LE, _LW
 from nova.virt import driver
-from nova.virt.hyperv import utilsfactory
-from nova.virt.hyperv import vmutils
+from hyperv.nova import utilsfactory
+from hyperv.nova import vmutils
 
 LOG = logging.getLogger(__name__)
 

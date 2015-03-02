@@ -15,8 +15,8 @@
 import mock
 
 from nova import test
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import hostutils
+from hyperv.nova import constants
+from hyperv.nova import hostutils
 
 
 class FakeCPUSpec(object):
@@ -45,7 +45,7 @@ class HostUtilsTestCase(test.NoDBTestCase):
 
         super(HostUtilsTestCase, self).setUp()
 
-    @mock.patch('nova.virt.hyperv.hostutils.ctypes')
+    @mock.patch('hyperv.nova.hostutils.ctypes')
     def test_get_host_tick_count64(self, mock_ctypes):
         tick_count64 = "100"
         mock_ctypes.windll.kernel32.GetTickCount64.return_value = tick_count64

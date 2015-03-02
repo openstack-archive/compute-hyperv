@@ -21,10 +21,10 @@ import mock
 from oslo_config import cfg
 
 from nova import test
-from nova.virt.hyperv import hostutils
-from nova.virt.hyperv import utilsfactory
-from nova.virt.hyperv import vmutils
-from nova.virt.hyperv import vmutilsv2
+from hyperv.nova import hostutils
+from hyperv.nova import utilsfactory
+from hyperv.nova import vmutils
+from hyperv.nova import vmutilsv2
 
 CONF = cfg.CONF
 

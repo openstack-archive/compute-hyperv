@@ -30,8 +30,8 @@ from nova.compute import arch
 from nova.compute import hv_type
 from nova.compute import vm_mode
 from nova.i18n import _
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import utilsfactory
+from hyperv.nova import constants
+from hyperv.nova import utilsfactory
 
 CONF = cfg.CONF
 CONF.import_opt('my_ip', 'nova.netconf')

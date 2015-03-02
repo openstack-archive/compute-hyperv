@@ -15,9 +15,9 @@
 import mock
 
 from nova.tests.unit import fake_instance
-from nova.tests.unit.virt.hyperv import test_base
-from nova.virt.hyperv import migrationops
-from nova.virt.hyperv import vmutils
+from hyperv.nova import migrationops
+from hyperv.nova import vmutils
+from hyperv.tests.unit import test_base
 
 
 class MigrationOpsTestCase(test_base.HyperVBaseTestCase):

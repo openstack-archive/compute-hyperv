@@ -18,7 +18,7 @@ import mock
 import os
 
 from nova import test
-from nova.virt.hyperv import ioutils
+from hyperv.nova import ioutils
 
 
 class IOThreadTestCase(test.NoDBTestCase):

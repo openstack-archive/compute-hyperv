@@ -32,8 +32,8 @@ if sys.platform == 'win32':
 from xml.etree import ElementTree
 
 from nova.i18n import _
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import vmutils
+from hyperv.nova import constants
+from hyperv.nova import vmutils
 
 
 VHD_HEADER_SIZE_FIX = 512

@@ -15,7 +15,7 @@
 import mock
 
 from nova import test
-from nova.virt.hyperv import rdpconsoleutilsv2
+from hyperv.nova import rdpconsoleutilsv2
 
 
 class RDPConsoleUtilsV2TestCase(test.NoDBTestCase):

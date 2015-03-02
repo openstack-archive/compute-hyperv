@@ -38,29 +38,29 @@ from nova import test
 from nova.tests.unit import fake_instance
 from nova.tests.unit import fake_network
 from nova.tests.unit.image import fake as fake_image
-from nova.tests.unit.virt.hyperv import db_fakes
-from nova.tests.unit.virt.hyperv import fake
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import driver
-from nova.virt.hyperv import basevolumeutils
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import driver as driver_hyperv
-from nova.virt.hyperv import hostutils
-from nova.virt.hyperv import imagecache
-from nova.virt.hyperv import ioutils
-from nova.virt.hyperv import networkutils
-from nova.virt.hyperv import pathutils
-from nova.virt.hyperv import rdpconsoleutils
-from nova.virt.hyperv import vhdutils
-from nova.virt.hyperv import vmutils
-from nova.virt.hyperv import volumeops
-from nova.virt.hyperv import volumeutils
-from nova.virt.hyperv import volumeutilsv2
+from hyperv.nova import basevolumeutils
+from hyperv.nova import constants
+from hyperv.nova import driver as driver_hyperv
+from hyperv.nova import hostutils
+from hyperv.nova import imagecache
+from hyperv.nova import ioutils
+from hyperv.nova import networkutils
+from hyperv.nova import pathutils
+from hyperv.nova import rdpconsoleutils
+from hyperv.nova import vhdutils
+from hyperv.nova import vmutils
+from hyperv.nova import volumeops
+from hyperv.nova import volumeutils
+from hyperv.nova import volumeutilsv2
+from hyperv.tests.unit import db_fakes
+from hyperv.tests.unit import fake
 from nova.virt import images
 
 CONF = cfg.CONF
-CONF.import_opt('vswitch_name', 'nova.virt.hyperv.vif', 'hyperv')
+CONF.import_opt('vswitch_name', 'hyperv.nova.vif', 'hyperv')
 
 
 class HyperVAPIBaseTestCase(test.NoDBTestCase):

@@ -17,9 +17,9 @@ import mock
 from oslo_config import cfg
 
 from nova.tests.unit import fake_instance
-from nova.tests.unit.virt.hyperv import test_base
-from nova.virt.hyperv import livemigrationops
-from nova.virt.hyperv import vmutils
+from hyperv.nova import livemigrationops
+from hyperv.nova import vmutils
+from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF
 
@@ -33,9 +33,9 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._livemigrops = livemigrationops.LiveMigrationOps()
         self._livemigrops._livemigrutils = mock.MagicMock()
 
-    @mock.patch('nova.virt.hyperv.vmops.VMOps.copy_vm_console_logs')
+    @mock.patch('hyperv.nova.vmops.VMOps.copy_vm_console_logs')
     @mock.patch('nova.virt.configdrive.required_by')
-    @mock.patch('nova.virt.hyperv.pathutils.PathUtils.copy_configdrive')
+    @mock.patch('hyperv.nova.pathutils.PathUtils.copy_configdrive')
     def _test_live_migration(self, mock_copy_configdrive, mock_required_by,
                              mock_copy_logs, side_effect, configdrive=False):
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -91,10 +91,10 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     def test_live_migration_with_configdrive(self):
         self._test_live_migration(side_effect=None, configdrive=True)
 
-    @mock.patch('nova.virt.hyperv.volumeops.VolumeOps'
+    @mock.patch('hyperv.nova.volumeops.VolumeOps'
                 '.ebs_root_in_block_devices')
-    @mock.patch('nova.virt.hyperv.imagecache.ImageCache.get_cached_image')
-    @mock.patch('nova.virt.hyperv.volumeops.VolumeOps'
+    @mock.patch('hyperv.nova.imagecache.ImageCache.get_cached_image')
+    @mock.patch('hyperv.nova.volumeops.VolumeOps'
                 '.initialize_volumes_connection')
     def test_pre_live_migration(self, mock_initialize_connection,
                                 mock_get_cached_image,
@@ -118,7 +118,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_initialize_connection.assert_called_once_with(
             mock.sentinel.BLOCK_INFO)
 
-    @mock.patch('nova.virt.hyperv.volumeops.VolumeOps.disconnect_volumes')
+    @mock.patch('hyperv.nova.volumeops.VolumeOps.disconnect_volumes')
     def test_post_live_migration(self, mock_disconnect_volumes):
         self._livemigrops.post_live_migration(
             self.context, mock.sentinel.instance,
@@ -126,7 +126,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_disconnect_volumes.assert_called_once_with(
             mock.sentinel.block_device_info)
 
-    @mock.patch('nova.virt.hyperv.vmops.VMOps.log_vm_serial_output')
+    @mock.patch('hyperv.nova.vmops.VMOps.log_vm_serial_output')
     def test_post_live_migration_at_destination(self, mock_log_vm):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._livemigrops.post_live_migration_at_destination(

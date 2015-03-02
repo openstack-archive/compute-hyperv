@@ -17,7 +17,7 @@
 import mock
 
 from nova import test
-from nova.virt.hyperv import basevolumeutils
+from hyperv.nova import basevolumeutils
 
 
 def _exception_thrower():

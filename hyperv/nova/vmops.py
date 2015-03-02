@@ -38,12 +38,12 @@ from nova.openstack.common import loopingcall
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import hardware
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import imagecache
-from nova.virt.hyperv import ioutils
-from nova.virt.hyperv import utilsfactory
-from nova.virt.hyperv import vmutils
-from nova.virt.hyperv import volumeops
+from hyperv.nova import constants
+from hyperv.nova import imagecache
+from hyperv.nova import ioutils
+from hyperv.nova import utilsfactory
+from hyperv.nova import vmutils
+from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 
@@ -117,9 +117,9 @@ def check_admin_permissions(function):
 class VMOps(object):
     _vif_driver_class_map = {
         'nova.network.neutronv2.api.API':
-        'nova.virt.hyperv.vif.HyperVNeutronVIFDriver',
+        'hyperv.nova.vif.HyperVNeutronVIFDriver',
         'nova.network.api.API':
-        'nova.virt.hyperv.vif.HyperVNovaNetworkVIFDriver',
+        'hyperv.nova.vif.HyperVNovaNetworkVIFDriver',
     }
 
     # The console log is stored in two files, each should have at most half of

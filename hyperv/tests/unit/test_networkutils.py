@@ -15,8 +15,8 @@
 import mock
 
 from nova import test
-from nova.virt.hyperv import networkutils
-from nova.virt.hyperv import vmutils
+from hyperv.nova import networkutils
+from hyperv.nova import vmutils
 
 
 class NetworkUtilsTestCase(test.NoDBTestCase):

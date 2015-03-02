@@ -29,8 +29,8 @@ from oslo_log import log as logging
 
 from nova.i18n import _
 from nova import utils
-from nova.virt.hyperv import basevolumeutils
-from nova.virt.hyperv import vmutils
+from hyperv.nova import basevolumeutils
+from hyperv.nova import vmutils
 
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF

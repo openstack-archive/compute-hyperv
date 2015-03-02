@@ -15,7 +15,7 @@
 
 import sys
 
-from nova.virt.hyperv import rdpconsoleutils
+from hyperv.nova import rdpconsoleutils
 
 if sys.platform == 'win32':
     import wmi

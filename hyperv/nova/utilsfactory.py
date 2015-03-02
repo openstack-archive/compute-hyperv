@@ -17,19 +17,19 @@ from oslo_config import cfg
 from oslo_log import log as logging
 
 from nova.i18n import _
-from nova.virt.hyperv import hostutils
-from nova.virt.hyperv import livemigrationutils
-from nova.virt.hyperv import networkutils
-from nova.virt.hyperv import networkutilsv2
-from nova.virt.hyperv import pathutils
-from nova.virt.hyperv import rdpconsoleutils
-from nova.virt.hyperv import rdpconsoleutilsv2
-from nova.virt.hyperv import vhdutils
-from nova.virt.hyperv import vhdutilsv2
-from nova.virt.hyperv import vmutils
-from nova.virt.hyperv import vmutilsv2
-from nova.virt.hyperv import volumeutils
-from nova.virt.hyperv import volumeutilsv2
+from hyperv.nova import hostutils
+from hyperv.nova import livemigrationutils
+from hyperv.nova import networkutils
+from hyperv.nova import networkutilsv2
+from hyperv.nova import pathutils
+from hyperv.nova import rdpconsoleutils
+from hyperv.nova import rdpconsoleutilsv2
+from hyperv.nova import vhdutils
+from hyperv.nova import vhdutilsv2
+from hyperv.nova import vmutils
+from hyperv.nova import vmutilsv2
+from hyperv.nova import volumeutils
+from hyperv.nova import volumeutilsv2
 
 hyper_opts = [
     cfg.BoolOpt('force_hyperv_utils_v1',

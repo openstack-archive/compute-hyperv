@@ -24,10 +24,10 @@ from oslo_utils import excutils
 
 from nova.i18n import _
 from nova.virt import configdrive
-from nova.virt.hyperv import imagecache
-from nova.virt.hyperv import utilsfactory
-from nova.virt.hyperv import vmops
-from nova.virt.hyperv import volumeops
+from hyperv.nova import imagecache
+from hyperv.nova import utilsfactory
+from hyperv.nova import vmops
+from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF

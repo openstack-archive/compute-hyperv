@@ -29,10 +29,10 @@ from xml.etree import ElementTree
 from oslo_utils import units
 
 from nova.i18n import _
-from nova.virt.hyperv import constants
-from nova.virt.hyperv import vhdutils
-from nova.virt.hyperv import vmutils
-from nova.virt.hyperv import vmutilsv2
+from hyperv.nova import constants
+from hyperv.nova import vhdutils
+from hyperv.nova import vmutils
+from hyperv.nova import vmutilsv2
 
 
 VHDX_BAT_ENTRY_SIZE = 8

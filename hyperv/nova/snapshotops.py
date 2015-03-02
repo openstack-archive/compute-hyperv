@@ -24,7 +24,7 @@ from oslo_log import log as logging
 from nova.compute import task_states
 from nova.i18n import _LW
 from nova.image import glance
-from nova.virt.hyperv import utilsfactory
+from hyperv.nova import utilsfactory
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)

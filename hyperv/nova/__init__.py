@@ -12,6 +12,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from nova.virt.hyperv import driver
+from hyperv.nova import driver
 
 HyperVDriver = driver.HyperVDriver

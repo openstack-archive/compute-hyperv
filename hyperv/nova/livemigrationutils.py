@@ -22,9 +22,9 @@ from oslo_log import log as logging
 
 from nova import exception
 from nova.i18n import _, _LE
-from nova.virt.hyperv import vmutils
-from nova.virt.hyperv import vmutilsv2
-from nova.virt.hyperv import volumeutilsv2
+from hyperv.nova import vmutils
+from hyperv.nova import vmutilsv2
+from hyperv.nova import volumeutilsv2
 
 LOG = logging.getLogger(__name__)
 

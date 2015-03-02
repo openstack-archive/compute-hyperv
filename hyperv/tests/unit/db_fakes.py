@@ -22,7 +22,7 @@ from nova.compute import task_states
 from nova.compute import vm_states
 from nova import db
 from nova import utils
-from nova.virt.hyperv import constants
+from hyperv.nova import constants
 
 
 def get_fake_instance_data(name, project_id, user_id):

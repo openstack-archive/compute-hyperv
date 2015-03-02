@@ -21,7 +21,7 @@ from oslo_config import cfg
 from oslo_utils import units
 
 from nova import exception
-from nova.tests.unit import fake_instance
+from hyperv.tests import fake_instance
 from hyperv.nova import constants
 from hyperv.nova import vmops
 from hyperv.nova import vmutils

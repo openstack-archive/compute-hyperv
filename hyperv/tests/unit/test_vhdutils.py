@@ -15,10 +15,10 @@
 import mock
 from oslo_utils import units
 
-from nova import test
 from hyperv.nova import constants
 from hyperv.nova import vhdutils
 from hyperv.nova import vmutils
+from hyperv.tests import test
 
 
 class VHDUtilsBaseTestCase(test.NoDBTestCase):

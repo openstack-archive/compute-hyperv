@@ -15,8 +15,8 @@
 
 import mock
 
-from nova import test
 from hyperv.nova import livemigrationutils
+from hyperv.tests import test
 
 
 class LiveMigrationUtilsTestCase(test.NoDBTestCase):

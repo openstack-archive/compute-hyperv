@@ -34,7 +34,6 @@ from nova import exception
 from nova.image import glance
 from nova import objects
 from nova.openstack.common import fileutils
-from nova import test
 from nova.tests.unit import fake_instance
 from nova.tests.unit import fake_network
 from nova.tests.unit.image import fake as fake_image
@@ -55,6 +54,7 @@ from hyperv.nova import vmutils
 from hyperv.nova import volumeops
 from hyperv.nova import volumeutils
 from hyperv.nova import volumeutilsv2
+from hyperv.tests import test
 from hyperv.tests.unit import db_fakes
 from hyperv.tests.unit import fake
 from nova.virt import images

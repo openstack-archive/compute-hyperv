@@ -16,8 +16,8 @@
 
 import mock
 
-from nova import test
 from hyperv.nova import basevolumeutils
+from hyperv.tests import test
 
 
 def _exception_thrower():

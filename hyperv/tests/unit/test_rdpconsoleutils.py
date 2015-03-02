@@ -12,8 +12,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from nova import test
 from hyperv.nova import rdpconsoleutils
+from hyperv.tests import test
 
 
 class RDPConsoleUtilsTestCase(test.NoDBTestCase):

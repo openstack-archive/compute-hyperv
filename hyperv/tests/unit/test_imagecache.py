@@ -20,11 +20,11 @@ from oslo_config import cfg
 
 from nova import exception
 from nova import objects
-from nova import test
 from nova.tests.unit import fake_instance
 from nova.tests.unit.objects import test_flavor
 from hyperv.nova import constants
 from hyperv.nova import imagecache
+from hyperv.tests import test
 
 CONF = cfg.CONF
 

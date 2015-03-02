@@ -15,9 +15,9 @@
 import mock
 from oslo_config import cfg
 
-from nova import test
 from hyperv.nova import vmutils
 from hyperv.nova import volumeutilsv2
+from hyperv.tests import test
 
 CONF = cfg.CONF
 CONF.import_opt('volume_attach_retry_count', 'hyperv.nova.volumeops',

@@ -16,9 +16,9 @@
 import mock
 
 from nova import exception
-from nova import test
 from hyperv.nova import constants
 from hyperv.nova import vmutils
+from hyperv.tests import test
 
 
 class VMUtilsTestCase(test.NoDBTestCase):

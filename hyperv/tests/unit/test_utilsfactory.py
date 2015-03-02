@@ -20,11 +20,11 @@ Unit tests for the Hyper-V utils factory.
 import mock
 from oslo_config import cfg
 
-from nova import test
 from hyperv.nova import hostutils
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmutils
 from hyperv.nova import vmutilsv2
+from hyperv.tests import test
 
 CONF = cfg.CONF
 

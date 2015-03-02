@@ -16,7 +16,7 @@
 
 import mock
 
-from nova import test
+from hyperv.tests import test
 
 
 class HyperVBaseTestCase(test.NoDBTestCase):

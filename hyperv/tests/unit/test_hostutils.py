@@ -14,9 +14,9 @@
 
 import mock
 
-from nova import test
 from hyperv.nova import constants
 from hyperv.nova import hostutils
+from hyperv.tests import test
 
 
 class FakeCPUSpec(object):

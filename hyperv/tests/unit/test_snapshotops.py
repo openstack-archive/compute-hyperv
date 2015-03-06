@@ -16,10 +16,10 @@
 import os
 
 import mock
-
 from nova.compute import task_states
-from hyperv.tests import fake_instance
+
 from hyperv.nova import snapshotops
+from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
 

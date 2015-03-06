@@ -21,15 +21,22 @@ inline callbacks.
 
 """
 
+import os
+
 import eventlet
 eventlet.monkey_patch(os=False)
 
 import copy
 import inspect
 import mock
-import os
 
 import fixtures
+from nova import objects
+from nova.objects import base as objects_base
+from nova.tests import fixtures as nova_fixtures
+from nova.tests.unit import conf_fixture
+from nova.tests.unit import policy_fixture
+from nova import utils
 from oslo_concurrency import lockutils
 from oslo_config import cfg
 from oslo_config import fixture as config_fixture
@@ -37,13 +44,6 @@ from oslo_log.fixture import logging_error as log_fixture
 from oslo_log import log as logging
 from oslotest import moxstubout
 import testtools
-
-from nova import objects
-from nova.objects import base as objects_base
-from nova.tests import fixtures as nova_fixtures
-from nova.tests.unit import conf_fixture
-from nova.tests.unit import policy_fixture
-from nova import utils
 
 
 CONF = cfg.CONF

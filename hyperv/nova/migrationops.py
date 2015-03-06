@@ -18,12 +18,12 @@ Management class for migration / resize operations.
 """
 import os
 
+from nova import exception
+from nova.virt import configdrive
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
 
-from nova import exception
-from nova.virt import configdrive
 from hyperv.i18n import _, _LE
 from hyperv.nova import imagecache
 from hyperv.nova import utilsfactory

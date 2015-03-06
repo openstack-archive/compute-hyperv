@@ -22,12 +22,12 @@ import os
 import re
 import time
 
+from nova import exception
+from nova.virt import driver
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 
-from nova import exception
-from nova.virt import driver
 from hyperv.i18n import _, _LE, _LW
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmutils

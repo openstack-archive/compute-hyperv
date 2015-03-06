@@ -22,6 +22,13 @@ import os
 import time
 
 from eventlet import timeout as etimeout
+from nova.api.metadata import base as instance_metadata
+from nova import exception
+from nova.openstack.common import fileutils
+from nova.openstack.common import loopingcall
+from nova import utils
+from nova.virt import configdrive
+from nova.virt import hardware
 from oslo_concurrency import processutils
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -30,13 +37,6 @@ from oslo_utils import importutils
 from oslo_utils import units
 from oslo_utils import uuidutils
 
-from nova.api.metadata import base as instance_metadata
-from nova import exception
-from nova.openstack.common import fileutils
-from nova.openstack.common import loopingcall
-from nova import utils
-from nova.virt import configdrive
-from nova.virt import hardware
 from hyperv.i18n import _, _LI, _LE, _LW
 from hyperv.nova import constants
 from hyperv.nova import imagecache

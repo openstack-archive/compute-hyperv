@@ -16,9 +16,9 @@
 import mock
 from oslo_config import cfg
 
-from hyperv.tests import fake_instance
 from hyperv.nova import livemigrationops
 from hyperv.nova import vmutils
+from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF

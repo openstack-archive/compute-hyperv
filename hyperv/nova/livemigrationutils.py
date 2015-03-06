@@ -18,9 +18,8 @@ import sys
 if sys.platform == 'win32':
     import wmi
 
-from oslo_log import log as logging
-
 from nova import exception
+from oslo_log import log as logging
 
 from hyperv.i18n import _, _LE
 from hyperv.nova import vmutils

@@ -16,14 +16,14 @@
 import os
 
 import mock
-from oslo_config import cfg
-
 from nova import exception
 from nova import objects
-from hyperv.tests import fake_instance
 from nova.tests.unit.objects import test_flavor
+from oslo_config import cfg
+
 from hyperv.nova import constants
 from hyperv.nova import imagecache
+from hyperv.tests import fake_instance
 from hyperv.tests import test
 
 CONF = cfg.CONF

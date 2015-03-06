@@ -18,11 +18,11 @@ Management class for live migration VM operations.
 """
 import functools
 
+from nova.virt import configdrive
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 
-from nova.virt import configdrive
 from hyperv.i18n import _
 from hyperv.nova import imagecache
 from hyperv.nova import utilsfactory

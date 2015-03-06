@@ -26,10 +26,10 @@ http://www.microsoft.com/en-us/download/details.aspx?id=34750
 import re
 import time
 
+from nova import utils
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from nova import utils
 from hyperv.i18n import _
 from hyperv.nova import basevolumeutils
 from hyperv.nova import vmutils

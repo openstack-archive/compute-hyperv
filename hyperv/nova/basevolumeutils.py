@@ -28,10 +28,9 @@ if sys.platform == 'win32':
     import _winreg
     import wmi
 
-from oslo_log import log as logging
-
 from nova import block_device
 from nova.virt import driver
+from oslo_log import log as logging
 
 from hyperv.i18n import _LI
 

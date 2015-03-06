@@ -13,9 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.import mock
 
-import mock
-
 import os
+
+import mock
 
 from hyperv.nova import ioutils
 from hyperv.tests import test

@@ -22,6 +22,7 @@ from nova.compute import task_states
 from nova.compute import vm_states
 from nova import db
 from nova import utils
+
 from hyperv.nova import constants
 
 

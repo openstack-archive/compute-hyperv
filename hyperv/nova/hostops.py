@@ -21,14 +21,15 @@ import os
 import platform
 import time
 
+
+from nova.compute import arch
+from nova.compute import hv_type
+from nova.compute import vm_mode
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_serialization import jsonutils
 from oslo_utils import units
 
-from nova.compute import arch
-from nova.compute import hv_type
-from nova.compute import vm_mode
 from hyperv.i18n import _
 from hyperv.nova import constants
 from hyperv.nova import utilsfactory

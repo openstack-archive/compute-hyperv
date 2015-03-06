@@ -18,8 +18,8 @@ import contextlib
 import os
 
 import mock
-
 from nova import exception
+
 from hyperv.nova import pathutils
 from hyperv.nova import vmutils
 from hyperv.nova import volumeops

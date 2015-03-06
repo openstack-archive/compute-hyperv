@@ -23,9 +23,6 @@ import uuid
 
 import mock
 from mox3 import mox
-from oslo_config import cfg
-from oslo_utils import units
-
 from nova.api.metadata import base as instance_metadata
 from nova.compute import power_state
 from nova import context
@@ -40,6 +37,10 @@ from nova.tests.unit.image import fake as fake_image
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import driver
+from nova.virt import images
+from oslo_config import cfg
+from oslo_utils import units
+
 from hyperv.nova import basevolumeutils
 from hyperv.nova import constants
 from hyperv.nova import driver as driver_hyperv
@@ -57,7 +58,6 @@ from hyperv.nova import volumeutilsv2
 from hyperv.tests import test
 from hyperv.tests.unit import db_fakes
 from hyperv.tests.unit import fake
-from nova.virt import images
 
 CONF = cfg.CONF
 CONF.import_opt('vswitch_name', 'hyperv.nova.vif', 'hyperv')

@@ -14,9 +14,9 @@
 
 import mock
 
-from hyperv.tests import fake_instance
 from hyperv.nova import migrationops
 from hyperv.nova import vmutils
+from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
 

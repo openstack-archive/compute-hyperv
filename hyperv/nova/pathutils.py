@@ -20,10 +20,10 @@ import sys
 if sys.platform == 'win32':
     import wmi
 
+from nova import utils
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from nova import utils
 from hyperv.i18n import _
 from hyperv.nova import constants
 from hyperv.nova import vmutils

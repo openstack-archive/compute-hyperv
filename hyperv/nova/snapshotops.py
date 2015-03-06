@@ -18,11 +18,11 @@ Management class for VM snapshot operations.
 """
 import os
 
+from nova.compute import task_states
+from nova.image import glance
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from nova.compute import task_states
-from nova.image import glance
 from hyperv.i18n import _LW
 from hyperv.nova import utilsfactory
 

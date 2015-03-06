@@ -16,15 +16,15 @@ import os
 
 from eventlet import timeout as etimeout
 import mock
+from nova import exception
 from oslo_concurrency import processutils
 from oslo_config import cfg
 from oslo_utils import units
 
-from nova import exception
-from hyperv.tests import fake_instance
 from hyperv.nova import constants
 from hyperv.nova import vmops
 from hyperv.nova import vmutils
+from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF

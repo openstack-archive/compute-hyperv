@@ -14,8 +14,8 @@
 #    under the License.
 
 import mock
-
 from nova import exception
+
 from hyperv.nova import constants
 from hyperv.nova import vmutils
 from hyperv.tests import test

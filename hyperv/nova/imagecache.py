@@ -17,16 +17,17 @@ Image caching and management.
 """
 import os
 
+from nova import utils
+from nova.virt import images
+
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
 
 from hyperv.i18n import _
-from nova import utils
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmutils
-from nova.virt import images
 
 LOG = logging.getLogger(__name__)
 

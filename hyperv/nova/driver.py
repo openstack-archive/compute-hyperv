@@ -19,9 +19,9 @@ A Hyper-V Nova Compute driver.
 
 import platform
 
+from nova.virt import driver
 from oslo_log import log as logging
 
-from nova.virt import driver
 from hyperv.i18n import _
 from hyperv.nova import hostops
 from hyperv.nova import livemigrationops

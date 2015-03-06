@@ -13,9 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from nova.console import type as ctype
 from oslo_log import log as logging
 
-from nova.console import type as ctype
 from hyperv.nova import hostops
 from hyperv.nova import utilsfactory
 

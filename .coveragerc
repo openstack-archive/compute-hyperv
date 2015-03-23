@@ -1,0 +1,7 @@
+[run]
+branch = True
+source = hyperv
+omit = hyperv/tests/*,hyperv/openstack/*
+
+[report]
+ignore-errors = True

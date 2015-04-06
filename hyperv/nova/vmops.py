@@ -23,6 +23,7 @@ import time
 
 from eventlet import timeout as etimeout
 from nova.api.metadata import base as instance_metadata
+from nova.compute import vm_states
 from nova import exception
 from nova.openstack.common import fileutils
 from nova.openstack.common import loopingcall
@@ -125,6 +126,7 @@ class VMOps(object):
     # The console log is stored in two files, each should have at most half of
     # the maximum console log size.
     _MAX_CONSOLE_LOG_FILE_SIZE = units.Mi / 2
+    _ROOT_DISK_CTRL_ADDR = 0
 
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
@@ -176,13 +178,18 @@ class VMOps(object):
                                      num_cpu=info['NumberOfProcessors'],
                                      cpu_time_ns=info['UpTime'])
 
-    def _create_root_vhd(self, context, instance):
-        base_vhd_path = self._imagecache.get_cached_image(context, instance)
+    def _create_root_vhd(self, context, instance, rescue_image_id=None):
+        is_rescue_vhd = rescue_image_id is not None
+
+        base_vhd_path = self._imagecache.get_cached_image(context, instance,
+                                                          rescue_image_id)
         base_vhd_info = self._vhdutils.get_vhd_info(base_vhd_path)
         base_vhd_size = base_vhd_info['MaxInternalSize']
         format_ext = base_vhd_path.split('.')[-1]
+
         root_vhd_path = self._pathutils.get_root_vhd_path(instance.name,
-                                                          format_ext)
+                                                          format_ext,
+                                                          is_rescue_vhd)
         root_vhd_size = instance.root_gb * units.Gi
 
         try:
@@ -212,9 +219,9 @@ class VMOps(object):
                 self._vhdutils.get_internal_vhd_size_by_file_size(
                     base_vhd_path, root_vhd_size))
 
-            if self._is_resize_needed(root_vhd_path, base_vhd_size,
-                                      root_vhd_internal_size,
-                                      instance):
+            if not is_rescue_vhd and self._is_resize_needed(
+                    root_vhd_path, base_vhd_size,
+                    root_vhd_internal_size, instance):
                 self._vhdutils.resize_vhd(root_vhd_path,
                                           root_vhd_internal_size,
                                           is_file_max_size=False)
@@ -371,7 +378,7 @@ class VMOps(object):
         return vm_gen
 
     def _create_config_drive(self, instance, injected_files, admin_password,
-                             network_info):
+                             network_info, rescue=False):
         if CONF.config_drive_format != 'iso9660':
             raise vmutils.UnsupportedConfigDriveFormatException(
                 _('Invalid config_drive_format "%s"') %
@@ -388,9 +395,8 @@ class VMOps(object):
                                                      extra_md=extra_md,
                                                      network_info=network_info)
 
-        instance_path = self._pathutils.get_instance_dir(
-            instance.name)
-        configdrive_path_iso = os.path.join(instance_path, 'configdrive.iso')
+        configdrive_path_iso = self._pathutils.get_configdrive_path(
+            instance.name, constants.DVD_FORMAT, rescue=rescue)
         LOG.info(_LI('Creating config drive at %(path)s'),
                  {'path': configdrive_path_iso}, instance=instance)
 
@@ -404,8 +410,8 @@ class VMOps(object):
                               e, instance=instance)
 
         if not CONF.hyperv.config_drive_cdrom:
-            configdrive_path = os.path.join(instance_path,
-                                            'configdrive.vhd')
+            configdrive_path = self._pathutils.get_configdrive_path(
+                instance.name, constants.DISK_FORMAT_VHD, rescue=rescue)
             utils.execute(CONF.hyperv.qemu_img_cmd,
                           'convert',
                           '-f',
@@ -432,6 +438,17 @@ class VMOps(object):
                                controller_type, drive_type)
         except KeyError:
             raise exception.InvalidDiskFormat(disk_format=configdrive_ext)
+
+    def _detach_config_drive(self, instance_name, rescue=False, delete=False):
+        configdrive_path = self._pathutils.lookup_configdrive_path(
+            instance_name, rescue=rescue)
+
+        if configdrive_path:
+            self._vmutils.detach_vm_disk(instance_name,
+                                         configdrive_path,
+                                         is_physical=False)
+            if delete:
+                self._pathutils.remove(configdrive_path)
 
     def _delete_disk_files(self, instance_name):
         self._pathutils.get_instance_dir(instance_name,
@@ -695,3 +712,79 @@ class VMOps(object):
         dvd_disk_paths = self._vmutils.get_vm_dvd_disk_paths(vm_name)
         for path in dvd_disk_paths:
             self._pathutils.copyfile(path, dest_host)
+
+    def rescue_instance(self, context, instance, network_info, image_meta,
+                        rescue_password):
+        rescue_image_id = image_meta.get('id') or instance.image_ref
+        rescue_vhd_path = self._create_root_vhd(
+            context, instance, image_meta, rescue_image_id=rescue_image_id)
+
+        rescue_vm_gen = self.get_image_vm_generation(rescue_vhd_path,
+                                                     image_meta)
+        vm_gen = self._vmutils.get_vm_gen(instance.name)
+        if rescue_vm_gen != vm_gen:
+            err_msg = _('The requested rescue image requires a different VM '
+                        'generation than the actual rescued instance. '
+                        'Rescue image VM generation: %(rescue_vm_gen)s. '
+                        'Rescued instance VM generation: %(vm_gen)s.')
+            raise vmutils.HyperVException(err_msg %
+                {'rescue_vm_gen': rescue_vm_gen,
+                 'vm_gen': vm_gen})
+
+        root_vhd_path = self._pathutils.lookup_root_vhd_path(instance.name)
+        if not root_vhd_path:
+            err_msg = _('Instance root disk image could not be found. '
+                        'Rescuing instances booted from volume is '
+                        'not supported.')
+            raise vmutils.HyperVException(err_msg)
+
+        controller_type = VM_GENERATIONS_CONTROLLER_TYPES[vm_gen]
+
+        self._vmutils.detach_vm_disk(instance.name, root_vhd_path,
+                                     is_physical=False)
+        self._attach_drive(instance.name, rescue_vhd_path, 0,
+                           self._ROOT_DISK_CTRL_ADDR, controller_type)
+        self._vmutils.attach_scsi_drive(instance.name, root_vhd_path,
+                                        drive_type=constants.DISK)
+
+        if configdrive.required_by(instance):
+            self._detach_config_drive(instance.name)
+            rescue_configdrive_path = self._create_config_drive(
+                instance,
+                injected_files=None,
+                admin_password=rescue_password,
+                network_info=network_info,
+                rescue=True)
+            self.attach_config_drive(instance, rescue_configdrive_path,
+                                     vm_gen)
+
+        self.power_on(instance)
+
+    def unrescue_instance(self, instance):
+        self.power_off(instance)
+
+        root_vhd_path = self._pathutils.lookup_root_vhd_path(instance.name)
+        rescue_vhd_path = self._pathutils.lookup_root_vhd_path(instance.name,
+                                                               rescue=True)
+
+        if (instance.vm_state == vm_states.RESCUED and
+                not (rescue_vhd_path and root_vhd_path)):
+            err_msg = _('Missing instance root and/or rescue image. '
+                        'The instance cannot be unrescued.')
+            raise vmutils.HyperVException(err_msg)
+
+        vm_gen = self._vmutils.get_vm_gen(instance.name)
+        controller_type = VM_GENERATIONS_CONTROLLER_TYPES[vm_gen]
+
+        self._vmutils.detach_vm_disk(instance.name, root_vhd_path,
+                                     is_physical=False)
+        if rescue_vhd_path:
+            self._vmutils.detach_vm_disk(instance.name, rescue_vhd_path,
+                                         is_physical=False)
+        self._attach_drive(instance.name, root_vhd_path, 0,
+                           self._ROOT_DISK_CTRL_ADDR, controller_type)
+
+        self._detach_config_drive(instance.name, rescue=True, delete=True)
+        fileutils.delete_if_exists(rescue_vhd_path)
+
+        self.power_on(instance)

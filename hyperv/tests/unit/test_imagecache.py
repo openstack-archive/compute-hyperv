@@ -23,6 +23,7 @@ from oslo_config import cfg
 
 from hyperv.nova import constants
 from hyperv.nova import imagecache
+from hyperv.nova import vmutils
 from hyperv.tests import fake_instance
 from hyperv.tests import test
 
@@ -73,7 +74,8 @@ class ImageCacheTestCase(test.NoDBTestCase):
         ret_val = self._test_get_root_vhd_size_gb(old_flavor=False)
         self.assertEqual(self.instance.root_gb, ret_val)
 
-    def _prepare_get_cached_image(self, path_exists, use_cow):
+    def _prepare_get_cached_image(self, path_exists=False, use_cow=False,
+                                  rescue_image_id=None):
         self.instance.image_ref = self.FAKE_IMAGE_REF
         self.imagecache._pathutils.get_base_vhd_dir.return_value = (
             self.FAKE_BASE_DIR)
@@ -83,8 +85,9 @@ class ImageCacheTestCase(test.NoDBTestCase):
 
         CONF.set_override('use_cow_images', use_cow)
 
+        image_file_name = rescue_image_id or self.FAKE_IMAGE_REF
         expected_path = os.path.join(self.FAKE_BASE_DIR,
-                                     self.FAKE_IMAGE_REF)
+                                     image_file_name)
         expected_vhd_path = "%s.%s" % (expected_path,
                                        constants.DISK_FORMAT_VHD.lower())
         return (expected_path, expected_vhd_path)
@@ -135,3 +138,26 @@ class ImageCacheTestCase(test.NoDBTestCase):
         self.assertEqual(expected_resized_vhd_path, result)
 
         mock_resize.assert_called_once_with(self.instance, expected_vhd_path)
+
+    @mock.patch.object(imagecache.images, 'fetch')
+    def test_cache_rescue_image_bigger_than_flavor(self, mock_fetch):
+        fake_rescue_image_id = 'fake_rescue_image_id'
+
+        self.imagecache._vhdutils.get_vhd_info.return_value = {
+            'MaxInternalSize': self.instance.root_gb + 1}
+        (expected_path,
+         expected_vhd_path) = self._prepare_get_cached_image(
+            rescue_image_id=fake_rescue_image_id)
+
+        self.assertRaises(vmutils.HyperVException,
+                          self.imagecache.get_cached_image,
+                          self.context, self.instance,
+                          fake_rescue_image_id)
+
+        mock_fetch.assert_called_once_with(self.context,
+                                           fake_rescue_image_id,
+                                           expected_path,
+                                           self.instance.user_id,
+                                           self.instance.project_id)
+        self.imagecache._vhdutils.get_vhd_info.assert_called_once_with(
+            expected_vhd_path)

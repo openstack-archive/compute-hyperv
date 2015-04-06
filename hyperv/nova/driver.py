@@ -21,6 +21,7 @@ import platform
 
 from nova.virt import driver
 from oslo_log import log as logging
+from oslo_utils import excutils
 
 from hyperv.i18n import _
 from hyperv.nova import hostops
@@ -241,3 +242,15 @@ class HyperVDriver(driver.ComputeDriver):
 
     def get_console_output(self, context, instance):
         return self._vmops.get_console_output(instance)
+
+    def rescue(self, context, instance, network_info, image_meta,
+               rescue_password):
+        try:
+            self._vmops.rescue_instance(context, instance, network_info,
+                                        image_meta, rescue_password)
+        except Exception:
+            with excutils.save_and_reraise_exception():
+                self._vmops.unrescue_instance(instance)
+
+    def unrescue(self, instance, network_info):
+        self._vmops.unrescue_instance(instance, network_info)

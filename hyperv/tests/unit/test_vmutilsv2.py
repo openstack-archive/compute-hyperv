@@ -260,3 +260,14 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
 
         ret_val = self._vmutils.get_vm_dvd_disk_paths(self._FAKE_VM_NAME)
         self.assertEqual(mock.sentinel.FAKE_DVD_PATH1, ret_val[0])
+
+    @mock.patch.object(vmutilsv2.VMUtilsV2, '_get_vm_setting_data')
+    def test_get_vm_gen(self, mock_get_vm_setting_data):
+        mock_vm = self._lookup_vm()
+        mock_vm_settings = mock.Mock(
+            VirtualSystemSubType=self._vmutils._VIRTUAL_SYSTEM_SUBTYPE_GEN2)
+        mock_get_vm_setting_data.return_value = mock_vm_settings
+
+        vm_gen = self._vmutils.get_vm_gen(mock_vm)
+
+        self.assertEqual(constants.VM_GEN_2, vm_gen)

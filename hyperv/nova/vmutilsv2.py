@@ -47,6 +47,7 @@ class VMUtilsV2(vmutils.VMUtils):
     _SERIAL_PORT_RES_SUB_TYPE = 'Microsoft:Hyper-V:Serial Port'
 
     _VIRTUAL_SYSTEM_TYPE_REALIZED = 'Microsoft:Hyper-V:System:Realized'
+    _VIRTUAL_SYSTEM_SUBTYPE_GEN1 = 'Microsoft:Hyper-V:SubType:1'
     _VIRTUAL_SYSTEM_SUBTYPE_GEN2 = 'Microsoft:Hyper-V:SubType:2'
 
     _SNAPSHOT_FULL = 2
@@ -321,3 +322,10 @@ class VMUtilsV2(vmutils.VMUtils):
                      if sasd.ResourceSubType == self._DVD_DISK_RES_SUB_TYPE]
 
         return dvd_paths
+
+    def get_vm_gen(self, instance_name):
+        vm = self._lookup_vm_check(instance_name)
+        vm_settings = self._get_vm_setting_data(vm)
+        vm_gen = getattr(vm_settings, 'VirtualSystemSubType',
+                         self._VIRTUAL_SYSTEM_SUBTYPE_GEN1)
+        return int(vm_gen.split(':')[-1])

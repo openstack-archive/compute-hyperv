@@ -10,3 +10,6 @@ oslo.log>=1.2.0  # Apache-2.0
 oslo.serialization>=1.4.0  # Apache-2.0
 oslo.utils>=1.6.0  # Apache-2.0
 oslo.i18n>=1.5.0  # Apache-2.0
+
+eventlet>=0.16.1,!=0.17.0
+-e git+http://github.com/openstack/nova.git#egg=nova

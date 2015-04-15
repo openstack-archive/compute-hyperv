@@ -279,6 +279,7 @@ class VMUtilsV2(vmutils.VMUtils):
 
         eth_port_data.HostResource = [vswitch_conn_data]
         eth_port_data.Parent = nic_data.path_()
+        eth_port_data.ElementName = nic_name
 
         vm = self._lookup_vm_check(vm_name)
         self._add_virt_resource(eth_port_data, vm.path_())

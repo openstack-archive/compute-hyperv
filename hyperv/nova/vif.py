@@ -14,12 +14,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import abc
-
+from nova.i18n import _
+from nova.network import model as network_model
 from oslo_config import cfg
 from oslo_log import log as logging
 
+from hyperv.nova import ovsutils
 from hyperv.nova import utilsfactory
+
 
 hyperv_opts = [
     cfg.StrOpt('vswitch_name',
@@ -30,30 +32,25 @@ hyperv_opts = [
 
 CONF = cfg.CONF
 CONF.register_opts(hyperv_opts, 'hyperv')
+CONF.import_opt('network_api_class', 'nova.network')
 
 LOG = logging.getLogger(__name__)
 
 
 class HyperVBaseVIFDriver(object):
-    @abc.abstractmethod
     def plug(self, instance, vif):
         pass
 
-    @abc.abstractmethod
+    def post_start(self, instance, vif):
+        pass
+
     def unplug(self, instance, vif):
         pass
 
 
 class HyperVNeutronVIFDriver(HyperVBaseVIFDriver):
     """Neutron VIF driver."""
-
-    def plug(self, instance, vif):
-        # Neutron takes care of plugging the port
-        pass
-
-    def unplug(self, instance, vif):
-        # Neutron takes care of unplugging the port
-        pass
+    pass
 
 
 class HyperVNovaNetworkVIFDriver(HyperVBaseVIFDriver):
@@ -77,6 +74,53 @@ class HyperVNovaNetworkVIFDriver(HyperVBaseVIFDriver):
 
         self._vmutils.set_nic_connection(vm_name, vif['id'], vswitch_data)
 
+
+class HyperVOVSVIFDriver(HyperVNovaNetworkVIFDriver):
+
+    def _get_bridge_name(self, vif):
+        return vif['network']['bridge']
+
+    def _get_ovs_interfaceid(self, vif):
+        return vif.get('ovs_interfaceid') or vif['id']
+
+    def post_start(self, instance, vif):
+        nic_name = vif['id']
+        bridge = self._get_bridge_name(vif)
+        if ovsutils.check_bridge_has_dev(bridge, nic_name,
+                                          run_as_root=False):
+            return
+
+        ovsutils.create_ovs_vif_port(
+            self._get_bridge_name(vif),
+            nic_name,
+            self._get_ovs_interfaceid(vif),
+            vif['address'],
+            instance.uuid)
+
     def unplug(self, instance, vif):
-        # TODO(alepilotti) Not implemented
-        pass
+        ovsutils.delete_ovs_vif_port(
+            self._get_bridge_name(vif),
+            vif['id'])
+
+
+_vif_driver_class_map = {
+    'nova.network.neutronv2.api.API': HyperVNeutronVIFDriver,
+    'nova.network.api.API': HyperVNovaNetworkVIFDriver,
+}
+_ovs_vif_driver = HyperVOVSVIFDriver
+
+
+def get_vif_driver(vif_type):
+    # results should be cached. Creating a global driver map
+    # with instantiated classes will cause tests to fail on
+    # non windows platforms
+    if vif_type == network_model.VIF_TYPE_OVS:
+        return _ovs_vif_driver()
+
+    try:
+        return _vif_driver_class_map[CONF.network_api_class]()
+    except KeyError:
+        raise TypeError(_("VIF driver not found for "
+                          "network_api_class: %(api_class)s, %(vif_type)s") %
+                        {"api_class": CONF.network_api_class,
+                         "vif_type": vif_type})

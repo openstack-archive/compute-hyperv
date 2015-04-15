@@ -31,6 +31,7 @@ class HostUtils(object):
     _DEFAULT_VM_GENERATION = constants.IMAGE_PROP_VM_GEN_1
 
     def __init__(self):
+        self._conn_cimv2 = None
         if sys.platform == 'win32':
             self._conn_cimv2 = wmi.WMI(privileges=["Shutdown"])
 
@@ -76,7 +77,8 @@ class HostUtils(object):
         return map(int, version_str.split('.')) >= [major, minor, build]
 
     def get_windows_version(self):
-        return self._conn_cimv2.Win32_OperatingSystem()[0].Version
+        if self._conn_cimv2:
+            return self._conn_cimv2.Win32_OperatingSystem()[0].Version
 
     def get_local_ips(self):
         addr_info = socket.getaddrinfo(socket.gethostname(), None, 0, 0, 0)

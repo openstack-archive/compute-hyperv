@@ -34,7 +34,6 @@ from oslo_concurrency import processutils
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
-from oslo_utils import importutils
 from oslo_utils import units
 from oslo_utils import uuidutils
 
@@ -43,6 +42,7 @@ from hyperv.nova import constants
 from hyperv.nova import imagecache
 from hyperv.nova import ioutils
 from hyperv.nova import utilsfactory
+from hyperv.nova import vif as vif_utils
 from hyperv.nova import vmutils
 from hyperv.nova import volumeops
 
@@ -88,7 +88,6 @@ hyperv_opts = [
 CONF = cfg.CONF
 CONF.register_opts(hyperv_opts, 'hyperv')
 CONF.import_opt('use_cow_images', 'nova.virt.driver')
-CONF.import_opt('network_api_class', 'nova.network')
 
 SHUTDOWN_TIME_INCREMENT = 5
 REBOOT_TYPE_SOFT = 'SOFT'
@@ -116,13 +115,6 @@ def check_admin_permissions(function):
 
 
 class VMOps(object):
-    _vif_driver_class_map = {
-        'nova.network.neutronv2.api.API':
-        'hyperv.nova.vif.HyperVNeutronVIFDriver',
-        'nova.network.api.API':
-        'hyperv.nova.vif.HyperVNovaNetworkVIFDriver',
-    }
-
     # The console log is stored in two files, each should have at most half of
     # the maximum console log size.
     _MAX_CONSOLE_LOG_FILE_SIZE = units.Mi / 2
@@ -135,18 +127,8 @@ class VMOps(object):
         self._hostutils = utilsfactory.get_hostutils()
         self._volumeops = volumeops.VolumeOps()
         self._imagecache = imagecache.ImageCache()
-        self._vif_driver = None
-        self._load_vif_driver_class()
+        self._vif_driver_cache = {}
         self._vm_log_writers = {}
-
-    def _load_vif_driver_class(self):
-        try:
-            class_name = self._vif_driver_class_map[CONF.network_api_class]
-            self._vif_driver = importutils.import_object(class_name)
-        except KeyError:
-            raise TypeError(_("VIF driver not found for "
-                              "network_api_class: %s") %
-                            CONF.network_api_class)
 
     def list_instance_uuids(self):
         instance_uuids = []
@@ -232,6 +214,14 @@ class VMOps(object):
 
         return root_vhd_path
 
+    def _get_vif_driver(self, vif_type):
+        vif_driver = self._vif_driver_cache.get(vif_type)
+        if vif_driver:
+            return vif_driver
+        vif_driver = vif_utils.get_vif_driver(vif_type)
+        self._vif_driver_cache[vif_type] = vif_driver
+        return vif_driver
+
     def _is_resize_needed(self, vhd_path, old_size, new_size, instance):
         if new_size < old_size:
             error_msg = _("Cannot resize a VHD to a smaller size, the"
@@ -293,7 +283,7 @@ class VMOps(object):
 
                 self.attach_config_drive(instance, configdrive_path, vm_gen)
 
-            self.power_on(instance)
+            self.power_on(instance, network_info=network_info)
         except Exception:
             with excutils.save_and_reraise_exception():
                 self.destroy(instance)
@@ -337,7 +327,8 @@ class VMOps(object):
             self._vmutils.create_nic(instance_name,
                                      vif['id'],
                                      vif['address'])
-            self._vif_driver.plug(instance, vif)
+            vif_driver = self._get_vif_driver(vif.get('type'))
+            vif_driver.plug(instance, vif)
 
         if CONF.hyperv.enable_instance_metrics_collection:
             self._vmutils.enable_vm_metrics_collection(instance_name)
@@ -472,6 +463,10 @@ class VMOps(object):
 
             if destroy_disks:
                 self._delete_disk_files(instance_name)
+            if network_info:
+                for vif in network_info:
+                    vif_driver = self._get_vif_driver(vif.get('type'))
+                    vif_driver.unplug(instance, vif)
         except Exception:
             with excutils.save_and_reraise_exception():
                 LOG.exception(_LE('Failed to destroy instance: %s'),
@@ -483,7 +478,7 @@ class VMOps(object):
 
         if reboot_type == REBOOT_TYPE_SOFT:
             if self._soft_shutdown(instance):
-                self.power_on(instance)
+                self.power_on(instance, network_info=network_info)
                 return
 
         self._set_vm_state(instance,
@@ -560,7 +555,7 @@ class VMOps(object):
         self._set_vm_state(instance,
                            constants.HYPERV_VM_STATE_DISABLED)
 
-    def power_on(self, instance, block_device_info=None):
+    def power_on(self, instance, block_device_info=None, network_info=None):
         """Power on the specified instance."""
         LOG.debug("Power on instance", instance=instance)
 
@@ -569,6 +564,10 @@ class VMOps(object):
                                                            block_device_info)
 
         self._set_vm_state(instance, constants.HYPERV_VM_STATE_ENABLED)
+        if network_info:
+            for vif in network_info:
+                vif_driver = self._get_vif_driver(vif.get('type'))
+                vif_driver.post_start(instance, vif)
 
     def _set_vm_state(self, instance, req_state):
         instance_name = instance.name
@@ -631,7 +630,7 @@ class VMOps(object):
     def resume_state_on_host_boot(self, context, instance, network_info,
                                   block_device_info=None):
         """Resume guest state when a host is booted."""
-        self.power_on(instance, block_device_info)
+        self.power_on(instance, block_device_info, network_info)
 
     def log_vm_serial_output(self, instance_name, instance_uuid):
         # Uses a 'thread' that will run in background, reading

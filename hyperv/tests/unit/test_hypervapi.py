@@ -29,10 +29,12 @@ from nova import db
 from nova import exception
 from nova.image import glance
 from nova import objects
+from nova.objects import flavor as flavor_obj
 from nova.openstack.common import fileutils
 from nova.tests.unit import fake_instance
 from nova.tests.unit import fake_network
 from nova.tests.unit.image import fake as fake_image
+from nova.tests.unit.objects import test_flavor
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import driver
@@ -334,6 +336,8 @@ class HyperVAPITestCase(HyperVAPIBaseTestCase):
         self._instance_data = self._get_instance_data()
         instance = db.instance_create(self._context, self._instance_data)
         instance['system_metadata'] = {}
+        instance.flavor = mock.MagicMock()
+        instance.flavor.extra_specs.get.return_value = None
 
         if ephemeral_storage:
             instance['ephemeral_gb'] = 1
@@ -944,6 +948,9 @@ class HyperVAPITestCase(HyperVAPIBaseTestCase):
         self._instance.vcpus = 2
         self._instance['system_metadata'] = {}
         self._instance['old_flavor'] = objects.Flavor(root_gb=5)
+        flavor = flavor_obj.Flavor(**test_flavor.fake_flavor)
+        self._instance.flavor = flavor
+        self._instance_data = self._get_instance_data()
         network_info = fake_network.fake_get_instance_nw_info(self.stubs)
 
         m = fake.PathUtils.get_instance_dir(mox.IsA(str))
@@ -1038,6 +1045,10 @@ class HyperVAPITestCase(HyperVAPIBaseTestCase):
         self._instance.memory_mb = 100
         self._instance.vcpus = 2
         self._instance['system_metadata'] = {}
+        flavor = flavor_obj.Flavor(**test_flavor.fake_flavor)
+        self._instance.flavor = flavor
+        self._instance_data = self._get_instance_data()
+
         network_info = fake_network.fake_get_instance_nw_info(self.stubs)
 
         fake_revert_path = ('C:\\FakeInstancesPath\\%s\\_revert' %

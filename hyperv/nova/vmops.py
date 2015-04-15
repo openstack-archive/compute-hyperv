@@ -83,6 +83,11 @@ hyperv_opts = [
                help='Number of seconds to wait for instance to shut down after'
                     ' soft reboot request is made. We fall back to hard reboot'
                     ' if instance does not shutdown within this window.'),
+    cfg.BoolOpt('enable_remotefx',
+                default=False,
+                help='Enables RemoteFX. This requires at least one DirectX 11 '
+                     'capable graphic adapter for Windows Server 2012 R2 and '
+                     'RDS-Virtualization feature has to be enabled')
 ]
 
 CONF = cfg.CONF
@@ -302,6 +307,17 @@ class VMOps(object):
                                 instance_path,
                                 [instance.uuid])
 
+        flavor_extra_specs = instance.flavor.extra_specs
+        remote_fx_config = flavor_extra_specs.get(
+                constants.FLAVOR_REMOTE_FX_EXTRA_SPEC_KEY)
+        if remote_fx_config:
+            if vm_gen == constants.VM_GEN_2:
+                raise vmutils.HyperVException(_("RemoteFX is not supported "
+                                                "on generation 2 virtual "
+                                                "machines."))
+            else:
+                self._configure_remotefx(instance, remote_fx_config)
+
         self._vmutils.create_scsi_controller(instance_name)
         controller_type = VM_GENERATIONS_CONTROLLER_TYPES[vm_gen]
 
@@ -417,6 +433,29 @@ class VMOps(object):
             configdrive_path = configdrive_path_iso
 
         return configdrive_path
+
+    def _configure_remotefx(self, instance, config):
+        if not CONF.hyperv.enable_remotefx:
+            raise vmutils.HyperVException(
+                _("enable_remotefx configuration option needs to be set to "
+                  "True in order to use RemoteFX"))
+
+        if not self._hostutils.check_server_feature(
+                        self._hostutils.FEATURE_RDS_VIRTUALIZATION):
+                    raise vmutils.HyperVException(
+                        _("The RDS-Virtualization feature must be installed "
+                          "in order to use RemoteFX"))
+
+        instance_name = instance.name
+        LOG.debug('Configuring RemoteFX for instance: %s', instance_name)
+
+        (remotefx_max_resolution, remotefx_monitor_count) = config.split(',')
+        remotefx_monitor_count = int(remotefx_monitor_count)
+
+        self._vmutils.enable_remotefx_video_adapter(
+            instance_name,
+            remotefx_monitor_count,
+            remotefx_max_resolution)
 
     def attach_config_drive(self, instance, configdrive_path, vm_gen):
         configdrive_ext = configdrive_path[(configdrive_path.rfind('.') + 1):]

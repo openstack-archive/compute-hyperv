@@ -36,6 +36,7 @@ from hyperv.nova import utilsfactory
 
 CONF = cfg.CONF
 CONF.import_opt('my_ip', 'nova.netconf')
+CONF.import_opt('enable_remotefx', 'hyperv.nova.vmops', 'hyperv')
 LOG = logging.getLogger(__name__)
 
 
@@ -105,6 +106,22 @@ class HostOps(object):
         LOG.debug('Windows version: %s ', version)
         return version
 
+    def _get_remotefx_gpu_info(self):
+        remotefx_total_video_ram = 0
+        remotefx_available_video_ram = 0
+
+        if CONF.hyperv.enable_remotefx:
+            gpus = self._hostutils.get_remotefx_gpu_info()
+            for gpu in gpus:
+                remotefx_total_video_ram += int(gpu['total_video_ram'])
+                remotefx_available_video_ram += int(gpu['available_video_ram'])
+        else:
+            gpus = []
+
+        return {'remotefx_total_video_ram': remotefx_total_video_ram,
+                'remotefx_available_video_ram': remotefx_available_video_ram,
+                'remotefx_gpu_info': jsonutils.dumps(gpus)}
+
     def get_available_resource(self):
         """Retrieve resource info.
 
@@ -130,6 +147,8 @@ class HostOps(object):
                  cpu_topology['cores'] *
                  cpu_topology['threads'])
 
+        gpu_info = self._get_remotefx_gpu_info()
+
         dic = {'vcpus': vcpus,
                'memory_mb': total_mem_mb,
                'memory_mb_used': used_mem_mb,
@@ -145,6 +164,7 @@ class HostOps(object):
                     (arch.X86_64, hv_type.HYPERV, vm_mode.HVM)]),
                'numa_topology': None,
                }
+        dic.update(gpu_info)
 
         return dic
 

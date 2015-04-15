@@ -81,6 +81,7 @@ class VMUtils(object):
     _SYNTHETIC_ETHERNET_PORT_SETTING_DATA_CLASS = \
     'Msvm_SyntheticEthernetPortSettingData'
     _AFFECTED_JOB_ELEMENT_CLASS = "Msvm_AffectedJobElement"
+    _CIM_RES_ALLOC_SETTING_DATA_CLASS = 'Cim_ResourceAllocationSettingData'
 
     _SHUTDOWN_COMPONENT = "Msvm_ShutdownComponent"
     _VIRTUAL_SYSTEM_CURRENT_SETTINGS = 3
@@ -770,3 +771,8 @@ class VMUtils(object):
 
     def get_vm_gen(self, instance_name):
         return constants.VM_GEN_1
+
+    def enable_remotefx_video_adapter(self, vm_name, monitor_count,
+                                      max_resolution):
+        raise NotImplementedError(_('RemoteFX is currently not supported by '
+                                    'this driver on this version of Hyper-V'))

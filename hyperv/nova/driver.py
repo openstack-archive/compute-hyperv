@@ -254,3 +254,9 @@ class HyperVDriver(driver.ComputeDriver):
 
     def unrescue(self, instance, network_info):
         self._vmops.unrescue_instance(instance, network_info)
+
+    def attach_interface(self, instance, image_meta, vif):
+        return self._vmops.attach_interface(instance, vif)
+
+    def detach_interface(self, instance, vif):
+        return self._vmops.detach_interface(instance, vif)

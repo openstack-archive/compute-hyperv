@@ -390,6 +390,18 @@ class VMUtilsTestCase(test.NoDBTestCase):
 
             mock_add_virt_res.assert_called_with(mock_nic, self._FAKE_VM_PATH)
 
+    @mock.patch.object(vmutils.VMUtils, '_get_nic_data_by_name')
+    def test_destroy_nic(self, mock_get_nic_data_by_name):
+        self._lookup_vm()
+        fake_nic_data = mock_get_nic_data_by_name.return_value
+
+        with mock.patch.object(self._vmutils,
+                               '_remove_virt_resource') as mock_rem_virt_res:
+            self._vmutils.destroy_nic(self._FAKE_VM_NAME,
+                                      mock.sentinel.FAKE_NIC_NAME)
+            mock_rem_virt_res.assert_called_once_with(fake_nic_data,
+                                                      self._FAKE_VM_PATH)
+
     def test_set_vm_state(self):
         mock_vm = self._lookup_vm()
         mock_vm.RequestStateChange.return_value = (

@@ -28,6 +28,7 @@ from hyperv.nova import hostops
 from hyperv.nova import livemigrationops
 from hyperv.nova import migrationops
 from hyperv.nova import rdpconsoleops
+from hyperv.nova import serialconsoleops
 from hyperv.nova import snapshotops
 from hyperv.nova import vmops
 from hyperv.nova import volumeops
@@ -46,9 +47,10 @@ class HyperVDriver(driver.ComputeDriver):
         self._livemigrationops = livemigrationops.LiveMigrationOps()
         self._migrationops = migrationops.MigrationOps()
         self._rdpconsoleops = rdpconsoleops.RDPConsoleOps()
+        self._serialconsoleops = serialconsoleops.SerialConsoleOps()
 
     def init_host(self, host):
-        self._vmops.restart_vm_log_writers()
+        self._serialconsoleops.start_console_handlers()
 
     def list_instance_uuids(self):
         return self._vmops.list_instance_uuids()
@@ -240,8 +242,11 @@ class HyperVDriver(driver.ComputeDriver):
     def get_rdp_console(self, context, instance):
         return self._rdpconsoleops.get_rdp_console(instance)
 
+    def get_serial_console(self, context, instance):
+        return self._serialconsoleops.get_serial_console(instance.name)
+
     def get_console_output(self, context, instance):
-        return self._vmops.get_console_output(instance)
+        return self._serialconsoleops.get_console_output(instance.name)
 
     def rescue(self, context, instance, network_info, image_meta,
                rescue_password):

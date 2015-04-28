@@ -176,7 +176,8 @@ class MigrationOps(object):
         image_meta = self._imagecache.get_image_details(context, instance)
         vm_gen = self._vmops.get_image_vm_generation(root_vhd_path, image_meta)
         self._vmops.create_instance(instance, network_info, block_device_info,
-                                    root_vhd_path, eph_vhd_path, vm_gen)
+                                    root_vhd_path, eph_vhd_path, vm_gen,
+                                    image_meta)
 
         self._check_and_attach_config_drive(instance, vm_gen)
 
@@ -288,7 +289,8 @@ class MigrationOps(object):
 
         vm_gen = self._vmops.get_image_vm_generation(root_vhd_path, image_meta)
         self._vmops.create_instance(instance, network_info, block_device_info,
-                                    root_vhd_path, eph_vhd_path, vm_gen)
+                                    root_vhd_path, eph_vhd_path,
+                                    vm_gen, image_meta)
 
         self._check_and_attach_config_drive(instance, vm_gen)
 

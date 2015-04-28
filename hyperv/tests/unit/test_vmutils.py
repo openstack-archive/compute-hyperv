@@ -619,38 +619,56 @@ class VMUtilsTestCase(test.NoDBTestCase):
 
         self.assertEqual(['active_vm'], active_instances)
 
-    def _test_get_vm_serial_port_connection(self, new_connection=None):
-        old_serial_connection = 'old_serial_connection'
-
+    def test_get_vm_serial_ports(self):
         mock_vm = self._lookup_vm()
         mock_vmsettings = [mock.MagicMock()]
         mock_vm.associators.return_value = mock_vmsettings
 
         fake_serial_port = mock.MagicMock()
-
         fake_serial_port.ResourceSubType = (
             self._vmutils._SERIAL_PORT_RES_SUB_TYPE)
-        fake_serial_port.Connection = [old_serial_connection]
+
         mock_rasds = [fake_serial_port]
         mock_vmsettings[0].associators.return_value = mock_rasds
-        self._vmutils._modify_virt_resource = mock.MagicMock()
-        fake_modify = self._vmutils._modify_virt_resource
 
-        ret_val = self._vmutils.get_vm_serial_port_connection(
-            self._FAKE_VM_NAME, update_connection=new_connection)
+        ret_val = self._vmutils._get_vm_serial_ports(mock_vm)
+        self.assertEqual(mock_rasds, ret_val)
 
-        if new_connection:
-            self.assertEqual(new_connection, ret_val)
-            fake_modify.assert_called_once_with(fake_serial_port,
-                                                mock_vm.path_())
-        else:
-            self.assertEqual(old_serial_connection, ret_val)
+    def test_set_vm_serial_port_conn(self):
+        mock_vm = self._lookup_vm()
+        mock_com_1 = mock.Mock()
+        mock_com_2 = mock.Mock()
 
-    def test_set_vm_serial_port_connection(self):
-        self._test_get_vm_serial_port_connection('new_serial_connection')
+        self._vmutils._get_vm_serial_ports = mock.Mock(
+            return_value=[mock_com_1, mock_com_2])
+        self._vmutils._modify_virt_resource = mock.Mock()
 
-    def test_get_vm_serial_port_connection(self):
-        self._test_get_vm_serial_port_connection()
+        self._vmutils.set_vm_serial_port_connection(
+            mock.sentinel.vm_name,
+            port_number=1,
+            pipe_path=mock.sentinel.pipe_path)
+
+        self.assertEqual([mock.sentinel.pipe_path], mock_com_1.Connection)
+        self._vmutils._modify_virt_resource.assert_called_once_with(
+            mock_com_1, mock_vm.path_())
+
+    def test_get_serial_port_conns(self):
+        self._lookup_vm()
+
+        mock_com_1 = mock.Mock()
+        mock_com_1.Connection = []
+
+        mock_com_2 = mock.Mock()
+        mock_com_2.Connection = [mock.sentinel.pipe_path]
+
+        self._vmutils._get_vm_serial_ports = mock.Mock(
+            return_value=[mock_com_1, mock_com_2])
+
+        ret_val = self._vmutils.get_vm_serial_port_connections(
+            mock.sentinel.vm_name)
+        expected_ret_val = [mock.sentinel.pipe_path]
+
+        self.assertEqual(expected_ret_val, ret_val)
 
     def test_list_instance_notes(self):
         vs = mock.MagicMock()

@@ -748,23 +748,32 @@ class VMUtils(object):
         raise NotImplementedError(_("Metrics collection is not supported on "
                                     "this version of Hyper-V"))
 
-    def get_vm_serial_port_connection(self, vm_name, update_connection=None):
-        vm = self._lookup_vm_check(vm_name)
-
+    def _get_vm_serial_ports(self, vm):
         vmsettings = vm.associators(
             wmi_result_class=self._VIRTUAL_SYSTEM_SETTING_DATA_CLASS)
         rasds = vmsettings[0].associators(
             wmi_result_class=self._RESOURCE_ALLOC_SETTING_DATA_CLASS)
-        serial_port = (
+        serial_ports = (
             [r for r in rasds if
-             r.ResourceSubType == self._SERIAL_PORT_RES_SUB_TYPE][0])
+             r.ResourceSubType == self._SERIAL_PORT_RES_SUB_TYPE]
+        )
+        return serial_ports
 
-        if update_connection:
-            serial_port.Connection = [update_connection]
-            self._modify_virt_resource(serial_port, vm.path_())
+    def set_vm_serial_port_connection(self, vm_name, port_number, pipe_path):
+        vm = self._lookup_vm_check(vm_name)
 
-        if len(serial_port.Connection) > 0:
-            return serial_port.Connection[0]
+        serial_port = self._get_vm_serial_ports(vm)[port_number - 1]
+        serial_port.Connection = [pipe_path]
+
+        self._modify_virt_resource(serial_port, vm.path_())
+
+    def get_vm_serial_port_connections(self, vm_name):
+        vm = self._lookup_vm_check(vm_name)
+        serial_ports = self._get_vm_serial_ports(vm)
+        conns = [serial_port.Connection[0]
+                 for serial_port in serial_ports
+                 if serial_port.Connection and serial_port.Connection[0]]
+        return conns
 
     def get_active_instances(self):
         """Return the names of all the active instances known to Hyper-V."""

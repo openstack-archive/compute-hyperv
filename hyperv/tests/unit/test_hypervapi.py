@@ -51,6 +51,7 @@ from hyperv.nova import pathutils
 from hyperv.nova import rdpconsoleutils
 from hyperv.nova import serialconsoleops
 from hyperv.nova import vhdutils
+from hyperv.nova import vmops
 from hyperv.nova import vmutils
 from hyperv.nova import volumeops
 from hyperv.nova import volumeutils
@@ -141,6 +142,8 @@ class HyperVAPIBaseTestCase(test.NoDBTestCase):
                                   'get_instance_migr_revert_dir')
         self._mox.StubOutWithMock(fake.PathUtils, 'get_instance_dir')
         self._mox.StubOutWithMock(fake.PathUtils, 'get_vm_console_log_paths')
+
+        self._mox.StubOutWithMock(vmops.VMOps, '_set_instance_disk_qos_specs')
 
         self._mox.StubOutWithMock(vmutils.VMUtils, 'vm_exists')
         self._mox.StubOutWithMock(vmutils.VMUtils, 'create_vm')
@@ -413,6 +416,8 @@ class HyperVAPITestCase(HyperVAPIBaseTestCase):
 
         vmutils.VMUtils.set_vm_serial_port_connection(
             mox.IsA(str), mox.IsA(int), mox.IsA(str))
+
+        vmops.VMOps._set_instance_disk_qos_specs(mox.IgnoreArg())
 
     def _set_vm_name(self, vm_name):
         self._test_vm_name = vm_name

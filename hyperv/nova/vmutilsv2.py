@@ -404,3 +404,11 @@ class VMUtilsV2(vmutils.VMUtils):
         vm = self._lookup_vm_check(vm_name)
         vmsettings = self._get_vm_setting_data(vm)
         return [note for note in vmsettings.Notes if note]
+
+    def set_disk_qos_specs(self, vm_name, disk_path, min_iops, max_iops):
+        disk_resource = self._get_mounted_disk_resource_from_path(
+            disk_path, is_physical=False)
+        disk_resource.IOPSLimit = max_iops
+        disk_resource.IOPSReservation = min_iops
+        # VMUtilsV2._modify_virt_resource does not require the vm path.
+        self._modify_virt_resource(disk_resource, None)

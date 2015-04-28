@@ -812,3 +812,7 @@ class VMUtils(object):
     def get_vm_power_state(self, vm_enabled_state):
         return self._enabled_states_map.get(vm_enabled_state,
                                             constants.HYPERV_VM_STATE_OTHER)
+
+    def set_disk_qos_specs(self, vm_name, disk_path, min_iops, max_iops):
+        LOG.warn(_LW("The root/virtualization WMI namespace does not "
+                     "support QoS. Ignoring QoS specs."))

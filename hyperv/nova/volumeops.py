@@ -27,6 +27,7 @@ from nova.virt import driver
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
+from oslo_utils import units
 
 from hyperv.i18n import _, _LE, _LW
 from hyperv.nova import utilsfactory
@@ -60,6 +61,10 @@ CONF.import_opt('my_ip', 'nova.netconf')
 class VolumeOps(object):
     """Management class for Volume-related tasks
     """
+
+    _SUPPORTED_QOS_SPECS = ['total_bytes_sec', 'min_bytes_sec',
+                            'total_iops_sec', 'min_iops_sec']
+    _IOPS_BASE_SIZE = 8 * units.Ki
 
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
@@ -98,6 +103,13 @@ class VolumeOps(object):
         volume_driver = self._get_volume_driver(
             connection_info=connection_info)
         volume_driver.attach_volume(connection_info, instance_name, ebs_root)
+
+        qos_specs = connection_info['data'].get('qos_specs') or {}
+        min_iops, max_iops = self.parse_disk_qos_specs(qos_specs)
+        if min_iops or max_iops:
+            volume_driver.set_disk_qos_specs(connection_info,
+                                             instance_name,
+                                             min_iops, max_iops)
 
     def detach_volume(self, connection_info, instance_name):
         volume_driver = self._get_volume_driver(
@@ -146,6 +158,42 @@ class VolumeOps(object):
             volume_driver = self._get_volume_driver(
                 connection_info=connection_info)
             volume_driver.initialize_volume_connection(connection_info)
+
+    def parse_disk_qos_specs(self, qos_specs):
+        total_bytes_sec = int(qos_specs.get('total_bytes_sec', 0))
+        min_bytes_sec = int(qos_specs.get('min_bytes_sec', 0))
+
+        total_iops = int(qos_specs.get('total_iops_sec',
+                                       self._bytes_per_sec_to_iops(
+                                           total_bytes_sec)))
+        min_iops = int(qos_specs.get('min_iops_sec',
+                                     self._bytes_per_sec_to_iops(
+                                         min_bytes_sec)))
+
+        if total_iops and total_iops < min_iops:
+            err_msg = (_("Invalid QoS specs: minimum IOPS cannot be greater "
+                         "than maximum IOPS. "
+                         "Requested minimum IOPS: %(min_iops)s "
+                         "Requested maximum IOPS: %(total_iops)s.") %
+                       {'min_iops': min_iops,
+                        'total_iops': total_iops})
+            raise vmutils.HyperVException(err_msg)
+
+        unsupported_specs = [spec for spec in qos_specs if
+                             spec not in self._SUPPORTED_QOS_SPECS]
+        if unsupported_specs:
+            LOG.warn(_LW('Ignoring unsupported qos specs: '
+                         '%(unsupported_specs)s. '
+                         'Supported qos specs: %(supported_qos_speces)s'),
+                     {'unsupported_specs': unsupported_specs,
+                      'supported_qos_speces': self._SUPPORTED_QOS_SPECS})
+
+        return min_iops, total_iops
+
+    def _bytes_per_sec_to_iops(self, no_bytes):
+        # Hyper-v uses normalized IOPS (8 KB increments)
+        # as IOPS allocation units.
+        return (no_bytes + self._IOPS_BASE_SIZE - 1) / self._IOPS_BASE_SIZE
 
     def _group_block_devices_by_type(self, block_device_mapping):
         block_devices = collections.defaultdict(list)
@@ -339,6 +387,11 @@ class ISCSIVolumeDriver(object):
     def initialize_volume_connection(self, connection_info):
         self.login_storage_target(connection_info)
 
+    def set_disk_qos_specs(self, connection_info, instance_name,
+                           min_iops, max_iops):
+        LOG.warn(_LW("The iSCSI Hyper-V volume driver does not support QoS. "
+                     "Ignoring QoS specs."))
+
 
 class SMBFSVolumeDriver(object):
     def __init__(self):
@@ -429,3 +482,9 @@ class SMBFSVolumeDriver(object):
 
     def initialize_volume_connection(self, connection_info):
         self.ensure_share_mounted(connection_info)
+
+    def set_disk_qos_specs(self, connection_info, instance_name,
+                           min_iops, max_iops):
+        disk_path = self._get_disk_path(connection_info)
+        self._vmutils.set_disk_qos_specs(instance_name, disk_path,
+                                         min_iops, max_iops)

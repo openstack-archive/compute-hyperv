@@ -267,15 +267,20 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
         self.assertEqual(mock.sentinel.FAKE_DVD_PATH1, ret_val[0])
 
     @mock.patch.object(vmutilsv2.VMUtilsV2, '_get_vm_setting_data')
-    def test_get_vm_gen(self, mock_get_vm_setting_data):
+    def _test_get_vm_gen(self, mock_get_vm_setting_data, vm_gen):
         mock_vm = self._lookup_vm()
-        mock_vm_settings = mock.Mock(
-            VirtualSystemSubType=self._vmutils._VIRTUAL_SYSTEM_SUBTYPE_GEN2)
-        mock_get_vm_setting_data.return_value = mock_vm_settings
+        vm_gen_string = "Microsoft:Hyper-V:SubType:" + str(vm_gen)
+        mock_vssd = mock.MagicMock(VirtualSystemSubType=vm_gen_string)
+        mock_get_vm_setting_data.return_value = mock_vssd
 
-        vm_gen = self._vmutils.get_vm_gen(mock_vm)
+        ret = self._vmutils.get_vm_gen(mock_vm)
+        self.assertEqual(vm_gen, ret)
 
-        self.assertEqual(constants.VM_GEN_2, vm_gen)
+    def test_get_vm_generation_gen1(self):
+        self._test_get_vm_gen(vm_gen=constants.VM_GEN_1)
+
+    def test_get_vm_generation_gen2(self):
+        self._test_get_vm_gen(vm_gen=constants.VM_GEN_2)
 
     @mock.patch.object(vmutilsv2.VMUtilsV2, '_get_new_resource_setting_data')
     @mock.patch.object(vmutilsv2.VMUtilsV2, '_add_virt_resource')
@@ -355,3 +360,22 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
                           self._vmutils.enable_remotefx_video_adapter,
                           mock.sentinel.fake_vm_name, self._FAKE_MONITOR_COUNT,
                           constants.REMOTEFX_MAX_RES_1024x768)
+
+    @mock.patch.object(vmutilsv2.VMUtilsV2,
+                       '_get_mounted_disk_resource_from_path')
+    @mock.patch.object(vmutilsv2.VMUtilsV2, '_modify_virt_resource')
+    def test_set_disk_qos_specs(self, mock_modify_virt_resource,
+                                mock_get_disk_resource):
+        mock_disk = mock_get_disk_resource.return_value
+
+        self._vmutils.set_disk_qos_specs(mock.sentinel.vm_name,
+                                         mock.sentinel.disk_path,
+                                         mock.sentinel.min_iops,
+                                         mock.sentinel.max_iops)
+
+        mock_get_disk_resource.assert_called_once_with(
+            mock.sentinel.disk_path, is_physical=False)
+        self.assertEqual(mock.sentinel.max_iops, mock_disk.IOPSLimit)
+        self.assertEqual(mock.sentinel.min_iops, mock_disk.IOPSReservation)
+        mock_modify_virt_resource.assert_called_once_with(mock_disk,
+                                                          None)

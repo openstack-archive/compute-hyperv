@@ -339,6 +339,7 @@ class VMOps(object):
 
         serial_ports = self._get_image_serial_port_settings(image_meta)
         self._create_vm_com_port_pipes(instance, serial_ports)
+        self._set_instance_disk_qos_specs(instance)
 
         for vif in network_info:
             LOG.debug('Creating nic for instance', instance=instance)
@@ -814,3 +815,27 @@ class VMOps(object):
         vif_driver = self._get_vif_driver(vif.get('type'))
         vif_driver.unplug(instance, vif)
         self._vmutils.destroy_nic(instance.name, vif['id'])
+
+    def _set_instance_disk_qos_specs(self, instance):
+        min_iops, max_iops = self._get_storage_qos_specs(instance)
+        local_disks = self._get_instance_local_disks(instance.name)
+        for disk_path in local_disks:
+            self._vmutils.set_disk_qos_specs(instance.name, disk_path,
+                                             min_iops, max_iops)
+
+    def _get_instance_local_disks(self, instance_name):
+        instance_path = self._pathutils.get_instance_dir(instance_name)
+        instance_disks = self._vmutils.get_vm_storage_paths(instance_name)[0]
+        local_disks = [disk_path for disk_path in instance_disks
+                       if disk_path.find(instance_path) != -1]
+        return local_disks
+
+    def _get_storage_qos_specs(self, instance):
+        extra_specs = instance.flavor.get('extra_specs') or {}
+        storage_qos_specs = {}
+        for spec, value in extra_specs.iteritems():
+            if ':' in spec:
+                scope, key = spec.split(':')
+                if scope == 'storage_qos':
+                    storage_qos_specs[key] = value
+        return self._volumeops.parse_disk_qos_specs(storage_qos_specs)

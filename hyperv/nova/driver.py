@@ -24,6 +24,7 @@ from oslo_log import log as logging
 from oslo_utils import excutils
 
 from hyperv.i18n import _
+from hyperv.nova import eventhandler
 from hyperv.nova import hostops
 from hyperv.nova import livemigrationops
 from hyperv.nova import migrationops
@@ -50,7 +51,12 @@ class HyperVDriver(driver.ComputeDriver):
         self._serialconsoleops = serialconsoleops.SerialConsoleOps()
 
     def init_host(self, host):
-        self._serialconsoleops.start_console_handlers()
+        serialops = self._serialconsoleops
+        serialops.start_console_handlers()
+        event_handler = eventhandler.InstanceEventHandler(
+            state_change_callback=self.emit_event,
+            running_state_callback=serialops.start_console_handler)
+        event_handler.start_listener()
 
     def list_instance_uuids(self):
         return self._vmops.list_instance_uuids()

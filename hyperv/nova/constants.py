@@ -21,6 +21,7 @@ from nova.compute import arch
 from nova.compute import power_state
 from oslo_utils import units
 
+HYPERV_VM_STATE_OTHER = 1
 HYPERV_VM_STATE_ENABLED = 2
 HYPERV_VM_STATE_DISABLED = 3
 HYPERV_VM_STATE_SHUTTING_DOWN = 4

@@ -815,3 +815,17 @@ class VMUtilsTestCase(test.NoDBTestCase):
 
         self._vmutils._conn.query.assert_called_once_with(expected_query)
         self.assertEqual(expected_disks, ret_disks)
+
+    def _get_fake_instance_notes(self):
+        return self._FAKE_VM_UUID
+
+    def test_instance_notes(self):
+        self._lookup_vm()
+        mock_vm_settings = mock.Mock()
+        mock_vm_settings.Notes = self._get_fake_instance_notes()
+        self._vmutils._get_vm_setting_data = mock.Mock(
+            return_value=mock_vm_settings)
+
+        notes = self._vmutils._get_instance_notes(mock.sentinel.vm_name)
+
+        self.assertEqual(notes[0], self._FAKE_VM_UUID)

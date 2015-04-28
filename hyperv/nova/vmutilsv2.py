@@ -399,3 +399,8 @@ class VMUtilsV2(vmutils.VMUtils):
         s3_disp_ctrl_res.Address = self._DISP_CTRL_ADDRESS_DX_11
 
         self._modify_virt_resource(s3_disp_ctrl_res, vm.path_())
+
+    def _get_instance_notes(self, vm_name):
+        vm = self._lookup_vm_check(vm_name)
+        vmsettings = self._get_vm_setting_data(vm)
+        return [note for note in vmsettings.Notes if note]

@@ -12,9 +12,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import contextlib
 import os
 
 import mock
+from nova import utils
 
 from hyperv.nova import constants
 from hyperv.nova import pathutils
@@ -31,6 +33,26 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         self.fake_instance_name = 'fake_instance_name'
 
         self._pathutils = pathutils.PathUtils()
+
+    @mock.patch.object(pathutils.PathUtils, 'rename')
+    def check_move_folder_contents(self, mock_rename):
+        with contextlib.nested(utils.tempdir(),
+                               utils.tempdir()) as (src_dir, dest_dir):
+            src_fname = os.path.join(src_dir, 'tmp_file.txt')
+            dest_fname = os.path.join(dest_dir, 'tmp_file.txt')
+            test_file = open(src_fname, 'w')
+            test_file.close()
+
+            # making sure tmp_folder and its contents is not moved.
+            fdir = os.path.join(src_dir, 'tmp_folder')
+            os.makedirs(fdir)
+            unmoved_fname = os.path.join(fdir, 'unmoved_file.txt')
+            unmoved_file = open(unmoved_fname, 'w')
+            unmoved_file.close()
+
+            self._pathutils.move_folder_contents(src_dir, dest_dir)
+
+            mock_rename.assert_called_once_with(src_fname, dest_fname)
 
     def _mock_lookup_configdrive_path(self, ext, rescue=False):
         self._pathutils.get_instance_dir = mock.MagicMock(

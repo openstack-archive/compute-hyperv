@@ -17,7 +17,7 @@ import functools
 import os
 
 from nova import exception
-from nova.i18n import _, _LI  # noqa
+from nova.i18n import _, _LI, _LE  # noqa
 from nova import utils
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -52,14 +52,20 @@ class SerialConsoleOps(object):
     def start_console_handler(self, instance_name):
         # Cleanup existing workers.
         self._stop_console_handler(instance_name)
+        handler = None
 
         try:
             handler = serialconsolehandler.SerialConsoleHandler(
                 instance_name)
             handler.start()
             _console_handlers[instance_name] = handler
-        except vmutils.HyperVException as exc:
-            LOG.error(exc)
+        except Exception as exc:
+            LOG.error(_LE('Instance %(instance_name)s serial console handler '
+                          'could not start. Exception %(exc)s'),
+                      {'instance_name': instance_name,
+                       'exc': exc})
+            if handler:
+                handler.stop()
 
     @instance_synchronized
     def stop_console_handler(self, instance_name):

@@ -39,17 +39,32 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(serialconsolehandler, 'SerialConsoleHandler')
     @mock.patch.object(serialconsoleops.SerialConsoleOps,
                        '_stop_console_handler')
-    def test_start_console_handler(self, mock_stop_handler,
-                                   mock_console_handler):
+    def _test_start_console_handler(self, mock_stop_handler,
+                                    mock_console_handler,
+                                    raise_exception=False):
+        mock_handler = mock_console_handler.return_value
+
+        if raise_exception:
+            mock_handler.start.side_effect = Exception
+
         self._serialops.start_console_handler(mock.sentinel.instance_name)
 
         mock_stop_handler.assert_called_once_with(mock.sentinel.instance_name)
         mock_console_handler.assert_called_once_with(
             mock.sentinel.instance_name)
-        handler = serialconsoleops._console_handlers.get(
-            mock.sentinel.instance_name)
-        self.assertEqual(mock_console_handler.return_value,
-                         handler)
+
+        if raise_exception:
+            mock_handler.stop.assert_called_once_with()
+        else:
+            console_handler = serialconsoleops._console_handlers.get(
+                mock.sentinel.instance_name)
+            self.assertEqual(mock_handler, console_handler)
+
+    def test_start_console_handler(self):
+        self._test_start_console_handler()
+
+    def test_start_console_handler_exception(self):
+        self._test_start_console_handler(raise_exception=True)
 
     def test_stop_console_handler(self):
         mock_console_handler = self._setup_console_handler_mock()

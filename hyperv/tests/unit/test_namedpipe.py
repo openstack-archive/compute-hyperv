@@ -89,7 +89,6 @@ class NamedPipeTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(namedpipe.NamedPipeHandler, '_close_pipe')
     def test_stop_pipe_handler(self, mock_close_pipe):
         self._mock_setup_pipe_handler()
-        self._handler._stopped.isSet.return_value = False
 
         self._handler.stop()
 

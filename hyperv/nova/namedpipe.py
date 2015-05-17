@@ -45,6 +45,7 @@ class NamedPipeHandler(object):
         self._connect_event = connect_event
         self._stopped = threading.Event()
         self._workers = []
+        self._pipe_handle = None
 
         self._ioutils = ioutils.IOUtils()
 
@@ -77,19 +78,18 @@ class NamedPipeHandler(object):
             raise vmutils.HyperVException(msg)
 
     def stop(self):
-        if not self._stopped.isSet():
-            self._stopped.set()
-            self._cancel_io()
+        self._stopped.set()
+        self._cancel_io()
 
-            for worker in self._workers:
-                worker_running = (worker.is_alive() and
-                                  worker is not threading.current_thread())
-                if worker_running:
-                    worker.join()
+        for worker in self._workers:
+            worker_running = (worker.is_alive() and
+                              worker is not threading.current_thread())
+            if worker_running:
+                worker.join()
 
-            self._close_pipe()
-            if self._log_file_handle:
-                self._log_file_handle.close()
+        self._close_pipe()
+        if self._log_file_handle:
+            self._log_file_handle.close()
 
     def _setup_io_structures(self):
         self._r_buffer = self._ioutils.get_buffer(

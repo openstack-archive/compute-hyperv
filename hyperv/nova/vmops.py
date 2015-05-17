@@ -492,10 +492,6 @@ class VMOps(object):
         LOG.info(_LI("Got request to destroy instance"), instance=instance)
         try:
             if self._vmutils.vm_exists(instance_name):
-                # We must make sure that the console log workers are stopped,
-                # otherwise we won't be able to delete VM log files.
-                self._serial_console_ops.stop_console_handler(instance_name)
-
                 self.power_off(instance)
 
                 self._vmutils.destroy_vm(instance_name)
@@ -589,6 +585,11 @@ class VMOps(object):
     def power_off(self, instance, timeout=0, retry_interval=0):
         """Power off the specified instance."""
         LOG.debug("Power off instance", instance=instance)
+
+        # We must make sure that the console log workers are stopped,
+        # otherwise we won't be able to delete / move VM log files.
+        self._serial_console_ops.stop_console_handler(instance.name)
+
         if retry_interval <= 0:
             retry_interval = SHUTDOWN_TIME_INCREMENT
         try:

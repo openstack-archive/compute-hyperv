@@ -757,14 +757,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                      mock_disconnect_volumes):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._vmops._vmutils.vm_exists.return_value = True
-        serialops = self._vmops._serial_console_ops
 
         self._vmops.destroy(instance=mock_instance,
                             block_device_info=mock.sentinel.FAKE_BD_INFO)
 
         self._vmops._vmutils.vm_exists.assert_called_with(
-            mock_instance.name)
-        serialops.stop_console_handler.assert_called_once_with(
             mock_instance.name)
         mock_power_off.assert_called_once_with(mock_instance)
         self._vmops._vmutils.destroy_vm.assert_called_once_with(
@@ -915,6 +912,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         with mock.patch.object(self._vmops, '_set_vm_state') as mock_set_state:
             self._vmops.power_off(instance, timeout)
 
+            serialops = self._vmops._serial_console_ops
+            serialops.stop_console_handler.assert_called_once_with(
+                instance.name)
             mock_set_state.assert_called_once_with(
                 instance, constants.HYPERV_VM_STATE_DISABLED)
 

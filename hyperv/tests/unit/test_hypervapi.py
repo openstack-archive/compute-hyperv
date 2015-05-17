@@ -805,6 +805,8 @@ class HyperVAPITestCase(HyperVAPIBaseTestCase):
             fake_root_vhd_path = 'C:\\FakePath\\root.vhd'
             fake_revert_path = os.path.join(self._test_instance_dir, '_revert')
 
+            serialconsoleops.SerialConsoleOps.stop_console_handler(
+                mox.IsA(str))
             func = mox.Func(self._check_instance_name)
             vmutils.VMUtils.set_vm_state(func,
                                          constants.HYPERV_VM_STATE_DISABLED)

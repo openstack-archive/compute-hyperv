@@ -95,6 +95,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             instance_path)
         get_revert_dir = (
             self._migrationops._pathutils.get_instance_migr_revert_dir)
+        self._migrationops._hostutils.get_local_ips.return_value = [
+            mock.sentinel.dest_path]
         self._migrationops._pathutils.copy.side_effect = IOError(
             "Expected exception.")
 

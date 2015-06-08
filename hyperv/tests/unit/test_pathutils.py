@@ -34,6 +34,26 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
 
         self._pathutils = pathutils.PathUtils()
 
+    def _test_smb_conn(self, smb_available=True):
+        self._mock_wmi.x_wmi = Exception
+        self._mock_wmi.WMI.side_effect = None if smb_available else Exception
+
+        self._pathutils._set_smb_conn()
+
+        if smb_available:
+            expected_conn = self._mock_wmi.WMI.return_value
+            self.assertEqual(expected_conn, self._pathutils._smb_conn)
+        else:
+            self.assertRaises(vmutils.HyperVException,
+                              getattr,
+                              self._pathutils, '_smb_conn')
+
+    def test_smb_conn_available(self):
+        self._test_smb_conn()
+
+    def test_smb_conn_unavailable(self):
+        self._test_smb_conn(smb_available=False)
+
     @mock.patch.object(pathutils.PathUtils, 'rename')
     def check_move_folder_contents(self, mock_rename):
         with contextlib.nested(utils.tempdir(),

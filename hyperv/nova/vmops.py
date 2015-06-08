@@ -824,10 +824,11 @@ class VMOps(object):
 
     def _set_instance_disk_qos_specs(self, instance):
         min_iops, max_iops = self._get_storage_qos_specs(instance)
-        local_disks = self._get_instance_local_disks(instance.name)
-        for disk_path in local_disks:
-            self._vmutils.set_disk_qos_specs(instance.name, disk_path,
-                                             min_iops, max_iops)
+        if min_iops or max_iops:
+            local_disks = self._get_instance_local_disks(instance.name)
+            for disk_path in local_disks:
+                self._vmutils.set_disk_qos_specs(instance.name, disk_path,
+                                                 min_iops, max_iops)
 
     def _get_instance_local_disks(self, instance_name):
         instance_path = self._pathutils.get_instance_dir(instance_name)

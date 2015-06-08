@@ -27,7 +27,7 @@ if sys.platform == 'win32':
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from hyperv.i18n import _
+from hyperv.i18n import _, _LW
 from hyperv.nova import constants
 from hyperv.nova import vmutils
 
@@ -408,7 +408,12 @@ class VMUtilsV2(vmutils.VMUtils):
     def set_disk_qos_specs(self, vm_name, disk_path, min_iops, max_iops):
         disk_resource = self._get_mounted_disk_resource_from_path(
             disk_path, is_physical=False)
-        disk_resource.IOPSLimit = max_iops
-        disk_resource.IOPSReservation = min_iops
+        try:
+            disk_resource.IOPSLimit = max_iops
+            disk_resource.IOPSReservation = min_iops
+        except AttributeError:
+            LOG.warn(_LW("This Windows version does not support disk QoS. "
+                         "Ignoring QoS specs."))
+            return
         # VMUtilsV2._modify_virt_resource does not require the vm path.
         self._modify_virt_resource(disk_resource, None)

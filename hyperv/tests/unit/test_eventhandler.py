@@ -77,52 +77,28 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
                        '_get_instance_uuid')
     @mock.patch.object(eventhandler.InstanceEventHandler, '_emit_event')
     def _test_dispatch_event(self, mock_emit_event, mock_get_uuid,
-                             missing_uuid=False,
-                             intermediary_state=False,
-                             power_state_changed=True):
-        fake_power_state = (
-            constants.HYPERV_VM_STATE_ENABLED if not intermediary_state
-            else constants.HYPERV_VM_STATE_OTHER)
-        last_power_state = None if power_state_changed else fake_power_state
-
+                             missing_uuid=False):
         mock_get_uuid.return_value = (
             mock.sentinel.instance_uuid if not missing_uuid else None)
         self._event_handler._vmutils.get_vm_power_state.return_value = (
-            fake_power_state)
-        self._event_handler._last_state = {
-            mock.sentinel.instance_guid: last_power_state
-        }
+            mock.sentinel.power_state)
 
         event = mock.Mock()
         event.ElementName = mock.sentinel.instance_name
-        # Hyper-V generated GUID
-        event.Name = mock.sentinel.instance_guid
         event.EnabledState = mock.sentinel.enabled_state
 
         self._event_handler._dispatch_event(event)
 
-        if not (missing_uuid or intermediary_state) and power_state_changed:
+        if not missing_uuid:
             mock_emit_event.assert_called_once_with(
                 mock.sentinel.instance_name,
                 mock.sentinel.instance_uuid,
-                fake_power_state)
+                mock.sentinel.power_state)
         else:
             self.assertFalse(mock_emit_event.called)
 
-        # Make sure that the last power state record is always updated,
-        # even in case of intermediary states.
-        self.assertEqual(
-            fake_power_state,
-            self._event_handler._last_state[mock.sentinel.instance_guid])
-
     def test_dispatch_event_new_final_state(self):
         self._test_dispatch_event()
-
-    def test_dispatch_event_intermediary_state(self):
-        self._test_dispatch_event(intermediary_state=True)
-
-    def test_dispatch_event_unchanged_state(self):
-        self._test_dispatch_event(power_state_changed=False)
 
     def test_dispatch_event_missing_uuid(self):
         self._test_dispatch_event(missing_uuid=True)

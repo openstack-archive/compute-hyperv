@@ -83,6 +83,9 @@ class VMUtils(object):
     'Msvm_SyntheticEthernetPortSettingData'
     _AFFECTED_JOB_ELEMENT_CLASS = "Msvm_AffectedJobElement"
     _CIM_RES_ALLOC_SETTING_DATA_CLASS = 'Cim_ResourceAllocationSettingData'
+    _COMPUTER_SYSTEM_CLASS = "Msvm_ComputerSystem"
+
+    _VM_ENABLED_STATE_PROP = "EnabledState"
 
     _SHUTDOWN_COMPONENT = "Msvm_ShutdownComponent"
     _VIRTUAL_SYSTEM_CURRENT_SETTINGS = 3
@@ -793,11 +796,41 @@ class VMUtils(object):
         raise NotImplementedError(_('RemoteFX is currently not supported by '
                                     'this driver on this version of Hyper-V'))
 
-    def get_vm_state_change_listener(self, event_type, timeframe):
-        return self._conn.Msvm_ComputerSystem.watch_for(
-            event_type,
-            delay_secs=timeframe,
-            fields=["EnabledState"])
+    def get_vm_power_state_change_listener(self, timeframe, filtered_states):
+        field = self._VM_ENABLED_STATE_PROP
+        query = self._get_event_wql_query(cls=self._COMPUTER_SYSTEM_CLASS,
+                                          field=field,
+                                          timeframe=timeframe,
+                                          filtered_states=filtered_states)
+        return self._conn.Msvm_ComputerSystem.watch_for(raw_wql=query,
+                                                        fields=[field])
+
+    def _get_event_wql_query(self, cls, field,
+                             timeframe, filtered_states=None):
+        """Return a WQL query used for polling WMI events.
+
+            :param cls: the WMI class polled for events
+            :param field: the field checked
+            :param timeframe: check for events that occurred in
+                              the specified timeframe
+            :param filtered_states: only catch events triggered when a WMI
+                                    object transitioned into one of those
+                                    states.
+        """
+        query = ("SELECT %(field)s, TargetInstance "
+                 "FROM __InstanceModificationEvent "
+                 "WITHIN %(timeframe)s "
+                 "WHERE TargetInstance ISA '%(class)s' "
+                 "AND TargetInstance.%(field)s != "
+                 "PreviousInstance.%(field)s" %
+                    {'class': cls,
+                     'field': field,
+                     'timeframe': timeframe})
+        if filtered_states:
+            checks = ["TargetInstance.%s = '%s'" % (field, state)
+                      for state in filtered_states]
+            query += " AND (%s)" % " OR ".join(checks)
+        return query
 
     def _get_instance_notes(self, vm_name):
         vm = self._lookup_vm_check(vm_name)

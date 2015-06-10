@@ -829,3 +829,50 @@ class VMUtilsTestCase(test.NoDBTestCase):
         notes = self._vmutils._get_instance_notes(mock.sentinel.vm_name)
 
         self.assertEqual(notes[0], self._FAKE_VM_UUID)
+
+    def test_get_event_wql_query(self):
+        cls = self._vmutils._COMPUTER_SYSTEM_CLASS
+        field = self._vmutils._VM_ENABLED_STATE_PROP
+        timeframe = 10
+        filtered_states = [constants.HYPERV_VM_STATE_ENABLED,
+                           constants.HYPERV_VM_STATE_DISABLED]
+
+        expected_checks = ' OR '.join(
+            ["TargetInstance.%s = '%s'" % (field, state)
+             for state in filtered_states])
+        expected_query = (
+            "SELECT %(field)s, TargetInstance "
+            "FROM __InstanceModificationEvent "
+            "WITHIN %(timeframe)s "
+            "WHERE TargetInstance ISA '%(class)s' "
+            "AND TargetInstance.%(field)s != "
+            "PreviousInstance.%(field)s "
+            "AND (%(checks)s)" %
+                {'class': cls,
+                 'field': field,
+                 'timeframe': timeframe,
+                 'checks': expected_checks})
+
+        query = self._vmutils._get_event_wql_query(
+            cls=cls, field=field, timeframe=timeframe,
+            filtered_states=filtered_states)
+        self.assertEqual(expected_query, query)
+
+    def test_get_vm_power_state_change_listener(self):
+        with mock.patch.object(self._vmutils,
+                               '_get_event_wql_query') as mock_get_query:
+            listener = self._vmutils.get_vm_power_state_change_listener(
+                mock.sentinel.timeframe,
+                mock.sentinel.filtered_states)
+
+            mock_get_query.assert_called_once_with(
+                cls=self._vmutils._COMPUTER_SYSTEM_CLASS,
+                field=self._vmutils._VM_ENABLED_STATE_PROP,
+                timeframe=mock.sentinel.timeframe,
+                filtered_states=mock.sentinel.filtered_states)
+            watcher = self._vmutils._conn.Msvm_ComputerSystem.watch_for
+            watcher.assert_called_once_with(
+                raw_wql=mock_get_query.return_value,
+                fields=[self._vmutils._VM_ENABLED_STATE_PROP])
+
+            self.assertEqual(watcher.return_value, listener)

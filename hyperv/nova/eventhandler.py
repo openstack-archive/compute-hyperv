@@ -47,7 +47,6 @@ CONF.register_opts(hyperv_opts, 'hyperv')
 
 
 class InstanceEventHandler(object):
-    _MODIFICATION_EVENT = 'modification'
     # The event listener timeout is set to 0 in order to return immediately
     # and avoid blocking the thread.
     _WAIT_TIMEOUT = 0
@@ -69,15 +68,13 @@ class InstanceEventHandler(object):
     def __init__(self, state_change_callback=None,
                  running_state_callback=None):
         self._vmutils = utilsfactory.get_vmutils()
-        self._listener = self._vmutils.get_vm_state_change_listener(
-            event_type=self._MODIFICATION_EVENT,
-            timeframe=CONF.hyperv.power_state_check_timeframe)
+        self._listener = self._vmutils.get_vm_power_state_change_listener(
+            timeframe=CONF.hyperv.power_state_check_timeframe,
+            filtered_states=self._TRANSITION_MAP.keys())
 
         self._polling_interval = CONF.hyperv.power_state_event_polling_interval
         self._state_change_callback = state_change_callback
         self._running_state_callback = running_state_callback
-
-        self._last_state = {}
 
     def start_listener(self):
         eventlet.spawn_n(self._poll_events)
@@ -98,22 +95,8 @@ class InstanceEventHandler(object):
             eventlet.sleep(self._polling_interval)
 
     def _dispatch_event(self, event):
-        # Hyper-V generated GUID
-        instance_guid = event.Name
         instance_state = self._vmutils.get_vm_power_state(event.EnabledState)
         instance_name = event.ElementName
-
-        # The event listener returns all instance related changes. We
-        # ignore events that are not triggered by power state changes
-        # as well as intermediary states.
-        last_state = self._last_state.get(instance_guid)
-
-        state_unchanged = last_state == instance_state
-        is_intermediary_state = instance_state not in self._TRANSITION_MAP
-        self._last_state[instance_guid] = instance_state
-
-        if state_unchanged or is_intermediary_state:
-            return
 
         # Instance uuid set by Nova. If this is missing, we assume that
         # the instance was not created by Nova and ignore the event.

@@ -51,11 +51,9 @@ class HyperVDriver(driver.ComputeDriver):
         self._serialconsoleops = serialconsoleops.SerialConsoleOps()
 
     def init_host(self, host):
-        serialops = self._serialconsoleops
-        serialops.start_console_handlers()
+        self._serialconsoleops.start_console_handlers()
         event_handler = eventhandler.InstanceEventHandler(
-            state_change_callback=self.emit_event,
-            running_state_callback=serialops.start_console_handler)
+            state_change_callback=self.emit_event)
         event_handler.start_listener()
 
     def list_instance_uuids(self):

@@ -42,8 +42,8 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
             group='hyperv')
 
         self._event_handler = eventhandler.InstanceEventHandler(
-            self._state_change_callback,
-            self._running_state_callback)
+            self._state_change_callback)
+        self._event_handler._serial_console_ops = mock.Mock()
 
     @mock.patch.object(eventhandler, 'wmi', create=True)
     @mock.patch.object(eventhandler.InstanceEventHandler, '_dispatch_event')
@@ -108,13 +108,30 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
     def test_emit_event(self, mock_spawn, mock_get_event):
         self._event_handler._emit_event(mock.sentinel.instance_name,
                                         mock.sentinel.instance_uuid,
-                                        constants.HYPERV_VM_STATE_ENABLED)
+                                        mock.sentinel.instance_state)
 
         virt_event = mock_get_event.return_value
         mock_spawn.assert_has_calls(
             [mock.call(self._state_change_callback, virt_event),
-             mock.call(self._running_state_callback,
-                       mock.sentinel.instance_name)])
+             mock.call(self._event_handler._handle_serial_console_workers,
+                       mock.sentinel.instance_name,
+                       mock.sentinel.instance_state)])
+
+    def test_handle_serial_console_instance_running(self):
+        self._event_handler._handle_serial_console_workers(
+            mock.sentinel.instance_name,
+            constants.HYPERV_VM_STATE_ENABLED)
+        serialops = self._event_handler._serial_console_ops
+        serialops.start_console_handler.assert_called_once_with(
+            mock.sentinel.instance_name)
+
+    def test_handle_serial_console_instance_stopped(self):
+        self._event_handler._handle_serial_console_workers(
+            mock.sentinel.instance_name,
+            constants.HYPERV_VM_STATE_DISABLED)
+        serialops = self._event_handler._serial_console_ops
+        serialops.stop_console_handler.assert_called_once_with(
+            mock.sentinel.instance_name)
 
     def _test_get_instance_uuid(self, instance_found=True,
                                 missing_uuid=False):

@@ -364,9 +364,13 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
     @mock.patch.object(vmutilsv2.VMUtilsV2,
                        '_get_mounted_disk_resource_from_path')
     @mock.patch.object(vmutilsv2.VMUtilsV2, '_modify_virt_resource')
-    def test_set_disk_qos_specs(self, mock_modify_virt_resource,
-                                mock_get_disk_resource):
-        mock_disk = mock_get_disk_resource.return_value
+    def _test_set_disk_qos_specs(self, mock_modify_virt_resource,
+                                 mock_get_disk_resource, qos_available=True):
+        mock_disk = mock.Mock()
+        if not qos_available:
+            type(mock_disk).IOPSLimit = mock.PropertyMock(
+                side_effect=AttributeError)
+        mock_get_disk_resource.return_value = mock_disk
 
         self._vmutils.set_disk_qos_specs(mock.sentinel.vm_name,
                                          mock.sentinel.disk_path,
@@ -375,7 +379,17 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
 
         mock_get_disk_resource.assert_called_once_with(
             mock.sentinel.disk_path, is_physical=False)
-        self.assertEqual(mock.sentinel.max_iops, mock_disk.IOPSLimit)
-        self.assertEqual(mock.sentinel.min_iops, mock_disk.IOPSReservation)
-        mock_modify_virt_resource.assert_called_once_with(mock_disk,
-                                                          None)
+
+        if qos_available:
+            self.assertEqual(mock.sentinel.max_iops, mock_disk.IOPSLimit)
+            self.assertEqual(mock.sentinel.min_iops, mock_disk.IOPSReservation)
+            mock_modify_virt_resource.assert_called_once_with(mock_disk,
+                                                              None)
+        else:
+            self.assertFalse(mock_modify_virt_resource.called)
+
+    def test_set_disk_qos_specs(self):
+        self._test_set_disk_qos_specs()
+
+    def test_set_disk_qos_specs_unsupported_feature(self):
+        self._test_set_disk_qos_specs(qos_available=False)

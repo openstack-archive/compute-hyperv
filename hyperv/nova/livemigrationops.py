@@ -24,6 +24,7 @@ from oslo_utils import excutils
 
 from hyperv.i18n import _
 from hyperv.nova import imagecache
+from hyperv.nova import serialconsoleops
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmops
 from hyperv.nova import volumeops
@@ -55,6 +56,7 @@ class LiveMigrationOps(object):
         self._pathutils = utilsfactory.get_pathutils()
         self._vmops = vmops.VMOps()
         self._volumeops = volumeops.VolumeOps()
+        self._serial_console_ops = serialconsoleops.SerialConsoleOps()
         self._imagecache = imagecache.ImageCache()
 
     @check_os_version_requirement
@@ -66,6 +68,11 @@ class LiveMigrationOps(object):
 
         try:
             self._vmops.copy_vm_dvd_disks(instance_name, dest)
+
+            # We must make sure that the console log workers are stopped,
+            # otherwise we won't be able to delete / move VM log files.
+            self._serial_console_ops.stop_console_handler(instance_name)
+
             self._pathutils.copy_vm_console_logs(instance_name, dest)
             self._livemigrutils.live_migrate_vm(instance_name,
                                                 dest)

@@ -93,7 +93,8 @@ class MigrationOps(object):
             if dest_path and self._pathutils.exists(dest_path):
                 self._pathutils.rmtree(dest_path)
             if self._pathutils.exists(revert_path):
-                self._pathutils.rename(revert_path, instance_path)
+                self._pathutils.move_folder_contents(revert_path,
+                                                     instance_path)
         except Exception as ex:
             # Log and ignore this exception
             LOG.exception(ex)

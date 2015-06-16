@@ -32,6 +32,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self.context = 'fake_context'
         self._livemigrops = livemigrationops.LiveMigrationOps()
         self._livemigrops._livemigrutils = mock.MagicMock()
+        self._livemigrops._pathutils = mock.MagicMock()
 
     @mock.patch('hyperv.nova.serialconsoleops.SerialConsoleOps.'
                 'stop_console_handler')
@@ -118,3 +119,5 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.block_device_info)
         mock_disconnect_volumes.assert_called_once_with(
             mock.sentinel.block_device_info)
+        self._livemigrops._pathutils.get_instance_dir.assert_called_once_with(
+            mock.sentinel.instance.name, create_dir=False, remove_dir=True)

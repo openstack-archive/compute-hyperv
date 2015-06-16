@@ -39,7 +39,7 @@ class PathUtils(object):
     def copy(self, src, dest):
         pass
 
-    def move_folder_contents(self, src_dir, dest_dir):
+    def move_folder_files(self, src_dir, dest_dir):
         pass
 
     def rmtree(self, path):

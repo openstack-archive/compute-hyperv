@@ -135,7 +135,7 @@ class HyperVAPIBaseTestCase(test.NoDBTestCase):
         self._mox.StubOutWithMock(fake.PathUtils, 'copyfile')
         self._mox.StubOutWithMock(fake.PathUtils, 'rmtree')
         self._mox.StubOutWithMock(fake.PathUtils, 'copy')
-        self._mox.StubOutWithMock(fake.PathUtils, 'move_folder_contents')
+        self._mox.StubOutWithMock(fake.PathUtils, 'move_folder_files')
         self._mox.StubOutWithMock(fake.PathUtils, 'remove')
         self._mox.StubOutWithMock(fake.PathUtils, 'rename')
         self._mox.StubOutWithMock(fake.PathUtils, 'makedirs')
@@ -835,12 +835,12 @@ class HyperVAPITestCase(HyperVAPIBaseTestCase):
                                                     remove_dir=True)
                 m.AndReturn(self._test_instance_dir)
             else:
-                fake.PathUtils.move_folder_contents(mox.IsA(str),
-                                                    mox.IsA(str))
+                fake.PathUtils.move_folder_files(mox.IsA(str),
+                                                 mox.IsA(str))
                 destroy_disks = True
                 if same_host:
-                    fake.PathUtils.move_folder_contents(mox.IsA(str),
-                                                        mox.IsA(str))
+                    fake.PathUtils.move_folder_files(mox.IsA(str),
+                                                     mox.IsA(str))
                     destroy_disks = False
 
                 self._setup_destroy_mocks(False)

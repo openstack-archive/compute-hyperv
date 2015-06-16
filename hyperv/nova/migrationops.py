@@ -78,10 +78,10 @@ class MigrationOps(object):
                               {'disk_file': disk_file, 'dest_path': dest_path})
                     self._pathutils.copy(disk_file, dest_path)
 
-            self._pathutils.move_folder_contents(instance_path, revert_path)
+            self._pathutils.move_folder_files(instance_path, revert_path)
 
             if same_host:
-                self._pathutils.move_folder_contents(dest_path, instance_path)
+                self._pathutils.move_folder_files(dest_path, instance_path)
         except Exception:
             with excutils.save_and_reraise_exception():
                 self._cleanup_failed_disk_migration(instance_path, revert_path,
@@ -93,8 +93,8 @@ class MigrationOps(object):
             if dest_path and self._pathutils.exists(dest_path):
                 self._pathutils.rmtree(dest_path)
             if self._pathutils.exists(revert_path):
-                self._pathutils.move_folder_contents(revert_path,
-                                                     instance_path)
+                self._pathutils.move_folder_files(revert_path,
+                                                  instance_path)
         except Exception as ex:
             # Log and ignore this exception
             LOG.exception(ex)

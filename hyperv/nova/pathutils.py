@@ -101,27 +101,19 @@ class PathUtils(object):
             raise IOError(_('The file copy from %(src)s to %(dest)s failed')
                            % {'src': src, 'dest': dest})
 
-    def move_folder_contents(self, src_dir, dest_dir):
-        """Moves the contents of the given src_dir to dest_dir by using
-        os.path.walk. It will ignore any nested folders.
+    def move_folder_files(self, src_dir, dest_dir):
+        """Moves the files of the given src_dir to dest_dir.
+        It will ignore any nested folders.
 
         :param src_dir: Given folder from which to move files.
         :param dest_dir: Folder to which to move files.
         """
 
-        def _move_contents(arg, dirname, fnames):
-            # Called by os.path.walk. Must pop the contents of the list fnames,
-            # otherwise, this method will be called again for each subdir in
-            # fnames.
-            for i in range(len(fnames)):
-                fname = fnames.pop()
-                src = os.path.join(src_dir, fname)
-                if os.path.isdir(src):
-                    # ignore subdirs
-                    continue
+        for fname in os.listdir(src_dir):
+            src = os.path.join(src_dir, fname)
+            # ignore subdirs.
+            if os.path.isfile(src):
                 self.rename(src, os.path.join(dest_dir, fname))
-
-        os.path.walk(src_dir, _move_contents, None)
 
     def rmtree(self, path):
         shutil.rmtree(path)

@@ -679,8 +679,10 @@ class VMOps(object):
 
     def copy_vm_dvd_disks(self, vm_name, dest_host):
         dvd_disk_paths = self._vmutils.get_vm_dvd_disk_paths(vm_name)
+        dest_path = self._pathutils.get_instance_dir(
+            vm_name, remote_server=dest_host)
         for path in dvd_disk_paths:
-            self._pathutils.copyfile(path, dest_host)
+            self._pathutils.copyfile(path, dest_path)
 
     def _get_image_serial_port_settings(self, image_meta):
         image_props = image_meta['properties']

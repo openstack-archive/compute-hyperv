@@ -632,6 +632,9 @@ class VMUtilsTestCase(test.NoDBTestCase):
         mock_vmsettings[0].associators.return_value = mock_rasds
 
         ret_val = self._vmutils._get_vm_serial_ports(mock_vm)
+
+        mock_vmsettings[0].associators.assert_called_once_with(
+            wmi_result_class=self._vmutils._SERIAL_PORT_SETTING_DATA_CLASS)
         self.assertEqual(mock_rasds, ret_val)
 
     def test_set_vm_serial_port_conn(self):

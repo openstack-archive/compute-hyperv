@@ -29,6 +29,7 @@ from oslo_log import log as logging
 
 from hyperv.i18n import _, _LW
 from hyperv.nova import constants
+from hyperv.nova import hostutils
 from hyperv.nova import vmutils
 
 CONF = cfg.CONF
@@ -89,6 +90,12 @@ class VMUtilsV2(vmutils.VMUtils):
     _DISP_CTRL_ADDRESS_DX_11 = "02C1,00000000,01"
 
     def __init__(self, host='.'):
+        if sys.platform == 'win32':
+            # A separate WMI class for VM serial ports has been introduced
+            # in Windows 10 / Windows Server 2016
+            if hostutils.HostUtils().check_min_windows_version(10, 0):
+                self._SERIAL_PORT_SETTING_DATA_CLASS = (
+                    "Msvm_SerialPortSettingData")
         super(VMUtilsV2, self).__init__(host)
 
     def _init_hyperv_wmi_conn(self, host):

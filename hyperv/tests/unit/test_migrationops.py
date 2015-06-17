@@ -77,7 +77,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             expected_get_dir)
         self._migrationops._pathutils.copy.assert_called_once_with(
             self._FAKE_DISK, fake_dest_path)
-        self._migrationops._pathutils.move_folder_contents.assert_has_calls(
+        self._migrationops._pathutils.move_folder_files.assert_has_calls(
             expected_move_calls)
 
     def test_migrate_disk_files(self):

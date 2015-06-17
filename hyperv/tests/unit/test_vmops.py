@@ -1065,7 +1065,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.FAKE_DEST_PATH)
 
         self._vmops.copy_vm_dvd_disks(mock.sentinel.FAKE_VM_NAME,
-                                      mock.sentinel.FAKE_DEST)
+                                      mock.sentinel.FAKE_DEST_HOST)
 
         mock_get_dvd_disk_paths.assert_called_with(mock.sentinel.FAKE_VM_NAME)
         self._vmops._pathutils.get_instance_dir.assert_called_once_with(

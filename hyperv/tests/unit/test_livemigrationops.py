@@ -34,10 +34,11 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._livemigrops._livemigrutils = mock.MagicMock()
         self._livemigrops._pathutils = mock.MagicMock()
 
-    @mock.patch('hyperv.nova.pathutils.PathUtils.copy_vm_console_logs')
+    @mock.patch('hyperv.nova.serialconsoleops.SerialConsoleOps.'
+                'stop_console_handler')
     @mock.patch('hyperv.nova.vmops.VMOps.copy_vm_dvd_disks')
     def _test_live_migration(self, mock_get_vm_dvd_paths,
-                             mock_copy_logs, side_effect):
+                             mock_stop_console_handler, side_effect):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_post = mock.MagicMock()
         mock_recover = mock.MagicMock()
@@ -58,6 +59,9 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
                                              post_method=mock_post,
                                              recover_method=mock_recover)
 
+            mock_stop_console_handler.assert_called_once_with(
+                mock_instance.name)
+            mock_copy_logs = self._livemigrops._pathutils.copy_vm_console_logs
             mock_copy_logs.assert_called_once_with(mock_instance.name,
                                                    fake_dest)
             mock_live_migr = self._livemigrops._livemigrutils.live_migrate_vm

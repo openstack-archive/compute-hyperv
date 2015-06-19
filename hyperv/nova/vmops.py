@@ -710,7 +710,7 @@ class VMOps(object):
                         rescue_password):
         rescue_image_id = image_meta.get('id') or instance.image_ref
         rescue_vhd_path = self._create_root_vhd(
-            context, instance, image_meta, rescue_image_id=rescue_image_id)
+            context, instance, rescue_image_id=rescue_image_id)
 
         rescue_vm_gen = self.get_image_vm_generation(rescue_vhd_path,
                                                      image_meta)
@@ -774,11 +774,10 @@ class VMOps(object):
         if rescue_vhd_path:
             self._vmutils.detach_vm_disk(instance.name, rescue_vhd_path,
                                          is_physical=False)
+            fileutils.delete_if_exists(rescue_vhd_path)
         self._attach_drive(instance.name, root_vhd_path, 0,
                            self._ROOT_DISK_CTRL_ADDR, controller_type)
-
         self._detach_config_drive(instance.name, rescue=True, delete=True)
-        fileutils.delete_if_exists(rescue_vhd_path)
 
         self.power_on(instance)
 

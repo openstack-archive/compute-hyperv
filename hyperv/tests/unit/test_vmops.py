@@ -1173,7 +1173,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(vmops.VMOps, 'power_off')
     def test_unrescue_instance(self, mock_power_on, mock_power_off,
                                mock_detach_config_drive,
-                               mock_atach_configdrive,
+                               mock_attach_configdrive,
                                mock_attach_drive,
                                mock_delete_if_exists):
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -1182,6 +1182,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vmutils.get_vm_gen.return_value = mock_vm_gen
         self._vmops._pathutils.lookup_root_vhd_path.side_effect = (
             mock.sentinel.root_vhd_path, mock.sentinel.rescue_vhd_path)
+        self._vmops._pathutils.lookup_configdrive_path.return_value = (
+            mock.sentinel.configdrive_path)
 
         self._vmops.unrescue_instance(mock_instance)
 
@@ -1203,6 +1205,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance.name, rescue=True, delete=True)
         mock_delete_if_exists.assert_called_once_with(
             mock.sentinel.rescue_vhd_path)
+        mock_attach_configdrive.assert_called_once_with(
+            mock_instance, mock.sentinel.configdrive_path, mock_vm_gen)
         mock_power_on.assert_called_once_with(mock_instance)
 
     @mock.patch.object(vmops.VMOps, 'power_off')

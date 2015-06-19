@@ -780,6 +780,12 @@ class VMOps(object):
         self._detach_config_drive(instance.name, rescue=True, delete=True)
         fileutils.delete_if_exists(rescue_vhd_path)
 
+        # Reattach the configdrive, if exists.
+        configdrive_path = self._pathutils.lookup_configdrive_path(
+            instance.name)
+        if configdrive_path:
+            self.attach_config_drive(instance, configdrive_path, vm_gen)
+
         self.power_on(instance)
 
     def _check_hotplug_is_available(self, instance):

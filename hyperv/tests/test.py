@@ -143,7 +143,7 @@ class TestCase(testtools.TestCase):
         # registry.
         objects_base.NovaObject.indirection_api = None
         self._base_test_obj_backup = copy.copy(
-            objects_base.NovaObject._obj_classes)
+            objects_base.NovaObjectRegistry._registry._obj_classes)
         self.addCleanup(self._restore_obj_registry)
 
         # NOTE(mnaser): All calls to utils.is_neutron() are cached in

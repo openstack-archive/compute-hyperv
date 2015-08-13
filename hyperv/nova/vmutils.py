@@ -29,6 +29,8 @@ from nova import exception
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import uuidutils
+import six
+from six.moves import range
 
 from hyperv.i18n import _, _LW
 from hyperv.nova import constants
@@ -104,7 +106,7 @@ class VMUtils(object):
 
     def __init__(self, host='.'):
         self._enabled_states_map = {v: k for k, v in
-                                    self._vm_power_states_map.iteritems()}
+                                    six.iteritems(self._vm_power_states_map)}
         if sys.platform == 'win32':
             self._init_hyperv_wmi_conn(host)
             self._conn_cimv2 = wmi.WMI(moniker='//%s/root/cimv2' % host)
@@ -750,7 +752,7 @@ class VMUtils(object):
         used_slots = [int(self._get_disk_resource_address(disk))
                       for disk in attached_disks]
 
-        for slot in xrange(constants.SCSI_CONTROLLER_SLOTS_NUMBER):
+        for slot in range(constants.SCSI_CONTROLLER_SLOTS_NUMBER):
             if slot not in used_slots:
                 return slot
         raise HyperVException(_("Exceeded the maximum number of slots"))

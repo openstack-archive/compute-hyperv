@@ -14,6 +14,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import abc
+
 from nova.i18n import _
 from nova.network import model as network_model
 from oslo_config import cfg
@@ -38,12 +40,15 @@ LOG = logging.getLogger(__name__)
 
 
 class HyperVBaseVIFDriver(object):
+    @abc.abstractmethod
     def plug(self, instance, vif):
         pass
 
+    @abc.abstractmethod
     def post_start(self, instance, vif):
         pass
 
+    @abc.abstractmethod
     def unplug(self, instance, vif):
         pass
 

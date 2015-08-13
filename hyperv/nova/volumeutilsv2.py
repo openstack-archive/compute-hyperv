@@ -27,6 +27,7 @@ if sys.platform == 'win32':
 from nova import utils
 from oslo_config import cfg
 from oslo_log import log as logging
+from six.moves import range
 
 from hyperv.i18n import _
 from hyperv.nova import basevolumeutils
@@ -78,7 +79,7 @@ class VolumeUtilsV2(basevolumeutils.BaseVolumeUtils):
         if retry_count < 2:
             retry_count = 2
 
-        for attempt in xrange(retry_count):
+        for attempt in range(retry_count):
             target = self._conn_storage.query("SELECT * FROM MSFT_iSCSITarget "
                                               "WHERE NodeAddress='%s' " %
                                               target_iqn)

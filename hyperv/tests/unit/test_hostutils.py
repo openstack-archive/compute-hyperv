@@ -42,7 +42,6 @@ class HostUtilsTestCase(test.NoDBTestCase):
     def setUp(self):
         self._hostutils = hostutils.HostUtils()
         self._hostutils._conn_cimv2 = mock.MagicMock()
-        self._hostutils._conn_virt_v2 = mock.MagicMock()
 
         super(HostUtilsTestCase, self).setUp()
 
@@ -140,26 +139,3 @@ class HostUtilsTestCase(test.NoDBTestCase):
             mock_check_win.return_value = False
             result = self._hostutils.get_supported_vm_types()
             self.assertEqual([constants.IMAGE_PROP_VM_GEN_1], result)
-
-    def test_get_remotefx_gpu_info(self):
-        fake_gpu = mock.MagicMock()
-        fake_gpu.Name = mock.sentinel.Fake_gpu_name
-        fake_gpu.TotalVideoMemory = mock.sentinel.Fake_gpu_total_memory
-        fake_gpu.AvailableVideoMemory = mock.sentinel.Fake_gpu_available_memory
-        fake_gpu.DirectXVersion = mock.sentinel.Fake_gpu_directx
-        fake_gpu.DriverVersion = mock.sentinel.Fake_gpu_driver_version
-
-        mock_phys_3d_proc = (
-            self._hostutils._conn_virt_v2.Msvm_Physical3dGraphicsProcessor)
-        mock_phys_3d_proc.return_value = [fake_gpu]
-
-        return_gpus = self._hostutils.get_remotefx_gpu_info()
-        self.assertEqual(mock.sentinel.Fake_gpu_name, return_gpus[0]['name'])
-        self.assertEqual(mock.sentinel.Fake_gpu_driver_version,
-            return_gpus[0]['driver_version'])
-        self.assertEqual(mock.sentinel.Fake_gpu_total_memory,
-            return_gpus[0]['total_video_ram'])
-        self.assertEqual(mock.sentinel.Fake_gpu_available_memory,
-            return_gpus[0]['available_video_ram'])
-        self.assertEqual(mock.sentinel.Fake_gpu_directx,
-            return_gpus[0]['directx_version'])

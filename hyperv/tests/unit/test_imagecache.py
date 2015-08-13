@@ -25,12 +25,12 @@ from hyperv.nova import constants
 from hyperv.nova import imagecache
 from hyperv.nova import vmutils
 from hyperv.tests import fake_instance
-from hyperv.tests import test
+from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF
 
 
-class ImageCacheTestCase(test.NoDBTestCase):
+class ImageCacheTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V ImageCache class."""
 
     FAKE_BASE_DIR = 'fake/base/dir'
@@ -42,17 +42,6 @@ class ImageCacheTestCase(test.NoDBTestCase):
 
         self.context = 'fake-context'
         self.instance = fake_instance.fake_instance_obj(self.context)
-
-        # utilsfactory will check the host OS version via get_hostutils,
-        # in order to return the proper Utils Class, so it must be mocked.
-        patched_func = mock.patch.object(imagecache.utilsfactory,
-                                         "get_hostutils")
-        patched_get_pathutils = mock.patch.object(imagecache.utilsfactory,
-                                                  "get_pathutils")
-        patched_func.start()
-        patched_get_pathutils.start()
-        self.addCleanup(patched_func.stop)
-        self.addCleanup(patched_get_pathutils.stop)
 
         self.imagecache = imagecache.ImageCache()
         self.imagecache._pathutils = mock.MagicMock()

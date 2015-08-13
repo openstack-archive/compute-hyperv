@@ -16,6 +16,7 @@
 
 import mock
 
+from hyperv.nova import utilsfactory
 from hyperv.tests import test
 
 
@@ -27,9 +28,12 @@ class HyperVBaseTestCase(test.NoDBTestCase):
         wmi_patcher = mock.patch('__builtin__.wmi', create=True,
                                  new=self._mock_wmi)
         platform_patcher = mock.patch('sys.platform', 'win32')
+        hostutils_patcher = mock.patch.object(utilsfactory, 'utils')
 
         platform_patcher.start()
         wmi_patcher.start()
+        hostutils_patcher.start()
 
         self.addCleanup(wmi_patcher.stop)
         self.addCleanup(platform_patcher.stop)
+        self.addCleanup(hostutils_patcher.stop)

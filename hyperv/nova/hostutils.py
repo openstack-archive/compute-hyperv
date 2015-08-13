@@ -36,11 +36,6 @@ class HostUtils(object):
         self._conn_cimv2 = None
         if sys.platform == 'win32':
             self._conn_cimv2 = wmi.WMI(privileges=["Shutdown"])
-            if self.check_min_windows_version(6, 2):
-                self._conn_virt_v2 = wmi.WMI(moniker='//./root/'
-                                             'virtualization/v2')
-            else:
-                self._conn_virt_v2 = None
 
     def get_cpus_info(self):
         cpus = self._conn_cimv2.query("SELECT * FROM Win32_Processor "
@@ -128,14 +123,4 @@ class HostUtils(object):
         return len(self._conn_cimv2.Win32_ServerFeature(ID=feature_id)) > 0
 
     def get_remotefx_gpu_info(self):
-        gpus = []
-        if self._conn_virt_v2:
-            all_gpus = self._conn_virt_v2.Msvm_Physical3dGraphicsProcessor(
-                EnabledForVirtualization=True)
-            for gpu in all_gpus:
-                gpus.append({'name': gpu.Name,
-                             'driver_version': gpu.DriverVersion,
-                             'total_video_ram': gpu.TotalVideoMemory,
-                             'available_video_ram': gpu.AvailableVideoMemory,
-                             'directx_version': gpu.DirectXVersion})
-        return gpus
+        return []

@@ -25,15 +25,15 @@ from eventlet import timeout as etimeout
 from nova.api.metadata import base as instance_metadata
 from nova.compute import vm_states
 from nova import exception
-from nova.openstack.common import fileutils
-from nova.openstack.common import loopingcall
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import hardware
 from oslo_concurrency import processutils
 from oslo_config import cfg
 from oslo_log import log as logging
+from oslo_service import loopingcall
 from oslo_utils import excutils
+from oslo_utils import fileutils
 from oslo_utils import units
 from oslo_utils import uuidutils
 

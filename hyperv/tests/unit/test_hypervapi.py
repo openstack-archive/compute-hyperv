@@ -30,7 +30,6 @@ from nova import exception
 from nova.image import glance
 from nova import objects
 from nova.objects import flavor as flavor_obj
-from nova.openstack.common import fileutils
 from nova.tests.unit import fake_instance
 from nova.tests.unit import fake_network
 from nova.tests.unit.image import fake as fake_image
@@ -40,6 +39,7 @@ from nova.virt import configdrive
 from nova.virt import driver
 from nova.virt import images
 from oslo_config import cfg
+from oslo_utils import fileutils
 
 from hyperv.nova import basevolumeutils
 from hyperv.nova import constants

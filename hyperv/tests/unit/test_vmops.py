@@ -19,12 +19,12 @@ import mock
 from nova.compute import vm_states
 from nova import exception
 from nova.objects import flavor as flavor_obj
-from nova.openstack.common import fileutils
 from nova.tests.unit.objects import test_flavor
 from nova.tests.unit.objects import test_virtual_interface
 from nova.virt import hardware
 from oslo_concurrency import processutils
 from oslo_config import cfg
+from oslo_utils import fileutils
 from oslo_utils import units
 
 from hyperv.nova import constants

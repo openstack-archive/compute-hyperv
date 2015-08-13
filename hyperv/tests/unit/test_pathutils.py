@@ -13,6 +13,7 @@
 #    under the License.
 
 import os
+import time
 
 import mock
 
@@ -225,3 +226,44 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
                       mock.sentinel.remote_log_path),
             mock.call(mock.sentinel.archived_log_path,
                       mock.sentinel.remote_archived_log_path)])
+
+    @mock.patch.object(pathutils.PathUtils, 'get_base_vhd_dir')
+    @mock.patch.object(pathutils.PathUtils, 'exists')
+    def _test_lookup_image_basepath(self, mock_exists,
+                                    mock_get_base_vhd_dir, found=True):
+        fake_image_name = 'fake_image_name'
+        if found:
+            mock_exists.side_effect = [False, True]
+        else:
+            mock_exists.return_value = False
+        mock_get_base_vhd_dir.return_value = 'fake_base_dir'
+
+        res = self._pathutils.lookup_image_basepath(fake_image_name)
+
+        mock_get_base_vhd_dir.assert_called_once_with()
+        if found:
+            self.assertEqual(
+                res, os.path.join('fake_base_dir', 'fake_image_name.vhdx'))
+        else:
+            self.assertIsNone(res)
+
+    def test_lookup_image_basepath(self):
+        self._test_lookup_image_basepath()
+
+    def test_lookup_image_basepath_not_found(self):
+        self._test_lookup_image_basepath(found=False)
+
+    def test_get_age_of_file(self):
+        current_time = time.time()
+        self._check_get_age_of_file(current_time=current_time)
+
+    @mock.patch.object(os.path, 'getmtime')
+    @mock.patch('time.time')
+    def _check_get_age_of_file(self, mock_time, mock_getmtime, current_time):
+        mock_time.return_value = current_time
+        mock_getmtime.return_value = current_time - 5
+
+        ret = self._pathutils.get_age_of_file(mock.sentinel.file_name)
+
+        self.assertEqual(5, ret)
+        mock_getmtime.assert_called_once_with(mock.sentinel.file_name)

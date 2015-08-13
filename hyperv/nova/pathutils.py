@@ -307,3 +307,16 @@ class PathUtils(object):
                 if force:
                     raise vmutils.HyperVException(
                         _("Could not unmount share: %s") % smbfs_share)
+
+    def lookup_image_basepath(self, image_name):
+        # Note: it is possible that the path doesn't exist
+        base_dir = self.get_base_vhd_dir()
+        for ext in ['vhd', 'vhdx', 'iso']:
+            file_path = os.path.join(base_dir,
+                                     image_name + '.' + ext.lower())
+            if self.exists(file_path):
+                return file_path
+        return None
+
+    def get_age_of_file(self, file_name):
+        return time.time() - os.path.getmtime(file_name)

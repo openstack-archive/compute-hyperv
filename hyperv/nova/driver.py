@@ -27,6 +27,7 @@ from hyperv.i18n import _, _LW
 from hyperv.nova import eventhandler
 from hyperv.nova import hostops
 from hyperv.nova import hostutils
+from hyperv.nova import imagecache
 from hyperv.nova import livemigrationops
 from hyperv.nova import migrationops
 from hyperv.nova import rdpconsoleops
@@ -40,7 +41,7 @@ LOG = logging.getLogger(__name__)
 
 class HyperVDriver(driver.ComputeDriver):
     capabilities = {
-        "has_imagecache": False,
+        "has_imagecache": True,
         "supports_recreate": False,
         "supports_migrate_to_same_host": True
     }
@@ -56,6 +57,7 @@ class HyperVDriver(driver.ComputeDriver):
         self._migrationops = migrationops.MigrationOps()
         self._rdpconsoleops = rdpconsoleops.RDPConsoleOps()
         self._serialconsoleops = serialconsoleops.SerialConsoleOps()
+        self._imagecache = imagecache.ImageCache()
 
         # check if the current version is older than kernel version 6.2
         # (Windows Server 2012)
@@ -269,6 +271,9 @@ class HyperVDriver(driver.ComputeDriver):
 
     def get_console_output(self, context, instance):
         return self._serialconsoleops.get_console_output(instance.name)
+
+    def manage_image_cache(self, context, all_instances):
+        self._imagecache.update(context, all_instances)
 
     def rescue(self, context, instance, network_info, image_meta,
                rescue_password):

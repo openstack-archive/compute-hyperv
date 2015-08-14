@@ -38,6 +38,12 @@ LOG = logging.getLogger(__name__)
 
 
 class HyperVDriver(driver.ComputeDriver):
+    capabilities = {
+        "has_imagecache": False,
+        "supports_recreate": False,
+        "supports_migrate_to_same_host": True
+    }
+
     def __init__(self, virtapi):
         super(HyperVDriver, self).__init__(virtapi)
 

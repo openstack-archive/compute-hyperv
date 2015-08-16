@@ -64,8 +64,10 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(self.instance.root_gb, ret_val)
 
     def _prepare_get_cached_image(self, path_exists=False, use_cow=False,
-                                  rescue_image_id=None):
+                                  rescue_image_id=None,
+                                  image_format=constants.DISK_FORMAT_VHD):
         self.instance.image_ref = self.FAKE_IMAGE_REF
+        self.instance.system_metadata = {'image_disk_format': image_format}
         self.imagecache._pathutils.get_base_vhd_dir.return_value = (
             self.FAKE_BASE_DIR)
         self.imagecache._pathutils.exists.return_value = path_exists
@@ -84,10 +86,10 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(imagecache.images, 'fetch')
     def test_get_cached_image_with_fetch(self, mock_fetch):
         (expected_path,
-         expected_vhd_path) = self._prepare_get_cached_image(False, False)
+         expected_image_path) = self._prepare_get_cached_image(False, False)
 
         result = self.imagecache.get_cached_image(self.context, self.instance)
-        self.assertEqual(expected_vhd_path, result)
+        self.assertEqual(expected_image_path, result)
 
         mock_fetch.assert_called_once_with(self.context, self.FAKE_IMAGE_REF,
                                            expected_path,
@@ -96,15 +98,16 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.imagecache._vhdutils.get_vhd_format.assert_called_once_with(
             expected_path)
         self.imagecache._pathutils.rename.assert_called_once_with(
-            expected_path, expected_vhd_path)
+            expected_path, expected_image_path)
 
     @mock.patch.object(imagecache.images, 'fetch')
     def test_get_cached_image_with_fetch_exception(self, mock_fetch):
         (expected_path,
-         expected_vhd_path) = self._prepare_get_cached_image(False, False)
+         expected_image_path) = self._prepare_get_cached_image(False, False)
 
         # path doesn't exist until fetched.
-        self.imagecache._pathutils.exists.side_effect = [False, False, True]
+        self.imagecache._pathutils.exists.side_effect = [False, False, False,
+            True]
         mock_fetch.side_effect = exception.InvalidImageRef(
             image_href=self.FAKE_IMAGE_REF)
 
@@ -120,15 +123,15 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
     def test_get_cached_image_use_cow(self, mock_update_img_timestamp,
                                       mock_resize):
         (expected_path,
-         expected_vhd_path) = self._prepare_get_cached_image(True, True)
+         expected_image_path) = self._prepare_get_cached_image(True, True)
 
-        expected_resized_vhd_path = expected_vhd_path + 'x'
-        mock_resize.return_value = expected_resized_vhd_path
+        expected_resized_image_path = expected_image_path + 'x'
+        mock_resize.return_value = expected_resized_image_path
 
         result = self.imagecache.get_cached_image(self.context, self.instance)
-        self.assertEqual(expected_resized_vhd_path, result)
+        self.assertEqual(expected_resized_image_path, result)
 
-        mock_resize.assert_called_once_with(self.instance, expected_vhd_path)
+        mock_resize.assert_called_once_with(self.instance, expected_image_path)
         mock_update_img_timestamp.assert_called_once_with(
             self.instance.image_ref)
 
@@ -140,8 +143,8 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
             'MaxInternalSize': self.instance.root_gb + 1}
         (expected_path,
          expected_vhd_path) = self._prepare_get_cached_image(
-            rescue_image_id=fake_rescue_image_id)
-
+            rescue_image_id=fake_rescue_image_id,
+            image_format=constants.DISK_FORMAT_VHD)
         self.assertRaises(vmutils.HyperVException,
                           self.imagecache.get_cached_image,
                           self.context, self.instance,

@@ -70,6 +70,10 @@ class HyperVDriver(driver.ComputeDriver):
                     'current version of OpenStack and the support for it will '
                     'be removed in the next cycle.'))
 
+    @property
+    def need_legacy_block_device_info(self):
+        return False
+
     def init_host(self, host):
         self._serialconsoleops.start_console_handlers()
         event_handler = eventhandler.InstanceEventHandler(

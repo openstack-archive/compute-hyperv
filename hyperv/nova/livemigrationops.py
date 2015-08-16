@@ -23,6 +23,7 @@ from oslo_log import log as logging
 from oslo_utils import excutils
 
 from hyperv.i18n import _
+from hyperv.nova import block_device_manager
 from hyperv.nova import imagecache
 from hyperv.nova import serialconsoleops
 from hyperv.nova import utilsfactory
@@ -58,6 +59,7 @@ class LiveMigrationOps(object):
         self._volumeops = volumeops.VolumeOps()
         self._serial_console_ops = serialconsoleops.SerialConsoleOps()
         self._imagecache = imagecache.ImageCache()
+        self._block_dev_man = block_device_manager.BlockDeviceInfoManager()
 
     @check_os_version_requirement
     def live_migration(self, context, instance_ref, dest, post_method,
@@ -93,7 +95,7 @@ class LiveMigrationOps(object):
         self._livemigrutils.check_live_migration_config()
 
         if CONF.use_cow_images:
-            boot_from_volume = self._volumeops.ebs_root_in_block_devices(
+            boot_from_volume = self._block_dev_man.is_boot_from_volume(
                 block_device_info)
             if not boot_from_volume and instance.image_ref:
                 self._imagecache.get_cached_image(context, instance)

@@ -393,3 +393,50 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
 
     def test_set_disk_qos_specs_unsupported_feature(self):
         self._test_set_disk_qos_specs(qos_available=False)
+
+    @mock.patch.object(vmutils.VMUtils, 'check_ret_val')
+    def test_modify_virtual_system(self, mock_check_ret_val):
+        mock_vs_man_svc = mock.MagicMock()
+        mock_vmsettings = mock.MagicMock()
+        mock_vs_man_svc.ModifySystemSettings.return_value = (
+            mock.sentinel.fake_job_path, mock.sentinel.fake_ret_val)
+        self._vmutils._modify_virtual_system(vs_man_svc=mock_vs_man_svc,
+                                             vm_path=None,
+                                             vmsetting=mock_vmsettings)
+        mock_vs_man_svc.ModifySystemSettings.assert_called_once_with(
+            SystemSettings=mock_vmsettings.GetText_.return_value)
+        mock_check_ret_val.assert_called_once_with(mock.sentinel.fake_ret_val,
+                                                   mock.sentinel.fake_job_path)
+
+    def test_set_secure_boot(self):
+        vs_data = mock.MagicMock()
+        self._vmutils._set_secure_boot(vs_data, certificate_required=False)
+
+        self.assertTrue(vs_data.SecureBootEnabled)
+
+    def test_set_secure_boot_certificate_required(self):
+        self.assertRaises(vmutils.HyperVException,
+                          self._vmutils._set_secure_boot,
+                          mock.MagicMock(), True)
+
+    @mock.patch.object(vmutilsv2.VMUtilsV2, '_modify_virtual_system')
+    @mock.patch.object(vmutilsv2.VMUtilsV2, '_get_vm_setting_data')
+    @mock.patch.object(vmutils.VMUtils, '_lookup_vm_check')
+    def test_enable_secure_boot(self, mock_lookup_vm_check,
+                                mock_get_vm_setting_data,
+                                mock_modify_virtual_system):
+        vm = mock_lookup_vm_check.return_value
+        vs_data = mock_get_vm_setting_data.return_value
+        vs_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+
+        with mock.patch.object(self._vmutils,
+                               '_set_secure_boot') as mock_set_secure_boot:
+            self._vmutils.enable_secure_boot(
+                mock.sentinel.VM_NAME, mock.sentinel.certificate_required)
+
+            mock_lookup_vm_check.assert_called_with(mock.sentinel.VM_NAME)
+            mock_get_vm_setting_data.assert_called_once_with(vm)
+            mock_set_secure_boot.assert_called_once_with(
+                vs_data, mock.sentinel.certificate_required)
+            mock_modify_virtual_system.assert_called_once_with(
+                vs_svc, vm.path_(), vs_data)

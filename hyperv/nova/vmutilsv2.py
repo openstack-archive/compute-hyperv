@@ -426,3 +426,22 @@ class VMUtilsV2(vmutils.VMUtils):
             return
         # VMUtilsV2._modify_virt_resource does not require the vm path.
         self._modify_virt_resource(disk_resource, None)
+
+    def enable_secure_boot(self, vm_name, certificate_required):
+        vm = self._lookup_vm_check(vm_name)
+        vs_data = self._get_vm_setting_data(vm)
+        self._set_secure_boot(vs_data, certificate_required)
+        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
+
+        self._modify_virtual_system(vs_man_svc, vm.path_(), vs_data)
+
+    def _set_secure_boot(self, vs_data, certificate_required):
+        vs_data.SecureBootEnabled = True
+        if certificate_required:
+            raise vmutils.HyperVException(
+                _('UEFI SecureBoot is supported only on Windows instances.'))
+
+    def _modify_virtual_system(self, vs_man_svc, vm_path, vmsetting):
+        (job_path, ret_val) = vs_man_svc.ModifySystemSettings(
+            SystemSettings=vmsetting.GetText_(1))
+        self.check_ret_val(ret_val, job_path)

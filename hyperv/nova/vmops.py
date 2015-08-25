@@ -292,6 +292,36 @@ class VMOps(object):
             with excutils.save_and_reraise_exception():
                 self.destroy(instance)
 
+    def _requires_certificate(self, image_meta):
+        os_type = image_meta.get('properties', {}).get('os_type', None)
+        if not os_type:
+            raise vmutils.HyperVException(
+                _('For secure boot, os_type must be specified in image '
+                  'properties.'))
+        elif os_type == 'windows':
+            return False
+        return True
+
+    # Secure Boot feature will be enabled by setting the "os_secure_boot"
+    # image property or the "os:secure_boot" flavor extra spec to required.
+    # The flavor extra spec value overrides the image property value.
+    def _requires_secure_boot(self, instance, image_meta, vm_gen):
+        flavor = instance.flavor
+        flavor_secure_boot = flavor.extra_specs.get(
+            constants.FLAVOR_SPEC_SECURE_BOOT, None)
+
+        image_props = image_meta['properties']
+        image_prop_secure_boot = image_props.get(
+            constants.IMAGE_PROP_SECURE_BOOT, None)
+
+        if flavor_secure_boot in (constants.REQUIRED, constants.DISABLED):
+            requires_secure_boot = constants.REQUIRED == flavor_secure_boot
+        else:
+            requires_secure_boot = image_prop_secure_boot == constants.REQUIRED
+        if vm_gen != constants.VM_GEN_2 and requires_secure_boot:
+            raise vmutils.HyperVException(_('Secure boot requires gen 2 VM.'))
+        return requires_secure_boot
+
     def create_instance(self, instance, network_info, block_device_info,
                         root_vhd_path, eph_vhd_path, vm_gen, image_meta):
         instance_name = instance.name
@@ -351,6 +381,12 @@ class VMOps(object):
 
         if CONF.hyperv.enable_instance_metrics_collection:
             self._vmutils.enable_vm_metrics_collection(instance_name)
+        secure_boot_enabled = self._requires_secure_boot(
+            instance, image_meta, vm_gen)
+        if secure_boot_enabled:
+            certificate_required = self._requires_certificate(image_meta)
+            self._vmutils.enable_secure_boot(instance.name,
+                                             certificate_required)
 
     def _attach_drive(self, instance_name, path, drive_addr, ctrl_disk_addr,
                       controller_type, drive_type=constants.DISK):

@@ -392,6 +392,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           [mock.sentinel.FILE], mock.sentinel.PASSWORD,
                           mock.sentinel.INFO, mock.sentinel.DEV_INFO)
 
+    @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
+    @mock.patch.object(vmops.VMOps, '_requires_certificate')
     @mock.patch('hyperv.nova.vif.get_vif_driver')
     @mock.patch.object(vmops.VMOps, '_set_instance_disk_qos_specs')
     @mock.patch.object(volumeops.VolumeOps, 'attach_volumes')
@@ -402,10 +404,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def _test_create_instance(self, mock_configure_remotefx, mock_create_pipes,
                               mock_get_port_settings, mock_attach_drive,
                               mock_attach_volumes, mock_set_qos_specs,
-                              mock_get_vif_driver,
-                              fake_root_path, fake_ephemeral_path,
-                              enable_instance_metrics,
-                              vm_gen=constants.VM_GEN_1, remotefx=False):
+                              mock_get_vif_driver, mock_requires_certificate,
+                              mock_requires_secure_boot, fake_root_path,
+                              fake_ephemeral_path, enable_instance_metrics,
+                              vm_gen=constants.VM_GEN_2,
+                              requires_sec_boot=True, remotefx=False):
         mock_vif_driver = mock_get_vif_driver()
         self.flags(enable_instance_metrics_collection=enable_instance_metrics,
                    group='hyperv')
@@ -413,6 +416,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                              'address': mock.sentinel.ADDRESS}
         mock_instance = fake_instance.fake_instance_obj(self.context)
         instance_path = os.path.join(CONF.instances_path, mock_instance.name)
+        mock_requires_secure_boot.return_value = requires_sec_boot
         flavor = flavor_obj.Flavor(**test_flavor.fake_flavor)
         if remotefx is True:
             flavor.extra_specs['hyperv:remotefx'] = "1920x1200,2"
@@ -482,12 +486,30 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             if enable_instance_metrics:
                 mock_enable.assert_called_once_with(mock_instance.name)
             mock_set_qos_specs.assert_called_once_with(mock_instance)
+            if requires_sec_boot:
+                mock_requires_secure_boot.assert_called_once_with(
+                    mock_instance, mock.sentinel.image_meta, vm_gen)
+                mock_requires_certificate.assert_called_once_with(
+                    mock.sentinel.image_meta)
+                enable_secure_boot = self._vmops._vmutils.enable_secure_boot
+                enable_secure_boot.assert_called_once_with(
+                    mock_instance.name, mock_requires_certificate.return_value)
 
     def test_create_instance(self):
         fake_ephemeral_path = mock.sentinel.FAKE_EPHEMERAL_PATH
         self._test_create_instance(fake_root_path=mock.sentinel.FAKE_ROOT_PATH,
                                    fake_ephemeral_path=fake_ephemeral_path,
                                    enable_instance_metrics=True)
+
+    def test_create_instance_exception(self):
+        # Secure Boot requires Generation 2 VMs. If boot is required while the
+        # vm_gen is 1, exception is raised.
+
+        fake_ephemeral_path = mock.sentinel.FAKE_EPHEMERAL_PATH
+        self._test_create_instance(fake_root_path=mock.sentinel.FAKE_ROOT_PATH,
+                                   fake_ephemeral_path=fake_ephemeral_path,
+                                   enable_instance_metrics=True,
+                                   vm_gen=constants.VM_GEN_1)
 
     def test_create_instance_no_root_path(self):
         fake_ephemeral_path = mock.sentinel.FAKE_EPHEMERAL_PATH
@@ -514,21 +536,18 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_create_instance_gen2(self):
         self._test_create_instance(fake_root_path=None,
                                    fake_ephemeral_path=None,
-                                   enable_instance_metrics=False,
-                                   vm_gen=constants.VM_GEN_2)
+                                   enable_instance_metrics=False)
 
     def test_create_instance_with_remote_fx(self):
         self._test_create_instance(fake_root_path=None,
                                    fake_ephemeral_path=None,
                                    enable_instance_metrics=False,
-                                   vm_gen=constants.VM_GEN_1,
                                    remotefx=True)
 
     def test_create_instance_with_remote_fx_gen2(self):
         self._test_create_instance(fake_root_path=None,
                                    fake_ephemeral_path=None,
                                    enable_instance_metrics=False,
-                                   vm_gen=constants.VM_GEN_2,
                                    remotefx=True)
 
     def test_attach_drive_vm_to_scsi(self):
@@ -1455,3 +1474,66 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         self.assertEqual(mock_parse_specs.return_value, ret_val)
         mock_parse_specs.assert_called_once_with(expected_qos_specs_dict)
+
+    def _test_requires_secure_boot(self, flavor_secure_boot,
+                                   image_prop_secure_boot,
+                                   fake_vm_gen=constants.VM_GEN_2):
+        mock_instance = mock.MagicMock()
+        flavor_secure_boot = {
+            'extra_specs': {'os:secure_boot': flavor_secure_boot}}
+        mock_image_meta = {'properties':
+                           {'os_secure_boot': image_prop_secure_boot}}
+
+        if flavor_secure_boot in ('required', 'disabled'):
+            expected_result = constants.REQUIRED == flavor_secure_boot
+        else:
+            expected_result = image_prop_secure_boot == 'required'
+        if fake_vm_gen != constants.VM_GEN_2 and expected_result:
+            self.assertRaises(vmutils.HyperVException,
+                              self._vmops._requires_secure_boot,
+                              mock_instance, mock_image_meta)
+        else:
+            result = self._vmops._requires_secure_boot(mock_instance,
+                                                       mock_image_meta,
+                                                       fake_vm_gen)
+            self.assertEqual(expected_result, result)
+
+    def test_requires_secure_boot_disabled(self):
+        self._test_requires_secure_boot(
+            flavor_secure_boot=constants.DISABLED,
+            image_prop_secure_boot=constants.REQUIRED)
+
+    def test_requires_secure_boot_optional(self):
+        self._test_requires_secure_boot(
+            flavor_secure_boot=constants.OPTIONAL,
+            image_prop_secure_boot=constants.OPTIONAL)
+
+    def test_requires_secure_boot_required(self):
+        self._test_requires_secure_boot(
+            flavor_secure_boot=constants.REQUIRED,
+            image_prop_secure_boot=constants.OPTIONAL)
+
+    def test_requires_secure_boot_bad_vm_gen(self):
+        self._test_requires_secure_boot(
+            flavor_secure_boot=constants.REQUIRED,
+            image_prop_secure_boot=constants.OPTIONAL,
+            fake_vm_gen=constants.VM_GEN_1)
+
+    def _test_requires_certificate(self, os_type):
+        image_meta = {'properties': {'os_type': os_type}}
+        if not os_type:
+            self.assertRaises(vmutils.HyperVException,
+                              self._vmops._requires_certificate, image_meta)
+        else:
+            expected_result = os_type == 'linux'
+            result = self._vmops._requires_certificate(image_meta)
+            self.assertEqual(expected_result, result)
+
+    def test_requires_certificate_windows(self):
+        self._test_requires_certificate(os_type='windows')
+
+    def test_requires_certificate_linux(self):
+        self._test_requires_certificate(os_type='linux')
+
+    def test_requires_certificate_os_type_none(self):
+        self._test_requires_certificate(os_type=None)

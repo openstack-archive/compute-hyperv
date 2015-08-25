@@ -30,6 +30,9 @@ class HyperVBaseTestCase(test.NoDBTestCase):
         platform_patcher = mock.patch('sys.platform', 'win32')
         hostutils_patcher = mock.patch.object(utilsfactory, 'utils')
 
+        hostutils_patcher = mock.patch.multiple(utilsfactory,
+                                                _get_class=mock.DEFAULT)
+
         platform_patcher.start()
         wmi_patcher.start()
         hostutils_patcher.start()

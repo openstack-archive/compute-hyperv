@@ -17,7 +17,6 @@ import mock
 
 from nova import exception
 
-from hyperv.nova import pathutils
 from hyperv.nova import serialconsolehandler
 from hyperv.nova import serialconsoleops
 from hyperv.nova import vmutils
@@ -92,10 +91,9 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch("__builtin__.open")
     @mock.patch("os.path.exists")
-    @mock.patch.object(pathutils.PathUtils, 'get_vm_console_log_paths')
-    def test_get_console_output_exception(self, mock_get_log_paths,
-                                          fake_path_exists, fake_open):
-        mock_get_log_paths.return_value = [mock.sentinel.log_path]
+    def test_get_console_output_exception(self, fake_path_exists, fake_open):
+        self._serialops._pathutils.get_vm_console_log_paths.return_value = [
+            mock.sentinel.log_path]
         fake_open.side_effect = IOError
         fake_path_exists.return_value = True
 
@@ -105,19 +103,14 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
         fake_open.assert_called_once_with(mock.sentinel.log_path, 'rb')
 
     @mock.patch('os.path.exists')
-    @mock.patch('hyperv.nova.pathutils.PathUtils.get_instance_dir')
-    @mock.patch('hyperv.nova.vmutils.VMUtils.get_active_instances')
     @mock.patch.object(serialconsoleops.SerialConsoleOps,
                        'start_console_handler')
-    def test_start_console_handlers(self, mock_start_console_handler,
-                                    mock_get_active_instances,
-                                    mock_get_instance_dir, mock_exists):
-        mock_get_active_instances.return_value = [
+    def test_start_console_handlers(self, mock_get_instance_dir, mock_exists):
+        self._serialops._pathutils.get_instance_dir.return_value = [
             mock.sentinel.nova_instance_name,
             mock.sentinel.other_instance_name]
         mock_exists.side_effect = [True, False]
 
         self._serialops.start_console_handlers()
 
-        mock_start_console_handler.assert_called_once_with(
-            mock.sentinel.nova_instance_name)
+        self._serialops._vmutils.get_active_instances.assert_called_once_with()

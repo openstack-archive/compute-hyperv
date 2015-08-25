@@ -18,40 +18,24 @@ Unit tests for the Hyper-V utils factory.
 """
 
 import mock
-from oslo_config import cfg
 
-from hyperv.nova import hostutils
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmutils
-from hyperv.nova import vmutilsv2
+from hyperv.nova import volumeutilsv2
 from hyperv.tests import test
-
-CONF = cfg.CONF
 
 
 class TestHyperVUtilsFactory(test.NoDBTestCase):
-    def test_get_vmutils_force_v1_and_min_version(self):
-        self._test_returned_class(None, True, True)
 
-    def test_get_vmutils_v2(self):
-        self._test_returned_class(vmutilsv2.VMUtilsV2, False, True)
+    def test_get_class(self):
+        expected_instance = volumeutilsv2.VolumeUtilsV2()
+        utilsfactory.utils = mock.MagicMock()
+        utilsfactory.utils.get_windows_version.return_value = '6.2'
+        instance = utilsfactory._get_class('volumeutils')
+        self.assertEqual(type(expected_instance), type(instance))
 
-    def test_get_vmutils_v2_r2(self):
-        self._test_returned_class(vmutils.VMUtils, False, False)
-
-    def test_get_vmutils_force_v1_and_not_min_version(self):
-        self._test_returned_class(vmutils.VMUtils, True, False)
-
-    def _test_returned_class(self, expected_class, force_v1, os_supports_v2):
-        CONF.set_override('force_hyperv_utils_v1', force_v1, 'hyperv')
-        with mock.patch.object(
-            hostutils.HostUtils,
-            'check_min_windows_version') as mock_check_min_windows_version:
-            mock_check_min_windows_version.return_value = os_supports_v2
-
-            if os_supports_v2 and force_v1:
-                self.assertRaises(vmutils.HyperVException,
-                                  utilsfactory.get_vmutils)
-            else:
-                actual_class = type(utilsfactory.get_vmutils())
-                self.assertEqual(actual_class, expected_class)
+    def test_get_class_not_found(self):
+        utilsfactory.utils = mock.MagicMock()
+        utilsfactory.utils.get_windows_version.return_value = '5.2'
+        self.assertRaises(vmutils.HyperVException, utilsfactory._get_class,
+                          'hostutils')

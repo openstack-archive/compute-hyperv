@@ -31,8 +31,6 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         super(LiveMigrationOpsTestCase, self).setUp()
         self.context = 'fake_context'
         self._livemigrops = livemigrationops.LiveMigrationOps()
-        self._livemigrops._livemigrutils = mock.MagicMock()
-        self._livemigrops._pathutils = mock.MagicMock()
 
     @mock.patch('hyperv.nova.serialconsoleops.SerialConsoleOps.'
                 'stop_console_handler')

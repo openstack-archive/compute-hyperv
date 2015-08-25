@@ -55,7 +55,6 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(VolumeOpsTestCase, self).setUp()
         self._volumeops = volumeops.VolumeOps()
-        self._volumeops._volutils = mock.MagicMock()
 
     def test_get_volume_driver(self):
         fake_conn_info = {'driver_volume_type': mock.sentinel.fake_driver_type}
@@ -477,6 +476,7 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         super(SMBFSVolumeDriverTestCase, self).setUp()
         self._volume_driver = volumeops.SMBFSVolumeDriver()
         self._volume_driver._vmutils = mock.MagicMock()
+        self._volume_driver._pathutils = mock.MagicMock()
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, 'ensure_share_mounted')
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_get_disk_path')
@@ -569,11 +569,10 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(expected, disk_path)
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_parse_credentials')
-    @mock.patch.object(pathutils.PathUtils, 'check_smb_mapping')
-    @mock.patch.object(pathutils.PathUtils, 'mount_smb_share')
-    def _test_ensure_mounted(self, mock_mount_smb_share,
-                             mock_check_smb_mapping, mock_parse_credentials,
-                             is_mounted=False):
+    def _test_ensure_mounted(self, mock_parse_credentials, is_mounted=False):
+        mock_mount_smb_share = self._volume_driver._pathutils.mount_smb_share
+        mock_check_smb_mapping = (
+            self._volume_driver._pathutils.check_smb_mapping)
         mock_check_smb_mapping.return_value = is_mounted
         mock_parse_credentials.return_value = (
             self._FAKE_USERNAME, self._FAKE_PASSWORD)
@@ -596,8 +595,9 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     def test_ensure_already_mounted(self):
         self._test_ensure_mounted(is_mounted=True)
 
-    @mock.patch.object(pathutils.PathUtils, 'unmount_smb_share')
-    def test_disconnect_volumes(self, mock_unmount_smb_share):
+    def test_disconnect_volumes(self):
+        mock_unmount_smb_share = (
+            self._volume_driver._pathutils.unmount_smb_share)
         block_device_mapping = [
             {'connection_info': self._FAKE_CONNECTION_INFO}]
         self._volume_driver.disconnect_volumes(block_device_mapping)

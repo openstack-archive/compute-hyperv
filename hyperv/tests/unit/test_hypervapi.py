@@ -39,7 +39,9 @@ from hyperv.nova import driver as driver_hyperv
 from hyperv.nova import hostutils
 from hyperv.nova import pathutils
 from hyperv.nova import rdpconsoleutils
+from hyperv.nova import rdpconsoleutilsv2
 from hyperv.nova import serialconsoleops
+from hyperv.nova import utilsfactory
 from hyperv.nova import vmutils
 from hyperv.tests import test
 from hyperv.tests.unit import db_fakes
@@ -104,6 +106,11 @@ class HyperVAPIBaseTestCase(test.NoDBTestCase):
         self.stubs.Set(glance, 'get_remote_image_service',
                        fake_get_remote_image_service)
 
+        def fake_get_min_windows_version():
+                return '6.3.0'
+        self.stubs.Set(utilsfactory.utils, 'get_windows_version',
+                       fake_get_min_windows_version)
+
         def fake_check_min_windows_version(fake_self, major, minor):
             if [major, minor] >= [6, 3]:
                 return False
@@ -122,6 +129,8 @@ class HyperVAPIBaseTestCase(test.NoDBTestCase):
         self._mox.StubOutWithMock(hostutils.HostUtils, 'get_local_ips')
 
         self._mox.StubOutWithMock(rdpconsoleutils.RDPConsoleUtils,
+                                  'get_rdp_console_port')
+        self._mox.StubOutWithMock(rdpconsoleutilsv2.RDPConsoleUtilsV2,
                                   'get_rdp_console_port')
 
         self._mox.StubOutWithMock(serialconsoleops.SerialConsoleOps,
@@ -190,7 +199,7 @@ class HyperVAPITestCase(HyperVAPIBaseTestCase):
         fake_port = 9999
         fake_vm_id = "fake_vm_id"
 
-        m = rdpconsoleutils.RDPConsoleUtils.get_rdp_console_port()
+        m = rdpconsoleutilsv2.RDPConsoleUtilsV2.get_rdp_console_port()
         m.AndReturn(fake_port)
 
         m = vmutils.VMUtils.get_vm_id(mox.IsA(str))

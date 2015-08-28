@@ -119,6 +119,9 @@ class HostUtils(object):
     def get_default_vm_generation(self):
         return self._DEFAULT_VM_GENERATION
 
+    def get_numa_nodes(self):
+        return []
+
     def check_server_feature(self, feature_id):
         return len(self._conn_cimv2.Win32_ServerFeature(ID=feature_id)) > 0
 

@@ -127,17 +127,15 @@ class VMUtilsV2(vmutils.VMUtils):
                     ['ElementName'],
                     VirtualSystemType=self._VIRTUAL_SYSTEM_TYPE_REALIZED)]
 
-    def _create_vm_obj(self, vs_man_svc, vm_name, vm_gen, notes,
-                       dynamic_memory_ratio, instance_path):
+    def _create_vm_obj(self, vs_man_svc, vm_name, vnuma_enabled, vm_gen,
+                       instance_path, notes):
         vs_data = self._conn.Msvm_VirtualSystemSettingData.new()
         vs_data.ElementName = vm_name
         vs_data.Notes = notes
         # Don't start automatically on host boot
         vs_data.AutomaticStartupAction = self._AUTOMATIC_STARTUP_ACTION_NONE
 
-        # vNUMA and dynamic memory are mutually exclusive
-        if dynamic_memory_ratio > 1:
-            vs_data.VirtualNumaEnabled = False
+        vs_data.VirtualNumaEnabled = vnuma_enabled
 
         if vm_gen == constants.VM_GEN_2:
             vs_data.VirtualSystemSubType = self._VIRTUAL_SYSTEM_SUBTYPE_GEN2

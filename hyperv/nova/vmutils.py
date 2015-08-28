@@ -221,7 +221,8 @@ class VMUtils(object):
         # Avoid snapshots
         return [s for s in vmsettings if s.SettingType == 3][0]
 
-    def _set_vm_memory(self, vm, vmsetting, memory_mb, dynamic_memory_ratio):
+    def _set_vm_memory(self, vm, vmsetting, memory_mb, memory_per_numa_node,
+                       dynamic_memory_ratio):
         mem_settings = vmsetting.associators(
             wmi_result_class=self._MEMORY_SETTING_DATA_CLASS)[0]
 
@@ -242,9 +243,14 @@ class VMUtils(object):
         # Start with the minimum memory
         mem_settings.VirtualQuantity = reserved_mem
 
+        if memory_per_numa_node:
+            # One memory block is 1 MB.
+            mem_settings.MaxMemoryBlocksPerNumaNode = memory_per_numa_node
+
         self._modify_virt_resource(mem_settings, vm.path_())
 
-    def _set_vm_vcpus(self, vm, vmsetting, vcpus_num, limit_cpu_features):
+    def _set_vm_vcpus(self, vm, vmsetting, vcpus_num, vcpus_per_numa_node,
+                      limit_cpu_features):
         procsetting = vmsetting.associators(
             wmi_result_class=self._PROCESSOR_SETTING_DATA_CLASS)[0]
         vcpus = int(vcpus_num)
@@ -253,14 +259,19 @@ class VMUtils(object):
         procsetting.Limit = 100000  # static assignment to 100%
         procsetting.LimitProcessorFeatures = limit_cpu_features
 
+        if vcpus_per_numa_node:
+            procsetting.MaxProcessorsPerNumaNode = vcpus_per_numa_node
+
         self._modify_virt_resource(procsetting, vm.path_())
 
-    def update_vm(self, vm_name, memory_mb, vcpus_num, limit_cpu_features,
-                  dynamic_memory_ratio):
+    def update_vm(self, vm_name, memory_mb, memory_per_numa_node, vcpus_num,
+                  vcpus_per_numa_node, limit_cpu_features, dynamic_mem_ratio):
         vm = self._lookup_vm_check(vm_name)
         vmsetting = self._get_vm_setting_data(vm)
-        self._set_vm_memory(vm, vmsetting, memory_mb, dynamic_memory_ratio)
-        self._set_vm_vcpus(vm, vmsetting, vcpus_num, limit_cpu_features)
+        self._set_vm_memory(vm, vmsetting, memory_mb, memory_per_numa_node,
+                            dynamic_mem_ratio)
+        self._set_vm_vcpus(vm, vmsetting, vcpus_num, vcpus_per_numa_node,
+                           limit_cpu_features)
 
     def check_admin_permissions(self):
         if not self._conn.Msvm_VirtualSystemManagementService():
@@ -269,25 +280,17 @@ class VMUtils(object):
                     " operate the virtual machine.")
             raise HyperVAuthorizationException(msg)
 
-    def create_vm(self, vm_name, memory_mb, vcpus_num, limit_cpu_features,
-                  dynamic_memory_ratio, vm_gen, instance_path, notes=None):
+    def create_vm(self, vm_name, vnuma_enabled, vm_gen, instance_path,
+                  notes=None):
         """Creates a VM."""
         vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
 
         LOG.debug('Creating VM %s', vm_name)
-        vm = self._create_vm_obj(vs_man_svc, vm_name, vm_gen, notes,
-                                 dynamic_memory_ratio, instance_path)
+        self._create_vm_obj(vs_man_svc, vm_name, vnuma_enabled, vm_gen,
+                            instance_path, notes)
 
-        vmsetting = self._get_vm_setting_data(vm)
-
-        LOG.debug('Setting memory for vm %s', vm_name)
-        self._set_vm_memory(vm, vmsetting, memory_mb, dynamic_memory_ratio)
-
-        LOG.debug('Set vCPUs for vm %s', vm_name)
-        self._set_vm_vcpus(vm, vmsetting, vcpus_num, limit_cpu_features)
-
-    def _create_vm_obj(self, vs_man_svc, vm_name, vm_gen, notes,
-                       dynamic_memory_ratio, instance_path):
+    def _create_vm_obj(self, vs_man_svc, vm_name, vnuma_enabled, vm_gen,
+                       instance_path, notes):
         vs_gs_data = self._conn.Msvm_VirtualSystemGlobalSettingData.new()
         vs_gs_data.ElementName = vm_name
         # Don't start automatically on host boot

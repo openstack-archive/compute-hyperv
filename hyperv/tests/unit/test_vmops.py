@@ -490,16 +490,19 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(vmops.VMOps, '_get_image_serial_port_settings')
     @mock.patch.object(vmops.VMOps, '_create_vm_com_port_pipes')
     @mock.patch.object(vmops.VMOps, '_configure_remotefx')
-    def _test_create_instance(self, mock_configure_remotefx, mock_create_pipes,
+    @mock.patch.object(vmops.VMOps, '_get_instance_vnuma_config')
+    def _test_create_instance(self, mock_get_instance_vnuma_config,
+                              mock_configure_remotefx, mock_create_pipes,
                               mock_get_port_settings, mock_attach_ephemerals,
                               mock_attach_root_device, mock_attach_volumes,
                               mock_set_qos_specs, mock_get_vif_driver,
                               mock_requires_certificate,
                               mock_requires_secure_boot,
                               enable_instance_metrics,
-                              vm_gen=constants.VM_GEN_2,
+                              vm_gen=constants.VM_GEN_1, vnuma_enabled=False,
                               requires_sec_boot=True, remotefx=False):
         mock_vif_driver = mock_get_vif_driver()
+        self.flags(dynamic_memory_ratio=2.0, group='hyperv')
         self.flags(enable_instance_metrics_collection=enable_instance_metrics,
                    group='hyperv')
         root_device_info = mock.sentinel.ROOT_DEV_INFO
@@ -509,6 +512,18 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         instance_path = os.path.join(CONF.instances_path, mock_instance.name)
         mock_requires_secure_boot.return_value = requires_sec_boot
+
+        if vnuma_enabled:
+            mock_get_instance_vnuma_config.return_value = (
+                mock.sentinel.mem_per_numa, mock.sentinel.cpus_per_numa)
+            cpus_per_numa = mock.sentinel.numa_cpus
+            mem_per_numa = mock.sentinel.mem_per_numa
+            dynamic_memory_ratio = 1.0
+        else:
+            mock_get_instance_vnuma_config.return_value = (None, None)
+            mem_per_numa, cpus_per_numa = (None, None)
+            dynamic_memory_ratio = CONF.hyperv.dynamic_memory_ratio
+
         flavor = flavor_obj.Flavor(**test_flavor.fake_flavor)
         if remotefx is True:
             flavor.extra_specs['hyperv:remotefx'] = "1920x1200,2"
@@ -537,10 +552,12 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     flavor.extra_specs['hyperv:remotefx'])
 
             self._vmops._vmutils.create_vm.assert_called_once_with(
-                mock_instance.name, mock_instance.memory_mb,
-                mock_instance.vcpus, CONF.hyperv.limit_cpu_features,
-                CONF.hyperv.dynamic_memory_ratio, vm_gen, instance_path,
-                [mock_instance.uuid])
+                mock_instance.name, vnuma_enabled, vm_gen,
+                instance_path, [mock_instance.uuid])
+            self._vmops._vmutils.update_vm.assert_called_once_with(
+                mock_instance.name, mock_instance.memory_mb, mem_per_numa,
+                mock_instance.vcpus, cpus_per_numa,
+                CONF.hyperv.limit_cpu_features, dynamic_memory_ratio)
 
             mock_create_scsi_ctrl = self._vmops._vmutils.create_scsi_controller
             mock_create_scsi_ctrl.assert_called_once_with(mock_instance.name)
@@ -1349,6 +1366,62 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertRaises(vmutils.HyperVException,
                           self._vmops.unrescue_instance,
                           mock_instance)
+
+    @mock.patch.object(vmops.hardware, 'numa_get_constraints')
+    @mock.patch.object(vmops.objects.ImageMeta, 'from_dict')
+    def _check_get_instance_vnuma_config_exception(self, mock_from_dict,
+                                                   mock_get_numa, numa_cells):
+        flavor = {'extra_specs': {}}
+        mock_instance = mock.MagicMock(flavor=flavor)
+        image_meta = mock.MagicMock(properties={})
+        mock_get_numa.return_value.cells = numa_cells
+
+        self.assertRaises(exception.InstanceUnacceptable,
+                          self._vmops._get_instance_vnuma_config,
+                          mock_instance, image_meta)
+
+    def test_get_instance_vnuma_config_bad_cpuset(self):
+        cell1 = mock.MagicMock(cpuset=set([0]), memory=1024, cpu_pinning=None)
+        cell2 = mock.MagicMock(cpuset=set([1, 2]), memory=1024,
+                               cpu_pinning=None)
+        self._check_get_instance_vnuma_config_exception(
+            numa_cells=[cell1, cell2])
+
+    def test_get_instance_vnuma_config_bad_memory(self):
+        cell1 = mock.MagicMock(cpuset=set([0]), memory=1024, cpu_pinning=None)
+        cell2 = mock.MagicMock(cpuset=set([1]), memory=2048, cpu_pinning=None)
+        self._check_get_instance_vnuma_config_exception(
+            numa_cells=[cell1, cell2])
+
+    def test_get_instance_vnuma_config_cpu_pinning_requested(self):
+        cell = mock.MagicMock(cpu_pinning={})
+        self._check_get_instance_vnuma_config_exception(numa_cells=[cell])
+
+    @mock.patch.object(vmops.hardware, 'numa_get_constraints')
+    @mock.patch.object(vmops.objects.ImageMeta, 'from_dict')
+    def _check_get_instance_vnuma_config(
+                self, mock_from_dict, mock_get_numa, numa_topology=None,
+                expected_mem_per_numa=None, expected_cpus_per_numa=None):
+        mock_instance = mock.MagicMock()
+        image_meta = mock.MagicMock()
+        mock_get_numa.return_value = numa_topology
+
+        result_memory_per_numa, result_cpus_per_numa = (
+            self._vmops._get_instance_vnuma_config(mock_instance, image_meta))
+
+        self.assertEqual(expected_cpus_per_numa, result_cpus_per_numa)
+        self.assertEqual(expected_mem_per_numa, result_memory_per_numa)
+
+    def test_get_instance_vnuma_config(self):
+        cell1 = mock.MagicMock(cpuset=set([0]), memory=2048, cpu_pinning=None)
+        cell2 = mock.MagicMock(cpuset=set([1]), memory=2048, cpu_pinning=None)
+        mock_topology = mock.MagicMock(cells=[cell1, cell2])
+        self._check_get_instance_vnuma_config(numa_topology=mock_topology,
+                                              expected_cpus_per_numa=1,
+                                              expected_mem_per_numa=2048)
+
+    def test_get_instance_vnuma_config_no_topology(self):
+        self._check_get_instance_vnuma_config()
 
     def _test_configure_remotefx(self, exception=False):
         self.flags(enable_remotefx=True, group='hyperv')

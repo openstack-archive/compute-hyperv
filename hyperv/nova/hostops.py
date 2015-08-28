@@ -125,6 +125,18 @@ class HostOps(object):
         LOG.debug('Windows version: %s ', version)
         return version
 
+    def _get_host_numa_topology(self):
+        numa_nodes = self._hostutils.get_numa_nodes()
+        cells = []
+        for numa_node in numa_nodes:
+            numa_node['pinned_cpus'] = set([])
+            numa_node['mempages'] = []
+            numa_node['siblings'] = []
+            cell = objects.NUMACell(**numa_node)
+            cells.append(cell)
+
+        return objects.NUMATopology(cells=cells)
+
     def _get_remotefx_gpu_info(self):
         remotefx_total_video_ram = 0
         remotefx_available_video_ram = 0
@@ -181,9 +193,14 @@ class HostOps(object):
                'supported_instances': jsonutils.dumps(
                    [(arch.I686, hv_type.HYPERV, vm_mode.HVM),
                     (arch.X86_64, hv_type.HYPERV, vm_mode.HVM)]),
-               'numa_topology': None,
                }
         dic.update(gpu_info)
+
+        numa_topology = self._get_host_numa_topology()
+        if numa_topology:
+            dic['numa_topology'] = numa_topology._to_json()
+        else:
+            dic['numa_topology'] = None
 
         return dic
 

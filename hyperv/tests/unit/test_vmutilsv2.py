@@ -41,13 +41,6 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
         self._vmutils._conn = mock.MagicMock()
         self._vmutils._pathutils = mock.MagicMock()
 
-    def test_create_vm(self):
-        super(VMUtilsV2TestCase, self).test_create_vm()
-        mock_vssd = self._vmutils._conn.Msvm_VirtualSystemSettingData.new()
-        self.assertEqual(self._vmutils._VIRTUAL_SYSTEM_SUBTYPE_GEN2,
-                         mock_vssd.VirtualSystemSubType)
-        self.assertFalse(mock_vssd.SecureBootEnabled)
-
     def test_modify_virt_resource(self):
         side_effect = [
             (self._FAKE_JOB_PATH, mock.MagicMock(), self._FAKE_RET_VAL)]
@@ -177,7 +170,7 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
     @mock.patch('hyperv.nova.vmutilsv2.VMUtilsV2.check_ret_val')
     @mock.patch('hyperv.nova.vmutilsv2.VMUtilsV2._get_wmi_obj')
     def _test_create_vm_obj(self, mock_get_wmi_obj, mock_check_ret_val,
-                            vm_path, dynamic_memory_ratio=1.0):
+                            vm_path, vnuma_enabled=True):
         mock_vs_man_svc = mock.MagicMock()
         mock_vs_data = mock.MagicMock()
         mock_job = mock.MagicMock()
@@ -196,9 +189,9 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
         response = self._vmutils._create_vm_obj(
             vs_man_svc=mock_vs_man_svc,
             vm_name=fake_vm_name,
-            vm_gen='fake vm gen',
+            vm_gen=constants.VM_GEN_2,
             notes='fake notes',
-            dynamic_memory_ratio=dynamic_memory_ratio,
+            vnuma_enabled=vnuma_enabled,
             instance_path=mock.sentinel.instance_path)
 
         if not vm_path:
@@ -212,11 +205,11 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
             SystemSettings=mock_vs_data.GetText_(1))
         mock_check_ret_val.assert_called_once_with(fake_ret_val, fake_job_path)
 
-        if dynamic_memory_ratio > 1:
-            self.assertFalse(mock_vs_data.VirtualNumaEnabled)
-
         mock_get_wmi_obj.assert_called_with('fake vm path')
 
+        self.assertEqual(vnuma_enabled, mock_vs_data.VirtualNumaEnabled)
+        self.assertEqual(self._vmutils._VIRTUAL_SYSTEM_SUBTYPE_GEN2,
+                         mock_vs_data.VirtualSystemSubType)
         self.assertEqual(mock_vs_data.Notes, 'fake notes')
         self.assertEqual(mock.sentinel.instance_path,
                          mock_vs_data.ConfigurationDataRoot)
@@ -235,8 +228,8 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
     def test_create_vm_obj_no_vm_path(self):
         self._test_create_vm_obj(vm_path=None)
 
-    def test_create_vm_obj_dynamic_memory(self):
-        self._test_create_vm_obj(vm_path=None, dynamic_memory_ratio=1.1)
+    def test_create_vm_obj_vnuma_disabled(self):
+        self._test_create_vm_obj(vm_path=None, vnuma_enabled=False)
 
     def test_list_instances(self):
         vs = mock.MagicMock()

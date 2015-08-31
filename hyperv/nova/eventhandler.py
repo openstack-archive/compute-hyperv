@@ -56,14 +56,8 @@ class InstanceEventHandler(object):
         constants.HYPERV_VM_STATE_ENABLED: virtevent.EVENT_LIFECYCLE_STARTED,
         constants.HYPERV_VM_STATE_DISABLED: virtevent.EVENT_LIFECYCLE_STOPPED,
         constants.HYPERV_VM_STATE_PAUSED: virtevent.EVENT_LIFECYCLE_PAUSED,
-        # We ignore the suspended state transition because
-        # this cannot be handled by the manager at the moment.
-        #
-        # TODO(lpetrut): Uncomment this after this patch gets in:
-        # I0fad28025785e77ef32b88ff813f39000d9f9e35
-        #
-        # constants.HYPERV_VM_STATE_SUSPENDED:
-        #    virtevent.EVENT_LIFECYCLE_SUSPENDED
+        constants.HYPERV_VM_STATE_SUSPENDED:
+            virtevent.EVENT_LIFECYCLE_SUSPENDED
     }
 
     def __init__(self, state_change_callback=None):

@@ -32,17 +32,8 @@ from hyperv.nova import vmutilsv2
 from hyperv.nova import volumeutils
 from hyperv.nova import volumeutilsv2
 
-hyper_opts = [
-    cfg.BoolOpt('force_hyperv_utils_v1',
-                default=False,
-                help='Force V1 WMI utility classes'),
-    cfg.BoolOpt('force_volumeutils_v1',
-                default=False,
-                help='Force V1 volume utility class'),
-]
-
 CONF = cfg.CONF
-CONF.register_opts(hyper_opts, 'hyperv')
+CONF.import_group('hyperv', 'nova.virt.hyperv.utilsfactory')
 
 LOG = logging.getLogger(__name__)
 

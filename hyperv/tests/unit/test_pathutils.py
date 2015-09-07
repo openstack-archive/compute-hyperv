@@ -31,15 +31,17 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         self.fake_instance_name = 'fake_instance_name'
 
         self._pathutils = pathutils.PathUtils()
+        self._pathutils._smb_conn_attr = mock.MagicMock()
 
-    def _test_smb_conn(self, smb_available=True):
-        self._mock_wmi.x_wmi = Exception
-        self._mock_wmi.WMI.side_effect = None if smb_available else Exception
+    @mock.patch.object(pathutils, 'wmi', create=True)
+    def _test_smb_conn(self, mock_wmi, smb_available=True):
+        mock_wmi.x_wmi = Exception
+        mock_wmi.WMI.side_effect = None if smb_available else Exception
 
         self._pathutils._set_smb_conn()
 
         if smb_available:
-            expected_conn = self._mock_wmi.WMI.return_value
+            expected_conn = mock_wmi.WMI.return_value
             self.assertEqual(expected_conn, self._pathutils._smb_conn)
         else:
             self.assertRaises(vmutils.HyperVException,

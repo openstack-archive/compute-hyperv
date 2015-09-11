@@ -964,3 +964,20 @@ class VMUtilsTestCase(test.NoDBTestCase):
         job = mock.MagicMock(JobState=constants.WMI_JOB_STATE_RUNNING)
 
         self.assertFalse(self._vmutils._is_job_completed(job))
+
+    @mock.patch.object(vmutils.VMUtils, '_get_vm_setting_data')
+    @mock.patch.object(vmutils.VMUtils, '_modify_virtual_system')
+    def test_set_boot_order_gen1(self, mock_modify_virt_syst,
+                            mock_get_vm_setting_data):
+        mock_vm = self._lookup_vm()
+
+        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+        mock_vssd = mock_get_vm_setting_data.return_value
+        fake_dev_boot_order = [mock.sentinel.BOOT_DEV1,
+                               mock.sentinel.BOOT_DEV2]
+
+        self._vmutils._set_boot_order(mock_vm.name, fake_dev_boot_order)
+
+        mock_modify_virt_syst.assert_called_once_with(
+            mock_svc, mock_vm.path_.return_value, mock_vssd)
+        self.assertEqual(tuple(fake_dev_boot_order), mock_vssd.BootOrder)

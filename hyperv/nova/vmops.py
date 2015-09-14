@@ -492,6 +492,7 @@ class VMOps(object):
         LOG.info(_LI("Got request to destroy instance"), instance=instance)
         try:
             if self._vmutils.vm_exists(instance_name):
+                self._vmutils.stop_vm_jobs(instance_name)
                 self.power_off(instance)
 
                 self._vmutils.destroy_vm(instance_name)

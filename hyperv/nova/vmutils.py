@@ -683,6 +683,11 @@ class VMUtils(object):
             snapshot_path)
         self.check_ret_val(ret_val, job_path)
 
+    def is_disk_attached(self, vm_name, disk_path, is_physical=True):
+        disk_resource = self._get_mounted_disk_resource_from_path(disk_path,
+                                                                  is_physical)
+        return disk_resource is not None
+
     def detach_vm_disk(self, vm_name, disk_path, is_physical=True):
         vm = self._lookup_vm_check(vm_name)
         disk_resource = self._get_mounted_disk_resource_from_path(disk_path,

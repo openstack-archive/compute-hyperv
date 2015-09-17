@@ -779,10 +779,11 @@ class VMOps(object):
                            self._ROOT_DISK_CTRL_ADDR, controller_type)
         self._detach_config_drive(instance.name, rescue=True, delete=True)
 
-        # Reattach the configdrive, if exists.
+        # Reattach the configdrive, if exists and not already attached.
         configdrive_path = self._pathutils.lookup_configdrive_path(
             instance.name)
-        if configdrive_path:
+        if configdrive_path and not self._vmutils.is_disk_attached(
+                instance.name, configdrive_path, is_physical=False):
             self.attach_config_drive(instance, configdrive_path, vm_gen)
 
         self.power_on(instance)

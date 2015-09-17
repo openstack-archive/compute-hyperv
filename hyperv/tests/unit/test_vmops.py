@@ -1180,6 +1180,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_vm_gen = constants.VM_GEN_2
 
         self._vmops._vmutils.get_vm_gen.return_value = mock_vm_gen
+        self._vmops._vmutils.is_disk_attached.return_value = False
         self._vmops._pathutils.lookup_root_vhd_path.side_effect = (
             mock.sentinel.root_vhd_path, mock.sentinel.rescue_vhd_path)
         self._vmops._pathutils.lookup_configdrive_path.return_value = (
@@ -1205,6 +1206,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance.name, rescue=True, delete=True)
         mock_delete_if_exists.assert_called_once_with(
             mock.sentinel.rescue_vhd_path)
+        self._vmops._vmutils.is_disk_attached.assert_called_once_with(
+            mock_instance.name, mock.sentinel.configdrive_path,
+            is_physical=False)
         mock_attach_configdrive.assert_called_once_with(
             mock_instance, mock.sentinel.configdrive_path, mock_vm_gen)
         mock_power_on.assert_called_once_with(mock_instance)

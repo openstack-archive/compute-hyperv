@@ -528,6 +528,8 @@ class VMOps(object):
         LOG.info(_LI("Got request to destroy instance"), instance=instance)
         try:
             if self._vmutils.vm_exists(instance_name):
+
+                # Stop the VM first.
                 self._vmutils.stop_vm_jobs(instance_name)
                 self.power_off(instance)
 
@@ -629,6 +631,7 @@ class VMOps(object):
 
         if retry_interval <= 0:
             retry_interval = SHUTDOWN_TIME_INCREMENT
+
         try:
             if timeout and self._soft_shutdown(instance,
                                                timeout,
@@ -638,7 +641,12 @@ class VMOps(object):
             self._set_vm_state(instance,
                                constants.HYPERV_VM_STATE_DISABLED)
         except exception.InstanceNotFound:
-            pass
+            # The manager can call the stop API after receiving instance
+            # power off events. If this is triggered when the instance
+            # is being deleted, it might attempt to power off an unexisting
+            # instance. We'll just pass in this case.
+            LOG.debug("Instance not found. Skipping power off",
+                      instance=instance)
 
     def power_on(self, instance, block_device_info=None, network_info=None):
         """Power on the specified instance."""

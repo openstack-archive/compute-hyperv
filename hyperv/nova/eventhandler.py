@@ -122,7 +122,7 @@ class InstanceEventHandler(object):
                              "will be ignored."),
                          instance_name)
             return instance_uuid
-        except exception.NotFound:
+        except exception.InstanceNotFound:
             # The instance has been deleted.
             pass
 

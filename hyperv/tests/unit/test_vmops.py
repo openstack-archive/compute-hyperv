@@ -926,7 +926,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_set_vm_state.assert_called_once_with(
             mock_instance, constants.HYPERV_VM_STATE_ENABLED)
 
-    def _test_power_off(self, timeout):
+    def _test_power_off(self, timeout, set_state_expected=True):
         instance = fake_instance.fake_instance_obj(self.context)
         with mock.patch.object(self._vmops, '_set_vm_state') as mock_set_state:
             self._vmops.power_off(instance, timeout)
@@ -934,8 +934,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             serialops = self._vmops._serial_console_ops
             serialops.stop_console_handler.assert_called_once_with(
                 instance.name)
-            mock_set_state.assert_called_once_with(
-                instance, constants.HYPERV_VM_STATE_DISABLED)
+            if set_state_expected:
+                mock_set_state.assert_called_once_with(
+                    instance, constants.HYPERV_VM_STATE_DISABLED)
 
     def test_power_off_hard(self):
         self._test_power_off(timeout=0)
@@ -944,6 +945,12 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_power_off_exception(self, mock_soft_shutdown):
         mock_soft_shutdown.return_value = False
         self._test_power_off(timeout=1)
+
+    @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
+    def test_power_off_unexisting_instance(self, mock_soft_shutdown):
+        mock_soft_shutdown.side_effect = (
+            exception.InstanceNotFound('fake_instance_uuid'))
+        self._test_power_off(timeout=1, set_state_expected=False)
 
     @mock.patch("hyperv.nova.vmops.VMOps._set_vm_state")
     @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")

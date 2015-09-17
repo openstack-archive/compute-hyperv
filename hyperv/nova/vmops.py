@@ -637,7 +637,7 @@ class VMOps(object):
 
             self._set_vm_state(instance,
                                constants.HYPERV_VM_STATE_DISABLED)
-        except exception.NotFound:
+        except exception.InstanceNotFound:
             pass
 
     def power_on(self, instance, block_device_info=None, network_info=None):

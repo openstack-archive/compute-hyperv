@@ -4,4 +4,4 @@ source = hyperv
 omit = hyperv/tests/*,hyperv/openstack/*
 
 [report]
-ignore-errors = True
+ignore_errors = True

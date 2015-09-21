@@ -287,3 +287,6 @@ class HyperVDriver(driver.ComputeDriver):
 
     def detach_interface(self, instance, vif):
         return self._vmops.detach_interface(instance, vif)
+
+    def host_maintenance_mode(self, host, mode):
+        return self._hostops.host_maintenance_mode(host, mode)

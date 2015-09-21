@@ -22,19 +22,34 @@ import platform
 import time
 
 
+from nova.compute import api
 from nova.compute import arch
 from nova.compute import hv_type
 from nova.compute import vm_mode
+from nova.compute import vm_states
+from nova import context
+from nova import exception
+from nova import objects
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_serialization import jsonutils
 from oslo_utils import units
 
-from hyperv.i18n import _
+from hyperv.i18n import _, _LE, _LI
 from hyperv.nova import constants
 from hyperv.nova import utilsfactory
+from hyperv.nova import vmops
+from hyperv.nova import vmutils
+
+hyper_host_opts = [
+    cfg.IntOpt('evacuate_task_state_timeout',
+               default=600,
+               help='Number of seconds to wait for an instance to be '
+                    'evacuated during host maintenance.'),
+]
 
 CONF = cfg.CONF
+CONF.register_opts(hyper_host_opts, 'hyperv')
 CONF.import_opt('my_ip', 'nova.netconf')
 CONF.import_opt('enable_remotefx', 'hyperv.nova.vmops', 'hyperv')
 LOG = logging.getLogger(__name__)
@@ -44,6 +59,9 @@ class HostOps(object):
     def __init__(self):
         self._hostutils = utilsfactory.get_hostutils()
         self._pathutils = utilsfactory.get_pathutils()
+        self._vmutils = utilsfactory.get_vmutils()
+        self._vmops = vmops.VMOps()
+        self._api = api.API()
 
     def _get_cpu_info(self):
         """Get the CPU information.
@@ -205,3 +223,85 @@ class HostOps(object):
         return "%s up %s,  0 users,  load average: 0, 0, 0" % (
                    str(time.strftime("%H:%M:%S")),
                    str(datetime.timedelta(milliseconds=long(tick_count64))))
+
+    def host_maintenance_mode(self, host, mode):
+        """Starts/Stops host maintenance. On start, it triggers
+        guest VMs evacuation.
+        """
+        ctxt = context.get_admin_context()
+
+        if not mode:
+            self._set_service_state(host=host, binary='nova-compute',
+                                    is_disabled=False)
+            LOG.info(_LI('Host is no longer under maintenance.'))
+            return 'off_maintenance'
+
+        self._set_service_state(host=host, binary='nova-compute',
+                                is_disabled=True)
+        vms_uuids = self._vmops.list_instance_uuids()
+        for vm_uuid in vms_uuids:
+            self._wait_for_instance_pending_task(ctxt, vm_uuid)
+
+        vm_names = self._vmutils.list_instances()
+        for vm_name in vm_names:
+            self._migrate_vm(ctxt, vm_name, host)
+
+        vms_uuid_after_migration = self._vmops.list_instance_uuids()
+        remaining_vms = len(vms_uuid_after_migration)
+        if remaining_vms == 0:
+            LOG.info(_LI('All vms have been migrated successfully.'
+                         'Host is down for maintenance'))
+            return 'on_maintenance'
+        raise vmutils.HyperVException(
+            _('Not all vms have been migrated: %s remaining instances.')
+            % remaining_vms)
+
+    def _set_service_state(self, host, binary, is_disabled):
+        "Enables/Disables service on host"
+
+        ctxt = context.get_admin_context(read_deleted='no')
+        service = objects.Service.get_by_args(ctxt, host, binary)
+        service.disabled = is_disabled
+        service.save()
+
+    def _migrate_vm(self, ctxt, vm_name, host):
+        try:
+            instance_uuid = self._vmutils.get_instance_uuid(vm_name)
+            if not instance_uuid:
+                LOG.info(_LI('VM "%s" running on this host was not created by '
+                             'nova. Skip migrating this vm to a new host.'),
+                         vm_name)
+                return
+            instance = objects.Instance.get_by_uuid(ctxt, instance_uuid)
+            if instance.vm_state == vm_states.ACTIVE:
+                self._api.live_migrate(ctxt, instance, block_migration=False,
+                                       disk_over_commit=False, host_name=None)
+            else:
+                self._api.resize(ctxt, instance, flavor_id=None,
+                    clean_shutdown=True)
+            self._wait_for_instance_pending_task(ctxt, instance_uuid)
+        except Exception as e:
+            LOG.error(_LE('Migrating vm failed with error: %s '), e)
+            raise exception.MigrationError(reason='Unable to migrate %s.'
+                                           % vm_name)
+
+    def _wait_for_instance_pending_task(self, context, vm_uuid):
+        instance = objects.Instance.get_by_uuid(context, vm_uuid)
+        task_state_timeout = CONF.hyperv.evacuate_task_state_timeout
+        while instance.task_state:
+            LOG.debug("Waiting to evacuate instance %(instance_id)s. Current "
+                      "task state: '%(task_state)s', Time remaining: "
+                      "%(timeout)s.", {'instance_id': instance.id,
+                                       'task_state': instance.task_state,
+                                       'timeout': task_state_timeout})
+            time.sleep(1)
+            instance.refresh()
+            task_state_timeout -= 1
+            if task_state_timeout <= 0:
+                err = (_("Timeout error. Instance %(instance)s hasn't changed "
+                         "task_state %(task_state)s within %(timeout)s "
+                         "seconds.") %
+                         {'instance': instance.name,
+                          'task_state': instance.task_state,
+                          'timeout': CONF.hyperv.evacuate_task_state_timeout})
+                raise exception.InternalError(message=err)

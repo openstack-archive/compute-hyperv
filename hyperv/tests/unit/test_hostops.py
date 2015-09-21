@@ -16,12 +16,16 @@
 import datetime
 
 import mock
+from nova import context as nova_context
+from nova import exception
+from nova import objects
 from oslo_config import cfg
 from oslo_serialization import jsonutils
 from oslo_utils import units
 
 from hyperv.nova import constants
 from hyperv.nova import hostops
+from hyperv.nova import vmutils
 from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF
@@ -41,6 +45,8 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(HostOpsTestCase, self).setUp()
         self._hostops = hostops.HostOps()
+        self._hostops._api = mock.MagicMock()
+        self._hostops._vmops = mock.MagicMock()
 
     def test_get_cpu_info(self):
         mock_processors = mock.MagicMock()
@@ -206,3 +212,117 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
         ret_val = self._hostops._get_remotefx_gpu_info()
         self.assertEqual(3072, ret_val['remotefx_total_video_ram'])
         self.assertEqual(2048, ret_val['remotefx_available_video_ram'])
+
+    @mock.patch.object(hostops.HostOps, '_wait_for_instance_pending_task')
+    @mock.patch.object(hostops.HostOps, '_set_service_state')
+    @mock.patch.object(hostops.HostOps, '_migrate_vm')
+    @mock.patch.object(nova_context, 'get_admin_context')
+    def _test_host_maintenance_mode(self, mock_get_admin_context,
+                                    mock_migrate_vm,
+                                    mock_set_service_state,
+                                    mock_wait_for_instance_pending_task,
+                                    vm_counter):
+        context = mock_get_admin_context.return_value
+        self._hostops._vmutils.list_instances.return_value = [
+            mock.sentinel.VM_NAME]
+        self._hostops._vmops.list_instance_uuids.return_value = [
+            mock.sentinel.UUID] * vm_counter
+        if vm_counter == 0:
+            result = self._hostops.host_maintenance_mode(
+                host=mock.sentinel.HOST, mode=True)
+            self.assertEqual('on_maintenance', result)
+        else:
+            self.assertRaises(vmutils.HyperVException,
+                              self._hostops.host_maintenance_mode,
+                              host=mock.sentinel.HOST,
+                              mode=True)
+
+        mock_set_service_state.assert_called_once_with(
+            host=mock.sentinel.HOST, binary='nova-compute', is_disabled=True)
+
+        mock_migrate_vm.assert_called_with(
+            context, mock.sentinel.VM_NAME, mock.sentinel.HOST)
+
+    @mock.patch.object(hostops.HostOps, '_set_service_state')
+    @mock.patch.object(nova_context, 'get_admin_context')
+    def test_host_maintenance_mode_disabled(self, mock_get_admin_context,
+                                            mock_set_service_state):
+        result = self._hostops.host_maintenance_mode(
+            host=mock.sentinel.HOST, mode=False)
+        mock_set_service_state.assert_called_once_with(
+            host=mock.sentinel.HOST, binary='nova-compute', is_disabled=False)
+        self.assertEqual('off_maintenance', result)
+
+    def test_host_maintenance_mode_enabled(self):
+        self._test_host_maintenance_mode(vm_counter=0)
+
+    def test_host_maintenance_mode_exception(self):
+        self._test_host_maintenance_mode(vm_counter=2)
+
+    @mock.patch.object(hostops.HostOps, '_wait_for_instance_pending_task')
+    @mock.patch.object(objects.Instance, 'get_by_uuid')
+    def _test_migrate_vm(self, mock_get_by_uuid,
+                         mock_wait_for_instance_pending_task,
+                         instance_uuid=None, vm_state='active'):
+        self._hostops._vmutils.get_instance_uuid.return_value = instance_uuid
+        instance = mock_get_by_uuid.return_value
+        type(instance).vm_state = mock.PropertyMock(
+            side_effect=[vm_state])
+        self._hostops._migrate_vm(ctxt=mock.sentinel.CONTEXT,
+                                  vm_name=mock.sentinel.VM_NAME,
+                                  host=mock.sentinel.HOST)
+        if not instance_uuid:
+            self.assertFalse(self._hostops._api.live_migrate.called)
+            return
+        if vm_state == 'active':
+            self._hostops._api.live_migrate.assert_called_once_with(
+                mock.sentinel.CONTEXT, instance, block_migration=False,
+                disk_over_commit=False, host_name=None)
+        else:
+            self._hostops._api.resize.assert_called_once_with(
+                mock.sentinel.CONTEXT, instance, flavor_id=None,
+                clean_shutdown=True)
+        mock_wait_for_instance_pending_task.assert_called_once_with(
+            mock.sentinel.CONTEXT, instance_uuid)
+
+    def test_migrate_vm_not_found(self):
+        self._test_migrate_vm()
+
+    def test_livemigrate_vm(self):
+        self._test_migrate_vm(instance_uuid=mock.sentinel.INSTANCE_UUID)
+
+    def test_resize_vm(self):
+        self._test_migrate_vm(instance_uuid=mock.sentinel.INSTANCE_UUID,
+                              vm_state='shutoff')
+
+    def test_migrate_vm_exception(self):
+        self.assertRaises(exception.MigrationError, self._hostops._migrate_vm,
+                          ctxt=mock.sentinel.CONTEXT,
+                          vm_name=mock.sentinel.VM_NAME,
+                          host=mock.sentinel.HOST)
+
+    @mock.patch("time.sleep")
+    @mock.patch.object(objects.Instance, 'get_by_uuid')
+    def test_wait_for_instance_pending_task(self, mock_get_by_uuid,
+                                            mock_sleep):
+        instance = mock_get_by_uuid.return_value
+        type(instance).task_state = mock.PropertyMock(
+            side_effect=['migrating', 'migrating', None])
+
+        self._hostops._wait_for_instance_pending_task(
+            context=mock.sentinel.CONTEXT, vm_uuid=mock.sentinel.VM_UUID)
+
+        instance.refresh.assert_called_once_with()
+
+    @mock.patch("time.sleep")
+    @mock.patch.object(objects.Instance, 'get_by_uuid')
+    def test_wait_for_instance_pending_task_timeout(self, mock_get_by_uuid,
+                                                    mock_sleep):
+        instance = mock_get_by_uuid.return_value
+        self.flags(evacuate_task_state_timeout=2, group='hyperv')
+        instance.task_state = 'migrating'
+
+        self.assertRaises(exception.InternalError,
+                          self._hostops._wait_for_instance_pending_task,
+                          context=mock.sentinel.CONTEXT,
+                          vm_uuid=mock.sentinel.VM_UUID)

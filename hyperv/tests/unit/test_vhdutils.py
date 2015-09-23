@@ -29,7 +29,7 @@ class VHDUtilsBaseTestCase(test.NoDBTestCase):
     _FAKE_FORMAT = 3
     _FAKE_TYPE = 3
     _FAKE_MAX_INTERNAL_SIZE = units.Gi
-    _FAKE_DYNAMIC_BLK_SIZE = 2097152L
+    _FAKE_DYNAMIC_BLK_SIZE = 2097152
     _FAKE_BAD_TYPE = 5
 
     _FAKE_JOB_PATH = 'fake_job_path'
@@ -234,8 +234,10 @@ class VHDUtilsTestCase(VHDUtilsBaseTestCase):
 
     def test_get_vhd_format_vhdx(self):
         with mock.patch('hyperv.nova.vhdutils.open',
-                        mock.mock_open(read_data=vhdutils.VHDX_SIGNATURE),
-                        create=True):
+                        mock.mock_open(),
+                        create=True) as mock_open:
+            mock_file = mock_open.return_value
+            mock_file.read.return_value = vhdutils.VHDX_SIGNATURE
 
             format = self._vhdutils.get_vhd_format(self._FAKE_VHD_PATH)
 

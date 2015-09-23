@@ -17,6 +17,7 @@ import uuid
 
 from nova import objects
 from nova.objects import fields
+import six
 
 
 def fake_db_instance(**updates):
@@ -43,7 +44,7 @@ def fake_db_instance(**updates):
         'tags': []
         }
 
-    for name, field in objects.Instance.fields.items():
+    for name, field in six.iteritems(objects.Instance.fields):
         if name in db_instance:
             continue
         if field.nullable:

@@ -28,6 +28,7 @@ eventlet.monkey_patch(os=False)
 
 import inspect
 import mock
+import six
 
 import fixtures
 from nova.tests import fixtures as nova_fixtures
@@ -111,13 +112,13 @@ class NoDBTestCase(testtools.TestCase):
         # Delete attributes that don't start with _ so they don't pin
         # memory around unnecessarily for the duration of the test
         # suite
-        for key in [k for k in self.__dict__.keys() if k[0] != '_']:
+        for key in [k for k in six.iterkeys(self.__dict__) if k[0] != '_']:
             del self.__dict__[key]
 
     def flags(self, **kw):
         """Override flag variables for a test."""
         group = kw.pop('group', None)
-        for k, v in kw.iteritems():
+        for k, v in six.iteritems(kw):
             CONF.set_override(k, v, group)
 
     def assertPublicAPISignatures(self, baseinst, inst):

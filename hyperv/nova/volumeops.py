@@ -29,6 +29,7 @@ from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
+import six
 from six.moves import range
 
 from hyperv.i18n import _, _LE, _LW
@@ -97,7 +98,7 @@ class VolumeOps(object):
         mapping = driver.block_device_info_get_mapping(block_device_info)
         block_devices = self._group_block_devices_by_type(
             mapping)
-        for driver_type, block_device_mapping in block_devices.items():
+        for driver_type, block_device_mapping in six.iteritems(block_devices):
             volume_driver = self._get_volume_driver(driver_type)
             volume_driver.disconnect_volumes(block_device_mapping)
 
@@ -195,7 +196,7 @@ class VolumeOps(object):
     def _bytes_per_sec_to_iops(self, no_bytes):
         # Hyper-v uses normalized IOPS (8 KB increments)
         # as IOPS allocation units.
-        return (no_bytes + self._IOPS_BASE_SIZE - 1) / self._IOPS_BASE_SIZE
+        return (no_bytes + self._IOPS_BASE_SIZE - 1) // self._IOPS_BASE_SIZE
 
     def _group_block_devices_by_type(self, block_device_mapping):
         block_devices = collections.defaultdict(list)
@@ -252,7 +253,7 @@ class ISCSIVolumeDriver(object):
             target_iqn = vol['connection_info']['data']['target_iqn']
             iscsi_targets[target_iqn] += 1
 
-        for target_iqn, disconnected_luns in iscsi_targets.items():
+        for target_iqn, disconnected_luns in six.iteritems(iscsi_targets):
             self.logout_storage_target(target_iqn, disconnected_luns)
 
     def logout_storage_target(self, target_iqn, disconnected_luns_count=1):

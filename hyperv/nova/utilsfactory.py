@@ -16,6 +16,7 @@
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import importutils
+import six
 
 from hyperv.i18n import _
 from hyperv.nova import hostutils
@@ -33,7 +34,7 @@ class_utils = {
     'hostutils': {'HostUtils': {'min_version': 6.0, 'max_version': 6.2},
                   'HostUtilsV2': {'min_version': 6.2, 'max_version': None}},
     'livemigrationutils': {'LiveMigrationUtils': {'min_version': 6.0,
-                                                  'max_version': 'None'}},
+                                                  'max_version': None}},
     'networkutils': {'NetworkUtils': {'min_version': 6.0,
                                       'max_version': 6.2},
                      'NetworkUtilsV2': {'min_version': 6.2,
@@ -61,11 +62,11 @@ def _get_class(utils_class_type):
                                       % utils_class_type)
 
     windows_version = utils.get_windows_version()
-    build = map(int, windows_version.split('.'))
+    build = list(map(int, windows_version.split('.')))
     windows_version = float("%i.%i" % (build[0], build[1]))
 
     existing_classes = class_utils.get(utils_class_type)
-    for class_variant in existing_classes.keys():
+    for class_variant in six.iterkeys(existing_classes):
         version = existing_classes.get(class_variant)
         if (version['min_version'] <= windows_version and
                 (version['max_version'] is None or

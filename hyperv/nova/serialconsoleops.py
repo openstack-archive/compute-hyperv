@@ -93,7 +93,7 @@ class SerialConsoleOps(object):
             instance_name)
 
         try:
-            log = ''
+            log = b''
             # Start with the oldest console log file.
             for log_path in console_log_paths[::-1]:
                 if os.path.exists(log_path):

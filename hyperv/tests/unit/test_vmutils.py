@@ -15,6 +15,7 @@
 
 import mock
 from nova import exception
+import six
 
 from hyperv.nova import constants
 from hyperv.nova import vmutils
@@ -91,7 +92,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
         mock_svc.GetSummaryInformation.return_value = (self._FAKE_RET_VAL,
                                                        [mock_summary])
 
-        for (key, val) in self._FAKE_SUMMARY_INFO.items():
+        for key, val in six.iteritems(self._FAKE_SUMMARY_INFO):
             setattr(mock_summary, key, val)
 
         summary = self._vmutils.get_vm_summary_info(self._FAKE_VM_NAME)
@@ -270,8 +271,8 @@ class VMUtilsTestCase(test.NoDBTestCase):
 
     def test_get_free_controller_slot_exception(self):
         mock_get_address = mock.Mock()
-        mock_get_address.side_effect = range(
-            constants.SCSI_CONTROLLER_SLOTS_NUMBER)
+        mock_get_address.side_effect = list(range(
+            constants.SCSI_CONTROLLER_SLOTS_NUMBER))
 
         mock_get_attached_disks = mock.Mock()
         mock_get_attached_disks.return_value = (

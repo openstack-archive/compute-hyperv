@@ -13,6 +13,7 @@
 #    under the License.
 
 import mock
+from six.moves import builtins
 
 from hyperv.nova import constants
 from hyperv.nova import vhdutilsv2
@@ -23,11 +24,11 @@ from hyperv.tests.unit import test_vhdutils
 class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
     """Unit tests for the Hyper-V VHDUtilsV2 class."""
 
-    _FAKE_BLOCK_SIZE = 33554432L
+    _FAKE_BLOCK_SIZE = 33554432
     _FAKE_LOG_SIZE = 1048576
     _FAKE_LOGICAL_SECTOR_SIZE = 4096
     _FAKE_METADATA_SIZE = 1048576
-    _FAKE_PHYSICAL_SECTOR_SIZE = 4096L
+    _FAKE_PHYSICAL_SECTOR_SIZE = 4096
 
     def setUp(self):
         super(VHDUtilsV2TestCase, self).setUp()
@@ -50,7 +51,8 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
     def _mock_get_vhd_info(self):
         mock_img_svc = self._vhdutils._conn.Msvm_ImageManagementService()[0]
         mock_img_svc.GetVirtualHardDiskSettingData.return_value = (
-            self._FAKE_JOB_PATH, self._FAKE_RET_VAL, self._FAKE_VHD_INFO_XML)
+            self._FAKE_JOB_PATH, self._FAKE_RET_VAL,
+            self._FAKE_VHD_INFO_XML)
 
     def test_get_vhd_info(self):
         self._mock_get_vhd_info()
@@ -124,7 +126,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
         expected_virt_disk_data = self._FAKE_VHD_INFO_XML.replace(
             self._FAKE_PARENT_PATH, fake_new_parent_path)
         mock_img_svc.SetVirtualHardDiskSettingData.assert_called_once_with(
-            VirtualDiskSettingData=expected_virt_disk_data)
+            VirtualDiskSettingData=expected_virt_disk_data.encode())
 
     def test_reconnect_parent_vhd_exception(self):
         # Test that reconnect_parent_vhd raises an exception if the
@@ -180,7 +182,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
             return_value=self._FAKE_BLOCK_SIZE)
 
         file_mock = mock.MagicMock()
-        with mock.patch('__builtin__.open', file_mock):
+        with mock.patch.object(builtins, 'open', file_mock):
             internal_size = (
                 self._vhdutils.get_internal_vhd_size_by_file_size(
                     self._FAKE_VHD_PATH, self._FAKE_MAX_INTERNAL_SIZE))
@@ -196,8 +198,9 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
 
     def test_get_vhdx_current_header(self):
         VHDX_HEADER_OFFSETS = [64 * 1024, 128 * 1024]
-        fake_sequence_numbers = ['\x01\x00\x00\x00\x00\x00\x00\x00',
-                                 '\x02\x00\x00\x00\x00\x00\x00\x00']
+        fake_sequence_numbers = [
+            bytearray(b'\x01\x00\x00\x00\x00\x00\x00\x00'),
+            bytearray(b'\x02\x00\x00\x00\x00\x00\x00\x00')]
         self._fake_file_handle.read = mock.MagicMock(
             side_effect=fake_sequence_numbers)
 
@@ -206,8 +209,8 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
         self.assertEqual(offset, VHDX_HEADER_OFFSETS[1])
 
     def test_get_vhdx_metadata_size(self):
-        fake_metadata_offset = '\x01\x00\x00\x00\x00\x00\x00\x00'
-        fake_metadata_size = '\x01\x00\x00\x00'
+        fake_metadata_offset = bytearray(b'\x01\x00\x00\x00\x00\x00\x00\x00')
+        fake_metadata_size = bytearray(b'\x01\x00\x00\x00')
         self._fake_file_handle.read = mock.MagicMock(
             side_effect=[fake_metadata_offset, fake_metadata_size])
 
@@ -220,7 +223,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
     def test_get_block_size(self):
         self._vhdutils._get_vhdx_metadata_size_and_offset = mock.MagicMock(
             return_value=(self._FAKE_METADATA_SIZE, 1024))
-        fake_block_size = '\x01\x00\x00\x00'
+        fake_block_size = bytearray(b'\x01\x00\x00\x00')
         self._fake_file_handle.read = mock.MagicMock(
             return_value=fake_block_size)
 
@@ -232,7 +235,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
         fake_current_header_offset = 64 * 1024
         self._vhdutils._get_vhdx_current_header_offset = mock.MagicMock(
             return_value=fake_current_header_offset)
-        fake_log_size = '\x01\x00\x00\x00'
+        fake_log_size = bytearray(b'\x01\x00\x00\x00')
         self._fake_file_handle.read = mock.MagicMock(
             return_value=fake_log_size)
 

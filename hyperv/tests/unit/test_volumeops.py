@@ -16,7 +16,6 @@
 
 import os
 
-import contextlib
 import mock
 from oslo_config import cfg
 
@@ -88,13 +87,11 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
         fake_vol_conn_info = (
             block_device_info['block_device_mapping'][0]['connection_info'])
 
-        with contextlib.nested(
-            mock.patch.object(self._volumeops,
-                              '_get_volume_driver'),
-            mock.patch.object(self._volumeops,
-                              'ebs_root_in_block_devices')
-            ) as (mock_get_volume_driver,
-                  mock_ebs_in_block_devices):
+        mock_get_volume_driver = mock.MagicMock()
+        mock_ebs_in_block_devices = mock.MagicMock()
+        with mock.patch.multiple(self._volumeops,
+                _get_volume_driver=mock_get_volume_driver,
+                ebs_root_in_block_devices=mock_ebs_in_block_devices):
 
             fake_vol_driver = mock_get_volume_driver.return_value
             mock_ebs_in_block_devices.return_value = False
@@ -368,22 +365,18 @@ class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.fake_iqn)
 
     def test_get_mounted_disk_from_lun(self):
-        with contextlib.nested(
-            mock.patch.object(self._volume_driver._volutils,
-                              'get_device_number_for_target'),
-            mock.patch.object(self._volume_driver._vmutils,
-                              'get_mounted_disk_by_drive_number')
-            ) as (mock_get_device_number_for_target,
-                  mock_get_mounted_disk_by_drive_number):
+        mock_get_device_number_for_target = (
+            self._volume_driver._volutils.get_device_number_for_target)
+        mock_get_device_number_for_target.return_value = 0
 
-            mock_get_device_number_for_target.return_value = 0
-            mock_get_mounted_disk_by_drive_number.return_value = (
-                mock.sentinel.disk_path)
+        mock_get_mounted_disk = (
+            self._volume_driver._vmutils.get_mounted_disk_by_drive_number)
+        mock_get_mounted_disk.return_value = mock.sentinel.disk_path
 
-            disk = self._volume_driver._get_mounted_disk_from_lun(
-                mock.sentinel.target_iqn,
-                mock.sentinel.target_lun)
-            self.assertEqual(mock.sentinel.disk_path, disk)
+        disk = self._volume_driver._get_mounted_disk_from_lun(
+            mock.sentinel.target_iqn,
+            mock.sentinel.target_lun)
+        self.assertEqual(mock.sentinel.disk_path, disk)
 
     def test_get_target_from_disk_path(self):
         result = self._volume_driver.get_target_from_disk_path(

@@ -20,6 +20,7 @@ from nova import exception
 from nova.i18n import _, _LI  # noqa
 from oslo_config import cfg
 from oslo_log import log as logging
+import six
 
 from hyperv.nova import constants
 from hyperv.nova import ioutils
@@ -109,7 +110,7 @@ class SerialConsoleHandler(object):
         log_rw_pipe_output = not serial_port_mapping.get(
             constants.SERIAL_PORT_TYPE_RO)
 
-        for pipe_type, pipe_path in serial_port_mapping.iteritems():
+        for pipe_type, pipe_path in six.iteritems(serial_port_mapping):
             enable_logging = (pipe_type == constants.SERIAL_PORT_TYPE_RO or
                               log_rw_pipe_output)
             handler = self._get_named_pipe_handler(

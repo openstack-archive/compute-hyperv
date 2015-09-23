@@ -15,6 +15,7 @@
 import os
 
 import mock
+from six.moves import builtins
 
 from hyperv.nova import constants
 from hyperv.nova import pathutils
@@ -178,8 +179,8 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         mock_rmtree.side_effect = [WindowsError(
             pathutils.ERROR_DIR_IS_NOT_EMPTY), True]
         fake_windows_error = WindowsError
-        with mock.patch('__builtin__.WindowsError',
-                        fake_windows_error, create=True):
+        with mock.patch.object(builtins, 'WindowsError',
+                               fake_windows_error, create=True):
             self._pathutils.rmtree(mock.sentinel.FAKE_PATH)
 
         mock_rmtree.assert_has_calls([mock.call(mock.sentinel.FAKE_PATH),
@@ -196,8 +197,8 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         fake_windows_error = WindowsError
         self._pathutils._check_create_dir = mock.MagicMock(
             side_effect=WindowsError(pathutils.ERROR_INVALID_NAME))
-        with mock.patch('__builtin__.WindowsError',
-                        fake_windows_error, create=True):
+        with mock.patch.object(builtins, 'WindowsError',
+                               fake_windows_error, create=True):
             self.assertRaises(vmutils.HyperVException,
                               self._pathutils._get_instances_sub_dir,
                               fake_dir_name)

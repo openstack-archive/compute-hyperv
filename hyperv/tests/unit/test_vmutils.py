@@ -565,6 +565,19 @@ class VMUtilsTestCase(test.NoDBTestCase):
         getattr(mock_svc, self._DESTROY_SNAPSHOT).assert_called_with(
             self._FAKE_SNAPSHOT_PATH)
 
+    @mock.patch.object(vmutils.VMUtils,
+                       '_get_mounted_disk_resource_from_path')
+    def test_is_disk_attached(self, mock_get_mounted_disk_from_path):
+        is_physical = True
+
+        is_attached = self._vmutils.is_disk_attached(mock.sentinel.vm_name,
+                                                     mock.sentinel.disk_path,
+                                                     is_physical=is_physical)
+
+        self.assertTrue(is_attached)
+        mock_get_mounted_disk_from_path.assert_called_once_with(
+            mock.sentinel.disk_path, is_physical)
+
     def test_detach_vm_disk(self):
         self._lookup_vm()
         mock_disk = self._prepare_mock_disk()

@@ -33,7 +33,7 @@ class_utils = {
     'hostutils': {'HostUtils': {'min_version': 6.0, 'max_version': 6.2},
                   'HostUtilsV2': {'min_version': 6.2, 'max_version': None}},
     'livemigrationutils': {'LiveMigrationUtils': {'min_version': 6.0,
-                                                  'max_version': 'None'}},
+                                                  'max_version': None}},
     'networkutils': {'NetworkUtils': {'min_version': 6.0,
                                       'max_version': 6.2},
                      'NetworkUtilsV2': {'min_version': 6.2,

@@ -16,13 +16,16 @@
 Image caching and management.
 """
 import os
+import re
 
 from nova import utils
+from nova.virt import imagecache
 from nova.virt import images
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
+from oslo_utils import uuidutils
 
 from hyperv.i18n import _
 from hyperv.nova import utilsfactory
@@ -32,12 +35,30 @@ LOG = logging.getLogger(__name__)
 
 CONF = cfg.CONF
 CONF.import_opt('use_cow_images', 'nova.virt.driver')
+CONF.import_opt('instances_path', 'nova.compute.manager')
+CONF.import_opt('remove_unused_original_minimum_age_seconds',
+                'nova.virt.imagecache')
 
 
-class ImageCache(object):
+def synchronize_with_path(f):
+    def wrapper(self, image_path):
+
+        @utils.synchronized(image_path)
+        def inner():
+            return f(self, image_path)
+        return inner()
+
+    return wrapper
+
+
+class ImageCache(imagecache.ImageCacheManager):
     def __init__(self):
+        super(ImageCache, self).__init__()
         self._pathutils = utilsfactory.get_pathutils()
         self._vhdutils = utilsfactory.get_vhdutils()
+        self.used_images = []
+        self.unexplained_images = []
+        self.originals = []
 
     def _get_root_vhd_size_gb(self, instance):
         if instance.old_flavor:
@@ -106,6 +127,7 @@ class ImageCache(object):
                 test_path = base_vhd_path + '.' + format_ext
                 if self._pathutils.exists(test_path):
                     vhd_path = test_path
+                    self._update_image_timestamp(image_id)
                     break
 
             if not vhd_path:
@@ -161,3 +183,67 @@ class ImageCache(object):
     def get_image_details(self, context, instance):
         image_id = instance.image_ref
         return images.get_info(context, image_id)
+
+    def _age_and_verify_cached_images(self, context, all_instances, base_dir):
+        for img in self.originals:
+            if img in self.used_images:
+                # change the timestamp on the image so as to reflect the last
+                # time it was used
+                self._update_image_timestamp(img)
+            else:
+                self._remove_if_old_image(img)
+
+    def _update_image_timestamp(self, image_name):
+        backing_files = self._get_image_backing_files(image_name)
+        for img in backing_files:
+            os.utime(img, None)
+
+    def _get_image_backing_files(self, image_name):
+        backing_files = [self._pathutils.lookup_image_basepath(image_name)]
+        resize_re = re.compile('%s_[0-9]+$' % image_name)
+        for img in self.unexplained_images:
+            match = resize_re.match(img)
+            if match:
+                backing_files.append(
+                    self._pathutils.lookup_image_basepath(img))
+
+        return backing_files
+
+    def _remove_if_old_image(self, image_name):
+        max_age_seconds = CONF.remove_unused_original_minimum_age_seconds
+        backing_files = self._get_image_backing_files(image_name)
+        for img in backing_files:
+            age_seconds = self._pathutils.get_age_of_file(img)
+            if age_seconds > max_age_seconds:
+                self.remove_old_image(img)
+
+    @synchronize_with_path
+    def remove_old_image(self, img):
+        self._pathutils.remove(img)
+
+    def update(self, context, all_instances):
+        base_vhd_dir = self._pathutils.get_base_vhd_dir()
+
+        running = self._list_running_instances(context, all_instances)
+        self.used_images = running['used_images'].keys()
+        all_files = self.list_base_images(base_vhd_dir)
+        self.originals = all_files['originals']
+        self.unexplained_images = all_files['unexplained_images']
+
+        self._age_and_verify_cached_images(context, all_instances,
+                                           base_vhd_dir)
+
+    def list_base_images(self, base_dir):
+        unexplained_images = []
+        originals = []
+
+        for entry in os.listdir(base_dir):
+            # remove file extension
+            file_name = os.path.splitext(entry)[0]
+            if uuidutils.is_uuid_like(file_name):
+                originals.append(file_name)
+            else:
+                unexplained_images.append(file_name)
+
+        return {'unexplained_images': unexplained_images,
+                'originals': originals}

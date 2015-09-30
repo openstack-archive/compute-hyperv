@@ -492,18 +492,40 @@ class VMUtilsTestCase(test.NoDBTestCase):
         self._assert_add_resources(mock_svc)
 
     def test_modify_virt_resource(self):
+        side_effect = [(self._FAKE_JOB_PATH, self._FAKE_RET_VAL)]
+        self._check_modify_virt_resource_max_retries(side_effect=side_effect)
+
+    def test_modify_virt_resource_max_retries_exception(self):
+        side_effect = vmutils.HyperVException
+        self._check_modify_virt_resource_max_retries(
+            side_effect=side_effect, num_calls=6, expected_fail=True)
+
+    def test_modify_virt_resource_max_retries(self):
+        side_effect = [vmutils.HyperVException] * 5 + [(self._FAKE_JOB_PATH,
+                                                        self._FAKE_RET_VAL)]
+        self._check_modify_virt_resource_max_retries(side_effect=side_effect,
+                                                     num_calls=5)
+
+    @mock.patch('eventlet.greenthread.sleep')
+    def _check_modify_virt_resource_max_retries(
+            self, mock_sleep, side_effect, num_calls=1, expected_fail=False):
         mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
-        mock_svc.ModifyVirtualSystemResources.return_value = (
-            self._FAKE_JOB_PATH, self._FAKE_RET_VAL)
+        mock_svc.ModifyVirtualSystemResources.side_effect = side_effect
         mock_res_setting_data = mock.MagicMock()
-        mock_res_setting_data.GetText_.return_value = self._FAKE_RES_DATA
+        mock_res_setting_data.GetText_.return_value = mock.sentinel.res_data
 
-        self._vmutils._modify_virt_resource(mock_res_setting_data,
-                                            self._FAKE_VM_PATH)
+        if expected_fail:
+            self.assertRaises(vmutils.HyperVException,
+                              self._vmutils._modify_virt_resource,
+                              mock_res_setting_data, self._FAKE_VM_PATH)
+        else:
+            self._vmutils._modify_virt_resource(mock_res_setting_data,
+                                                self._FAKE_VM_PATH)
 
-        mock_svc.ModifyVirtualSystemResources.assert_called_with(
-            ResourceSettingData=[self._FAKE_RES_DATA],
-            ComputerSystem=self._FAKE_VM_PATH)
+        mock_calls = [mock.call(ResourceSettingData=[mock.sentinel.res_data],
+                                ComputerSystem=self._FAKE_VM_PATH)] * num_calls
+        mock_svc.ModifyVirtualSystemResources.has_calls(mock_calls)
+        mock_sleep.has_calls(mock.call(1) * num_calls)
 
     def test_remove_virt_resource(self):
         mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]

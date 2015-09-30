@@ -48,18 +48,36 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
         self.assertFalse(mock_vssd.SecureBootEnabled)
 
     def test_modify_virt_resource(self):
+        side_effect = [
+            (self._FAKE_JOB_PATH, mock.MagicMock(), self._FAKE_RET_VAL)]
+        self._check_modify_virt_resource_max_retries(side_effect=side_effect)
+
+    def test_modify_virt_resource_max_retries(self):
+        side_effect = [vmutils.HyperVException] * 5 + [
+            (self._FAKE_JOB_PATH, mock.MagicMock(), self._FAKE_RET_VAL)]
+        self._check_modify_virt_resource_max_retries(side_effect=side_effect,
+                                                     num_calls=5)
+
+    @mock.patch('eventlet.greenthread.sleep')
+    def _check_modify_virt_resource_max_retries(
+            self, mock_sleep, side_effect, num_calls=1, expected_fail=False):
         mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
-        mock_svc.ModifyResourceSettings.return_value = (self._FAKE_JOB_PATH,
-                                                        mock.MagicMock(),
-                                                        self._FAKE_RET_VAL)
+        mock_svc.ModifyResourceSettings.side_effect = side_effect
         mock_res_setting_data = mock.MagicMock()
-        mock_res_setting_data.GetText_.return_value = self._FAKE_RES_DATA
+        mock_res_setting_data.GetText_.return_value = mock.sentinel.res_data
 
-        self._vmutils._modify_virt_resource(mock_res_setting_data,
-                                            self._FAKE_VM_PATH)
+        if expected_fail:
+            self.assertRaises(vmutils.HyperVException,
+                              self._vmutils._modify_virt_resource,
+                              mock_res_setting_data, self._FAKE_VM_PATH)
+        else:
+            self._vmutils._modify_virt_resource(mock_res_setting_data,
+                                                self._FAKE_VM_PATH)
 
-        mock_svc.ModifyResourceSettings.assert_called_with(
-            ResourceSettings=[self._FAKE_RES_DATA])
+        mock_calls = [
+            mock.call(ResourceSettings=[self._FAKE_RES_DATA])] * num_calls
+        mock_svc.ModifyResourceSettings.has_calls(mock_calls)
+        mock_sleep.has_calls(mock.call(1) * num_calls)
 
     @mock.patch.object(vmutilsv2, 'wmi', create=True)
     @mock.patch.object(vmutilsv2.VMUtilsV2, 'check_ret_val')

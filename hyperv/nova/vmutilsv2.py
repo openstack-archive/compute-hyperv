@@ -26,6 +26,7 @@ if sys.platform == 'win32':
 
 from oslo_config import cfg
 from oslo_log import log as logging
+from oslo_service import loopingcall
 
 from hyperv.i18n import _, _LW
 from hyperv.nova import constants
@@ -258,6 +259,10 @@ class VMUtilsV2(vmutils.VMUtils):
         self.check_ret_val(ret_val, job_path)
         return new_resources
 
+    # _modify_virt_resource can fail, especially while setting up the VM's
+    # serial port connection. Retrying the operation will yield success.
+    @loopingcall.RetryDecorator(max_retry_count=5, max_sleep_time=1,
+                                exceptions=(vmutils.HyperVException, ))
     def _modify_virt_resource(self, res_setting_data, vm_path):
         """Updates a VM resource."""
         vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]

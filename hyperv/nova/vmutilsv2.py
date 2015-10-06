@@ -31,6 +31,7 @@ from oslo_service import loopingcall
 from hyperv.i18n import _, _LW
 from hyperv.nova import constants
 from hyperv.nova import hostutils
+from hyperv.nova import pathutils
 from hyperv.nova import vmutils
 
 CONF = cfg.CONF
@@ -56,6 +57,8 @@ class VMUtilsV2(vmutils.VMUtils):
                                         'Display Controller')
     _SYNTH_3D_DISP_ALLOCATION_SETTING_DATA_CLASS = (
         'Msvm_Synthetic3DDisplayControllerSettingData')
+
+    _LOGICAL_IDENTITY_CLASS = 'Msvm_LogicalIdentity'
 
     _VIRTUAL_SYSTEM_TYPE_REALIZED = 'Microsoft:Hyper-V:System:Realized'
     _VIRTUAL_SYSTEM_SUBTYPE_GEN1 = 'Microsoft:Hyper-V:SubType:1'
@@ -99,6 +102,7 @@ class VMUtilsV2(vmutils.VMUtils):
             if hostutils.HostUtils().check_min_windows_version(10, 0):
                 self._SERIAL_PORT_SETTING_DATA_CLASS = (
                     "Msvm_SerialPortSettingData")
+            self._pathutils = pathutils.PathUtils()
         super(VMUtilsV2, self).__init__(host)
 
     def _init_hyperv_wmi_conn(self, host):
@@ -450,3 +454,42 @@ class VMUtilsV2(vmutils.VMUtils):
         (job_path, ret_val) = vs_man_svc.ModifySystemSettings(
             SystemSettings=vmsetting.GetText_(1))
         self.check_ret_val(ret_val, job_path)
+
+    def _is_drive_physical(self, drive_path):
+        # TODO(atuvenie): Find better way to check if path represents
+        # physical or virtual drive.
+        return not self._pathutils.exists(drive_path)
+
+    def _drive_to_boot_source(self, drive_path):
+
+        is_physical = self._is_drive_physical(drive_path)
+        drive = self._get_mounted_disk_resource_from_path(
+            drive_path, is_physical=is_physical)
+
+        if is_physical:
+            bssd = drive.associators(
+                wmi_association_class=self._LOGICAL_IDENTITY_CLASS)[0]
+        else:
+            rasd = wmi.WMI(moniker=drive.Parent)
+            bssd = rasd.associators(
+                wmi_association_class=self._LOGICAL_IDENTITY_CLASS)[0]
+        return bssd
+
+    def set_boot_order(self, vm_name, device_boot_order):
+        if self.get_vm_gen(vm_name) == constants.VM_GEN_1:
+            self._set_boot_order(vm_name, device_boot_order)
+        else:
+            self._set_boot_order_gen2(vm_name, device_boot_order)
+
+    def _set_boot_order_gen2(self, vm_name, device_boot_order):
+        new_boot_order = [(self._drive_to_boot_source(device)).path_()
+                           for device in device_boot_order if device]
+
+        vm = self._lookup_vm_check(vm_name)
+
+        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
+        vssd = self._get_vm_setting_data(vm)
+        old_boot_order = vssd.BootSourceOrder
+        network_boot_devs = set(old_boot_order) ^ set(new_boot_order)
+        vssd.BootSourceOrder = tuple(new_boot_order) + tuple(network_boot_devs)
+        self._modify_virtual_system(vs_man_svc, None, vssd)

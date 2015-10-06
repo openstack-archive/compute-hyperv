@@ -169,5 +169,41 @@ class BlockDeviceInfoManager(object):
         (bdm['drive_addr'],
          bdm['ctrl_disk_addr']) = self._get_available_controller_slot(
             bdm['disk_bus'], slot_map)
+
         # make sure that boot_index is set.
         bdm['boot_index'] = bdm.get('boot_index')
+
+    def _sort_by_boot_order(self, bd_list):
+        # we sort the block devices by boot_index leaving the ones that don't
+        # have a specified boot_index at the end
+        bd_list.sort(key=lambda x: (x['boot_index'] is None, x['boot_index']))
+
+    def get_boot_order(self, vm_gen, block_device_info):
+        if vm_gen == constants.VM_GEN_1:
+            return self._get_boot_order_gen1(block_device_info)
+        else:
+            return self._get_boot_order_gen2(block_device_info)
+
+    def _get_boot_order_gen1(self, block_device_info):
+        if block_device_info['root_disk']['type'] == 'iso':
+            return [constants.BOOT_DEVICE_CDROM,
+                    constants.BOOT_DEVICE_HARDDISK,
+                    constants.BOOT_DEVICE_NETWORK,
+                    constants.BOOT_DEVICE_FLOPPY]
+        else:
+            return [constants.BOOT_DEVICE_HARDDISK,
+                    constants.BOOT_DEVICE_CDROM,
+                    constants.BOOT_DEVICE_NETWORK,
+                    constants.BOOT_DEVICE_FLOPPY]
+
+    def _get_boot_order_gen2(self, block_device_info):
+        boot_order = [block_device_info['root_disk']]
+        boot_order += driver.block_device_info_get_ephemerals(
+            block_device_info)
+        boot_order += driver.block_device_info_get_mapping(block_device_info)
+
+        self._sort_by_boot_order(boot_order)
+
+        return [self._volops.get_mounted_disk_path_from_volume(
+                boot_dev['connection_info']) if boot_dev.get('connection_info')
+                else boot_dev['path'] for boot_dev in boot_order]

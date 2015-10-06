@@ -267,6 +267,9 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             image_meta)
         mock_check_attach_config_drive.assert_called_once_with(
             mock_instance, get_image_vm_gen.return_value)
+        self._migrationops._vmops.set_boot_order.assert_called_once_with(
+            get_image_vm_gen.return_value, block_device_info,
+            mock_instance.name)
         self._migrationops._vmops.power_on.assert_called_once_with(
             mock_instance, network_info=mock.sentinel.network_info)
 
@@ -440,6 +443,9 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.image_meta)
         mock_check_attach_config_drive.assert_called_once_with(
             mock_instance, get_image_vm_gen.return_value)
+        self._migrationops._vmops.set_boot_order.assert_called_once_with(
+            get_image_vm_gen.return_value, block_device_info,
+            mock_instance.name)
         self._migrationops._vmops.power_on.assert_called_once_with(
             mock_instance)
 

@@ -203,6 +203,11 @@ class VolumeOps(object):
             block_devices[volume_type].append(volume)
         return block_devices
 
+    def get_mounted_disk_path_from_volume(self, connection_info):
+        volume_driver = self._get_volume_driver(
+            connection_info=connection_info)
+        return volume_driver.get_mounted_disk_path_from_volume(connection_info)
+
 
 class ISCSIVolumeDriver(object):
     def __init__(self):
@@ -264,6 +269,15 @@ class ISCSIVolumeDriver(object):
             LOG.debug("Skipping disconnecting target %s as there "
                       "are LUNs still being used.", target_iqn)
 
+    def get_mounted_disk_path_from_volume(self, connection_info):
+        data = connection_info['data']
+        target_lun = data['target_lun']
+        target_iqn = data['target_iqn']
+
+        # Getting the mounted disk
+        return self._get_mounted_disk_from_lun(target_iqn, target_lun,
+                                               wait_for_device=True)
+
     def attach_volume(self, connection_info, instance_name,
                       disk_bus=constants.CTRL_TYPE_SCSI):
         """Attach a volume to the SCSI controller or to the IDE controller if
@@ -276,13 +290,8 @@ class ISCSIVolumeDriver(object):
         try:
             self.login_storage_target(connection_info)
 
-            data = connection_info['data']
-            target_lun = data['target_lun']
-            target_iqn = data['target_iqn']
-
-            # Getting the mounted disk
-            mounted_disk_path = self._get_mounted_disk_from_lun(target_iqn,
-                                                                target_lun)
+            mounted_disk_path = self.get_mounted_disk_path_from_volume(
+                connection_info)
 
             if disk_bus == constants.CTRL_TYPE_IDE:
                 # Find the IDE controller for the vm.
@@ -304,6 +313,7 @@ class ISCSIVolumeDriver(object):
             with excutils.save_and_reraise_exception():
                 LOG.error(_LE('Unable to attach volume to instance %s'),
                           instance_name)
+                target_iqn = connection_info['data']['target_iqn']
                 if target_iqn:
                     self.logout_storage_target(target_iqn)
 
@@ -314,19 +324,14 @@ class ISCSIVolumeDriver(object):
                   {'connection_info': connection_info,
                    'instance_name': instance_name})
 
-        data = connection_info['data']
-        target_lun = data['target_lun']
-        target_iqn = data['target_iqn']
-
-        # Getting the mounted disk
-        mounted_disk_path = self._get_mounted_disk_from_lun(target_iqn,
-                                                            target_lun)
+        mounted_disk_path = self.get_mounted_disk_path_from_volume(
+            connection_info)
 
         LOG.debug("Detaching physical disk from instance: %s",
                   mounted_disk_path)
         self._vmutils.detach_vm_disk(instance_name, mounted_disk_path)
 
-        self.logout_storage_target(target_iqn)
+        self.logout_storage_target(connection_info['data']['target_iqn'])
 
     def _get_mounted_disk_from_lun(self, target_iqn, target_lun,
                                    wait_for_device=False):
@@ -413,12 +418,15 @@ class SMBFSVolumeDriver(object):
         self._username_regex = re.compile(r'user(?:name)?=([^, ]+)')
         self._password_regex = re.compile(r'pass(?:word)?=([^, ]+)')
 
+    def get_mounted_disk_path_from_volume(self, connection_info):
+        return self._get_disk_path(connection_info)
+
     @export_path_synchronized
     def attach_volume(self, connection_info, instance_name,
                       disk_bus=constants.CTRL_TYPE_SCSI):
         self.ensure_share_mounted(connection_info)
 
-        disk_path = self._get_disk_path(connection_info)
+        disk_path = self.get_mounted_disk_path_from_volume(connection_info)
 
         try:
             if disk_bus == constants.CTRL_TYPE_IDE:
@@ -445,7 +453,7 @@ class SMBFSVolumeDriver(object):
                   {'connection_info': connection_info,
                    'instance_name': instance_name})
 
-        disk_path = self._get_disk_path(connection_info)
+        disk_path = self.get_mounted_disk_path_from_volume(connection_info)
         export_path = self._get_export_path(connection_info)
 
         self._vmutils.detach_vm_disk(instance_name, disk_path,

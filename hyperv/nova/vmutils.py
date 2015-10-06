@@ -895,3 +895,15 @@ class VMUtils(object):
 
     def _is_job_completed(self, job):
         return job.JobState in self._completed_job_states
+
+    def set_boot_order(self, vm_name, device_boot_order):
+        self._set_boot_order(vm_name, device_boot_order)
+
+    def _set_boot_order(self, vm_name, device_boot_order):
+        vm = self._lookup_vm_check(vm_name)
+
+        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
+        vssd = self._get_vm_setting_data(vm)
+        vssd.BootOrder = tuple(device_boot_order)
+
+        self._modify_virtual_system(vs_man_svc, vm.path_(), vssd)

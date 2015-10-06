@@ -25,6 +25,7 @@ class VMUtils10TestCase(test.NoDBTestCase):
         super(VMUtils10TestCase, self).setUp()
         self._vmutils = vmutils10.VMUtils10()
         self._vmutils._conn = mock.MagicMock()
+        self._vmutils._pathutils = mock.MagicMock()
 
     def test_set_secure_boot_certificate_required(self):
         vs_data = mock.MagicMock()

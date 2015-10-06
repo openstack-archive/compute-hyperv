@@ -349,6 +349,20 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_create_dynamic_vhd.assert_called_once_with('fake_eph_path',
                                                         10 * units.Gi, 'vhd')
 
+    @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
+                       'get_boot_order')
+    def test_set_boot_order(self, mock_bdm_get_boot_order):
+        mock_bdm_get_boot_order.return_value = mock.sentinel.FAKE_BOOT_ORDER
+
+        self._vmops.set_boot_order(mock.sentinel.FAKE_VM_GEN,
+                                   mock.sentinel.FAKE_BDI,
+                                   mock.sentinel.FAKE_INSTANCE_NAME)
+
+        mock_bdm_get_boot_order.assert_called_once_with(
+            mock.sentinel.FAKE_VM_GEN, mock.sentinel.FAKE_BDI)
+        self._vmops._vmutils.set_boot_order.assert_called_once_with(
+            mock.sentinel.FAKE_INSTANCE_NAME, mock.sentinel.FAKE_BOOT_ORDER)
+
     @mock.patch('hyperv.nova.vmops.VMOps.destroy')
     @mock.patch('hyperv.nova.vmops.VMOps.power_on')
     @mock.patch('hyperv.nova.vmops.VMOps.attach_config_drive')
@@ -363,8 +377,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('hyperv.nova.vmops.VMOps._delete_disk_files')
     @mock.patch('hyperv.nova.vif.get_vif_driver')
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
-                'validate_and_update_bdi')
-    def _test_spawn(self, mock_validate_and_update_bdi,
+                       'validate_and_update_bdi')
+    @mock.patch.object(vmops.VMOps, 'set_boot_order')
+    def _test_spawn(self, mock_set_boot_order, mock_validate_and_update_bdi,
                     mock_get_vif_driver, mock_delete_disk_files,
                     mock_ebs_root_in_block_devices, mock_create_root_device,
                     mock_create_ephemerals, mock_get_image_vm_gen,
@@ -424,6 +439,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     [fake_network_info])
                 mock_attach_config_drive.assert_called_once_with(
                     mock_instance, fake_config_drive_path, fake_vm_gen)
+            mock_set_boot_order.assert_called_once_with(fake_vm_gen,
+                block_device_info, mock_instance.name)
             mock_power_on.assert_called_once_with(
                 mock_instance, network_info=[fake_network_info])
 

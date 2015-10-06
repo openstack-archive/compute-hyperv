@@ -276,6 +276,12 @@ class VMOps(object):
                                           eph_info['size'] * units.Gi,
                                           eph_info['format'])
 
+    def set_boot_order(self, vm_gen, block_device_info, instance_name):
+        boot_order = self._block_device_manager.get_boot_order(
+            vm_gen, block_device_info)
+
+        self._vmutils.set_boot_order(instance_name, boot_order)
+
     @check_admin_permissions
     def spawn(self, context, instance, image_meta, injected_files,
               admin_password, network_info, block_device_info=None):
@@ -309,7 +315,7 @@ class VMOps(object):
                                                              network_info)
 
                 self.attach_config_drive(instance, configdrive_path, vm_gen)
-
+            self.set_boot_order(vm_gen, block_device_info, instance.name)
             self.power_on(instance, network_info=network_info)
         except Exception:
             with excutils.save_and_reraise_exception():

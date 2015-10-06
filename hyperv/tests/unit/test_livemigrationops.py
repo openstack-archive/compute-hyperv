@@ -31,6 +31,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         super(LiveMigrationOpsTestCase, self).setUp()
         self.context = 'fake_context'
         self._livemigrops = livemigrationops.LiveMigrationOps()
+        self._livemigrops._block_dev_man = mock.MagicMock()
 
     @mock.patch('hyperv.nova.serialconsoleops.SerialConsoleOps.'
                 'stop_console_handler')
@@ -83,17 +84,16 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
                           post_method=mock.DEFAULT,
                           recover_method=mock.DEFAULT)
 
-    @mock.patch('hyperv.nova.volumeops.VolumeOps'
-                '.ebs_root_in_block_devices')
     @mock.patch('hyperv.nova.imagecache.ImageCache.get_cached_image')
     @mock.patch('hyperv.nova.volumeops.VolumeOps'
                 '.initialize_volumes_connection')
     def test_pre_live_migration(self, mock_initialize_connection,
-                                mock_get_cached_image,
-                                mock_ebs_root_in_block_devices):
+                                mock_get_cached_image):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_instance.image_ref = "fake_image_ref"
-        mock_ebs_root_in_block_devices.return_value = None
+        bdman = self._livemigrops._block_dev_man
+        mock_is_boot_from_vol = bdman.is_boot_from_volume
+        mock_is_boot_from_vol.return_value = None
         CONF.set_override('use_cow_images', True)
         self._livemigrops.pre_live_migration(
             self.context, mock_instance,
@@ -103,7 +103,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         check_config = (
             self._livemigrops._livemigrutils.check_live_migration_config)
         check_config.assert_called_once_with()
-        mock_ebs_root_in_block_devices.assert_called_once_with(
+        mock_is_boot_from_vol.assert_called_once_with(
             mock.sentinel.BLOCK_INFO)
         mock_get_cached_image.assert_called_once_with(self.context,
                                                       mock_instance)

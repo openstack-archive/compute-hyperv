@@ -15,10 +15,10 @@
 import mock
 
 from hyperv.nova import vmutils10
-from hyperv.tests.unit import test_vmutilsv2
+from hyperv.tests import test
 
 
-class VMUtils10TestCase(test_vmutilsv2.VMUtilsV2TestCase):
+class VMUtils10TestCase(test.NoDBTestCase):
     """Unit tests for the Hyper-V VMUtils10 class."""
 
     def setUp(self):

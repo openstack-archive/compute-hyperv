@@ -160,7 +160,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
                           mock.call(mock.sentinel.rw_pipe_path,
                                     pipe_type=constants.SERIAL_PORT_TYPE_RW,
                                     enable_logging=False)]
-        mock_get_handler.assert_has_calls(expected_calls)
+        mock_get_handler.assert_has_calls(expected_calls, any_order=True)
 
     @mock.patch.object(namedpipe, 'NamedPipeHandler')
     def _test_get_named_pipe_handler(self, mock_pipe_handler_class,

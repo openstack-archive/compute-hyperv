@@ -43,8 +43,8 @@ VHD_HEADER_SIZE_DYNAMIC = 512
 VHD_FOOTER_SIZE_DYNAMIC = 512
 VHD_BLK_SIZE_OFFSET = 544
 
-VHD_SIGNATURE = 'conectix'
-VHDX_SIGNATURE = 'vhdxfile'
+VHD_SIGNATURE = b'conectix'
+VHDX_SIGNATURE = b'vhdxfile'
 
 
 class VHDUtils(object):
@@ -145,7 +145,7 @@ class VHDUtils(object):
             fs = VHD_FOOTER_SIZE_DYNAMIC
 
             max_internal_size = (new_vhd_file_size -
-                                 (hs + ddhs + fs)) * bs / (bes + bs)
+                                 (hs + ddhs + fs)) * bs // (bes + bs)
             return max_internal_size
         else:
             vhd_parent = self.get_vhd_parent_path(vhd_path)
@@ -184,7 +184,7 @@ class VHDUtils(object):
             if name == "ParentPath":
                 vhd_info_dict[name] = value_text
             elif name in ["FileSize", "MaxInternalSize"]:
-                vhd_info_dict[name] = long(value_text)
+                vhd_info_dict[name] = int(value_text)
             elif name in ["InSavedState", "InUse"]:
                 vhd_info_dict[name] = bool(value_text)
             elif name == "Type":

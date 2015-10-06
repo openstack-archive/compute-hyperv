@@ -15,6 +15,7 @@
 
 import errno
 import mock
+from six.moves import builtins
 
 from hyperv.nova import constants
 from hyperv.nova import namedpipe
@@ -56,7 +57,7 @@ class NamedPipeTestCase(test_base.HyperVBaseTestCase):
         self._handler._r_completion_routine = mock.Mock()
         self._handler._w_completion_routine = mock.Mock()
 
-    @mock.patch('__builtin__.open')
+    @mock.patch.object(builtins, 'open')
     @mock.patch.object(namedpipe.NamedPipeHandler, '_open_pipe')
     def test_start_pipe_handler(self, mock_open_pipe, mock_open):
         self._handler.start()
@@ -190,7 +191,7 @@ class NamedPipeTestCase(test_base.HyperVBaseTestCase):
         self._test_write_to_log(size_exceeded=True)
 
     @mock.patch.object(namedpipe.NamedPipeHandler, '_retry_if_file_in_use')
-    @mock.patch('__builtin__.open')
+    @mock.patch.object(builtins, 'open')
     @mock.patch.object(namedpipe, 'os')
     def test_rotate_logs(self, mock_os, mock_open, mock_exec_retry):
         fake_archived_log_path = self._FAKE_LOG_PATH + '.1'

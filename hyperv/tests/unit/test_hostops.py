@@ -22,6 +22,7 @@ from nova import objects
 from oslo_config import cfg
 from oslo_serialization import jsonutils
 from oslo_utils import units
+import six
 
 from hyperv.nova import constants
 from hyperv.nova import hostops
@@ -66,7 +67,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
         self._hostops._hostutils.get_cpus_info.assert_called_once_with()
 
         expected = [mock.call(fkey)
-                    for fkey in constants.PROCESSOR_FEATURE.keys()]
+                    for fkey in six.iterkeys(constants.PROCESSOR_FEATURE)]
         self._hostops._hostutils.is_cpu_feature_present.has_calls(expected)
         expected_response = self._get_mock_cpu_info()
         self.assertEqual(expected_response, response)
@@ -76,7 +77,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
                 'model': self.FAKE_NAME,
                 'arch': constants.WMI_WIN32_PROCESSOR_ARCHITECTURE[
                     self.FAKE_ARCHITECTURE],
-                'features': constants.PROCESSOR_FEATURE.values(),
+                'features': list(constants.PROCESSOR_FEATURE.values()),
                 'topology': {'cores': self.FAKE_NUM_CPUS,
                              'threads': self.FAKE_NUM_CPUS,
                              'sockets': self.FAKE_NUM_CPUS}}
@@ -94,7 +95,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual((2, 1, 1), response)
 
     def test_get_local_hdd_info_gb(self):
-        self._hostops._pathutils.get_instance_dir.return_value = ''
+        self._hostops._pathutils.get_instances_dir.return_value = ''
         self._hostops._hostutils.get_volume_info.return_value = (2 * units.Gi,
                                                                  1 * units.Gi)
         response = self._hostops._get_local_hdd_info_gb()
@@ -195,7 +196,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
             self.FAKE_TICK_COUNT)
 
         response = self._hostops.get_host_uptime()
-        tdelta = datetime.timedelta(milliseconds=long(self.FAKE_TICK_COUNT))
+        tdelta = datetime.timedelta(milliseconds=int(self.FAKE_TICK_COUNT))
         expected = "%s up %s,  0 users,  load average: 0, 0, 0" % (
                    str(mock_time()), str(tdelta))
 

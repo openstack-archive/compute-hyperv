@@ -20,6 +20,7 @@ if sys.platform == 'win32':
 
 from nova import exception
 from oslo_log import log as logging
+import six
 
 from hyperv.i18n import _, _LE
 from hyperv.nova import vmutils
@@ -119,13 +120,13 @@ class LiveMigrationUtils(object):
         scsi_ctrl_path = self._vmutils.get_vm_scsi_controller(vm_name)
         scsi_paths = self._vmutils.get_controller_volume_paths(scsi_ctrl_path)
 
-        return dict(ide_paths.items() + scsi_paths.items())
+        return dict(list(ide_paths.items()) + list(scsi_paths.items()))
 
     def _get_remote_disk_data(self, vmutils_remote, disk_paths, dest_host):
         volutils_remote = volumeutilsv2.VolumeUtilsV2(dest_host)
 
         disk_paths_remote = {}
-        for (rasd_rel_path, disk_path) in disk_paths.items():
+        for rasd_rel_path, disk_path in six.iteritems(disk_paths):
             target = self._volutils.get_target_from_disk_path(disk_path)
             if target:
                 (target_iqn, target_lun) = target

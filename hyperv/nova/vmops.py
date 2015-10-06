@@ -36,6 +36,7 @@ from oslo_utils import excutils
 from oslo_utils import fileutils
 from oslo_utils import units
 from oslo_utils import uuidutils
+import six
 
 from hyperv.i18n import _, _LI, _LE, _LW
 from hyperv.nova import constants
@@ -717,7 +718,7 @@ class VMOps(object):
         self.power_on(instance, block_device_info, network_info)
 
     def _create_vm_com_port_pipes(self, instance, serial_ports):
-        for port_number, port_type in serial_ports.iteritems():
+        for port_number, port_type in six.iteritems(serial_ports):
             pipe_path = r'\\.\pipe\%s_%s' % (instance.uuid, port_type)
             self._vmutils.set_vm_serial_port_connection(
                 instance.name, port_number, pipe_path)
@@ -733,9 +734,9 @@ class VMOps(object):
         image_props = image_meta['properties']
         serial_ports = {}
 
-        for image_prop, port_type in constants.SERIAL_PORT_TYPES.iteritems():
+        for img_prop, port_type in six.iteritems(constants.SERIAL_PORT_TYPES):
             port_number = int(image_props.get(
-                image_prop,
+                img_prop,
                 constants.DEFAULT_SERIAL_CONSOLE_PORT))
 
             if port_number not in [1, 2]:
@@ -893,7 +894,7 @@ class VMOps(object):
     def _get_storage_qos_specs(self, instance):
         extra_specs = instance.flavor.get('extra_specs') or {}
         storage_qos_specs = {}
-        for spec, value in extra_specs.iteritems():
+        for spec, value in six.iteritems(extra_specs):
             if ':' in spec:
                 scope, key = spec.split(':')
                 if scope == 'storage_qos':

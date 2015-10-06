@@ -14,6 +14,7 @@
 #    under the License.
 
 import ctypes
+import six
 import struct
 import sys
 
@@ -27,7 +28,11 @@ from hyperv.nova import vmutils
 
 LOG = logging.getLogger(__name__)
 
-Queue = patcher.original('Queue')
+# Avoid using six.moves.queue as we need a non monkey patched class
+if sys.version_info > (3, 0):
+    Queue = patcher.original('queue')
+else:
+    Queue = patcher.original('Queue')
 
 if sys.platform == 'win32':
     from ctypes import wintypes
@@ -230,13 +235,11 @@ class IOUtils(object):
         return (ctypes.c_ubyte * buff_size)()
 
     def get_buffer_data(self, buff, num_bytes):
-        data = "".join([struct.pack('B', b)
-                        for b in buff[:num_bytes]])
-        return data
+        return bytes(bytearray(buff[:num_bytes]))
 
     def write_buffer_data(self, buff, data):
         for i, c in enumerate(data):
-            buff[i] = struct.unpack('B', c)[0]
+            buff[i] = struct.unpack('B', six.b(c))[0]
 
 
 class IOQueue(Queue.Queue):

@@ -160,11 +160,11 @@ class VHDUtilsV2(vhdutils.VHDUtils):
                         ls = self._get_vhdx_log_size(f)
                         ms = self._get_vhdx_metadata_size_and_offset(f)[0]
 
-                        chunk_ratio = (1 << 23) * lss / bs
+                        chunk_ratio = (1 << 23) * lss // bs
                         size = new_vhd_file_size
 
                         max_internal_size = (bs * chunk_ratio * (size - hs -
-                            ls - ms - bes - bes / chunk_ratio) / (bs *
+                            ls - ms - bes - bes // chunk_ratio) // (bs *
                             chunk_ratio + bes * chunk_ratio + bes))
 
                         return max_internal_size - (max_internal_size % bs)
@@ -237,7 +237,7 @@ class VHDUtilsV2(vhdutils.VHDUtils):
                 vhd_info_dict[name] = value_text
             elif name in ["BlockSize", "LogicalSectorSize",
                           "PhysicalSectorSize", "MaxInternalSize"]:
-                vhd_info_dict[name] = long(value_text)
+                vhd_info_dict[name] = int(value_text)
             elif name in ["Type", "Format"]:
                 vhd_info_dict[name] = int(value_text)
 

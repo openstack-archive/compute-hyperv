@@ -15,6 +15,7 @@
 #    under the License.
 
 import mock
+from six.moves import builtins
 
 from hyperv.nova import utilsfactory
 from hyperv.tests import test
@@ -25,8 +26,8 @@ class HyperVBaseTestCase(test.NoDBTestCase):
         super(HyperVBaseTestCase, self).setUp()
 
         self._mock_wmi = mock.MagicMock()
-        wmi_patcher = mock.patch('__builtin__.wmi', create=True,
-                                 new=self._mock_wmi)
+        wmi_patcher = mock.patch.object(builtins, 'wmi', create=True,
+                                        new=self._mock_wmi)
         platform_patcher = mock.patch('sys.platform', 'win32')
         hostutils_patcher = mock.patch.object(utilsfactory, 'utils')
 

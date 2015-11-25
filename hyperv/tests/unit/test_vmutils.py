@@ -79,6 +79,14 @@ class VMUtilsTestCase(test.NoDBTestCase):
 
         super(VMUtilsTestCase, self).setUp()
 
+    def test_vs_man_svc(self):
+        expected = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+        self.assertEqual(expected, self._vmutils._vs_man_svc)
+
+    def test_vs_man_svc_cached(self):
+        self._vmutils._vs_man_svc_attr = mock.sentinel.fake_svc
+        self.assertEqual(mock.sentinel.fake_svc, self._vmutils._vs_man_svc)
+
     def test_enable_vm_metrics_collection(self):
         self.assertRaises(NotImplementedError,
                           self._vmutils.enable_vm_metrics_collection,
@@ -86,9 +94,9 @@ class VMUtilsTestCase(test.NoDBTestCase):
 
     def test_get_vm_summary_info(self):
         self._lookup_vm()
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
 
         mock_summary = mock.MagicMock()
+        mock_svc = self._vmutils._vs_man_svc
         mock_svc.GetSummaryInformation.return_value = (self._FAKE_RET_VAL,
                                                        [mock_summary])
 
@@ -272,8 +280,6 @@ class VMUtilsTestCase(test.NoDBTestCase):
                 mock.sentinel.vcpus_per_numa, mock.sentinel.limit_cpu_features)
 
     def test_create_vm(self):
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
-
         with mock.patch.object(self._vmutils,
                                '_create_vm_obj') as mock_create_vm_obj:
             self._vmutils.create_vm(self._FAKE_VM_NAME,
@@ -282,7 +288,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
                                     mock.sentinel.instance_path)
 
             mock_create_vm_obj.assert_called_once_with(
-                mock_svc, self._FAKE_VM_NAME, mock.sentinel.vnuma_enabled,
+                self._FAKE_VM_NAME, mock.sentinel.vnuma_enabled,
                 self._VM_GEN, mock.sentinel.instance_path, None)
 
     def test_get_vm_scsi_controller(self):
@@ -456,7 +462,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
     def test_destroy_vm(self):
         self._lookup_vm()
 
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+        mock_svc = self._vmutils._vs_man_svc
         getattr(mock_svc, self._DESTROY_SYSTEM).return_value = (
             self._FAKE_JOB_PATH, self._FAKE_RET_VAL)
 
@@ -518,7 +524,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
         return mock_job
 
     def test_add_virt_resource(self):
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+        mock_svc = self._vmutils._vs_man_svc
         getattr(mock_svc, self._ADD_RESOURCE).return_value = (
             self._FAKE_JOB_PATH, mock.MagicMock(), self._FAKE_RET_VAL)
         mock_res_setting_data = mock.MagicMock()
@@ -546,7 +552,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
     @mock.patch('eventlet.greenthread.sleep')
     def _check_modify_virt_resource_max_retries(
             self, mock_sleep, side_effect, num_calls=1, expected_fail=False):
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+        mock_svc = self._vmutils._vs_man_svc
         mock_svc.ModifyVirtualSystemResources.side_effect = side_effect
         mock_res_setting_data = mock.MagicMock()
         mock_res_setting_data.GetText_.return_value = mock.sentinel.res_data
@@ -565,7 +571,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
         mock_sleep.has_calls(mock.call(1) * num_calls)
 
     def test_remove_virt_resource(self):
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+        mock_svc = self._vmutils._vs_man_svc
         getattr(mock_svc, self._REMOVE_RESOURCE).return_value = (
             self._FAKE_JOB_PATH, self._FAKE_RET_VAL)
         mock_res_setting_data = mock.MagicMock()
@@ -683,7 +689,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
         return mock_disk
 
     def _get_snapshot_service(self):
-        return self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+        return self._vmutils._vs_man_svc
 
     def _assert_add_resources(self, mock_svc):
         getattr(mock_svc, self._ADD_RESOURCE).assert_called_with(
@@ -779,17 +785,16 @@ class VMUtilsTestCase(test.NoDBTestCase):
 
     @mock.patch('hyperv.nova.vmutils.VMUtils.check_ret_val')
     def test_modify_virtual_system(self, mock_check_ret_val):
-        mock_vs_man_svc = mock.MagicMock()
         mock_vmsetting = mock.MagicMock()
         fake_path = 'fake path'
         fake_job_path = 'fake job path'
         fake_ret_val = 'fake return value'
 
+        mock_vs_man_svc = self._vmutils._vs_man_svc
         mock_vs_man_svc.ModifyVirtualSystem.return_value = (0, fake_job_path,
                                                             fake_ret_val)
 
-        self._vmutils._modify_virtual_system(vs_man_svc=mock_vs_man_svc,
-                                             vm_path=fake_path,
+        self._vmutils._modify_virtual_system(vm_path=fake_path,
                                              vmsetting=mock_vmsetting)
 
         mock_vs_man_svc.ModifyVirtualSystem.assert_called_once_with(
@@ -804,7 +809,6 @@ class VMUtilsTestCase(test.NoDBTestCase):
     def test_create_vm_obj(self, mock_get_vm_setting_data,
                            mock_modify_virtual_system,
                            mock_get_wmi_obj, mock_check_ret_val):
-        mock_vs_man_svc = mock.MagicMock()
         mock_vs_gs_data = mock.MagicMock()
         fake_vm_path = 'fake vm path'
         fake_job_path = 'fake job path'
@@ -812,12 +816,12 @@ class VMUtilsTestCase(test.NoDBTestCase):
         _conn = self._vmutils._conn.Msvm_VirtualSystemGlobalSettingData
 
         _conn.new.return_value = mock_vs_gs_data
+        mock_vs_man_svc = self._vmutils._vs_man_svc
         mock_vs_man_svc.DefineVirtualSystem.return_value = (fake_vm_path,
                                                             fake_job_path,
                                                             fake_ret_val)
 
         response = self._vmutils._create_vm_obj(
-            vs_man_svc=mock_vs_man_svc,
             vm_name='fake vm', vm_gen='fake vm gen',
             notes='fake notes', vnuma_enabled=mock.sentinel.vnuma_enabled,
             instance_path=mock.sentinel.instance_path)
@@ -835,7 +839,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
         mock_get_wmi_obj.assert_called_with(fake_vm_path)
         mock_get_vm_setting_data.assert_called_once_with(mock_get_wmi_obj())
         mock_modify_virtual_system.assert_called_once_with(
-            mock_vs_man_svc, fake_vm_path, mock_get_vm_setting_data())
+            fake_vm_path, mock_get_vm_setting_data())
 
         self.assertEqual(mock_get_vm_setting_data().Notes,
                          '\n'.join('fake notes'))
@@ -1008,7 +1012,6 @@ class VMUtilsTestCase(test.NoDBTestCase):
                             mock_get_vm_setting_data):
         mock_vm = self._lookup_vm()
 
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
         mock_vssd = mock_get_vm_setting_data.return_value
         fake_dev_boot_order = [mock.sentinel.BOOT_DEV1,
                                mock.sentinel.BOOT_DEV2]
@@ -1016,5 +1019,5 @@ class VMUtilsTestCase(test.NoDBTestCase):
         self._vmutils._set_boot_order(mock_vm.name, fake_dev_boot_order)
 
         mock_modify_virt_syst.assert_called_once_with(
-            mock_svc, mock_vm.path_.return_value, mock_vssd)
+            mock_vm.path_.return_value, mock_vssd)
         self.assertEqual(tuple(fake_dev_boot_order), mock_vssd.BootOrder)

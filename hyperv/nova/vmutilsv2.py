@@ -127,7 +127,7 @@ class VMUtilsV2(vmutils.VMUtils):
                     ['ElementName'],
                     VirtualSystemType=self._VIRTUAL_SYSTEM_TYPE_REALIZED)]
 
-    def _create_vm_obj(self, vs_man_svc, vm_name, vnuma_enabled, vm_gen,
+    def _create_vm_obj(self, vm_name, vnuma_enabled, vm_gen,
                        instance_path, notes):
         vs_data = self._conn.Msvm_VirtualSystemSettingData.new()
         vs_data.ElementName = vm_name
@@ -151,9 +151,10 @@ class VMUtilsV2(vmutils.VMUtils):
 
         (job_path,
          vm_path,
-         ret_val) = vs_man_svc.DefineSystem(ResourceSettings=[],
-                                            ReferenceConfiguration=None,
-                                            SystemSettings=vs_data.GetText_(1))
+         ret_val) = self._vs_man_svc.DefineSystem(
+            ResourceSettings=[],
+            ReferenceConfiguration=None,
+            SystemSettings=vs_data.GetText_(1))
         job = self.check_ret_val(ret_val, job_path)
         if not vm_path and job:
             vm_path = job.associators(self._AFFECTED_JOB_ELEMENT_CLASS)[0]
@@ -246,18 +247,16 @@ class VMUtilsV2(vmutils.VMUtils):
     def destroy_vm(self, vm_name):
         vm = self._lookup_vm_check(vm_name)
 
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         # Remove the VM. It does not destroy any associated virtual disk.
-        (job_path, ret_val) = vs_man_svc.DestroySystem(vm.path_())
+        (job_path, ret_val) = self._vs_man_svc.DestroySystem(vm.path_())
         self.check_ret_val(ret_val, job_path)
 
     def _add_virt_resource(self, res_setting_data, vm_path):
         """Adds a new resource to the VM."""
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         res_xml = [res_setting_data.GetText_(1)]
         (job_path,
          new_resources,
-         ret_val) = vs_man_svc.AddResourceSettings(vm_path, res_xml)
+         ret_val) = self._vs_man_svc.AddResourceSettings(vm_path, res_xml)
         self.check_ret_val(ret_val, job_path)
         return new_resources
 
@@ -267,18 +266,16 @@ class VMUtilsV2(vmutils.VMUtils):
                                 exceptions=(vmutils.HyperVException, ))
     def _modify_virt_resource(self, res_setting_data, vm_path):
         """Updates a VM resource."""
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         (job_path,
          out_res_setting_data,
-         ret_val) = vs_man_svc.ModifyResourceSettings(
+         ret_val) = self._vs_man_svc.ModifyResourceSettings(
             ResourceSettings=[res_setting_data.GetText_(1)])
         self.check_ret_val(ret_val, job_path)
 
     def _remove_virt_resource(self, res_setting_data, vm_path):
         """Removes a VM resource."""
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         res_path = [res_setting_data.path_()]
-        (job_path, ret_val) = vs_man_svc.RemoveResourceSettings(res_path)
+        (job_path, ret_val) = self._vs_man_svc.RemoveResourceSettings(res_path)
         self.check_ret_val(ret_val, job_path)
 
     def get_vm_state(self, vm_name):
@@ -438,9 +435,8 @@ class VMUtilsV2(vmutils.VMUtils):
         vm = self._lookup_vm_check(vm_name)
         vs_data = self._get_vm_setting_data(vm)
         self._set_secure_boot(vs_data, certificate_required)
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
 
-        self._modify_virtual_system(vs_man_svc, vm.path_(), vs_data)
+        self._modify_virtual_system(vm.path_(), vs_data)
 
     def _set_secure_boot(self, vs_data, certificate_required):
         vs_data.SecureBootEnabled = True
@@ -448,8 +444,8 @@ class VMUtilsV2(vmutils.VMUtils):
             raise vmutils.HyperVException(
                 _('UEFI SecureBoot is supported only on Windows instances.'))
 
-    def _modify_virtual_system(self, vs_man_svc, vm_path, vmsetting):
-        (job_path, ret_val) = vs_man_svc.ModifySystemSettings(
+    def _modify_virtual_system(self, vm_path, vmsetting):
+        (job_path, ret_val) = self._vs_man_svc.ModifySystemSettings(
             SystemSettings=vmsetting.GetText_(1))
         self.check_ret_val(ret_val, job_path)
 
@@ -485,9 +481,8 @@ class VMUtilsV2(vmutils.VMUtils):
 
         vm = self._lookup_vm_check(vm_name)
 
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         vssd = self._get_vm_setting_data(vm)
         old_boot_order = vssd.BootSourceOrder
         network_boot_devs = set(old_boot_order) ^ set(new_boot_order)
         vssd.BootSourceOrder = tuple(new_boot_order) + tuple(network_boot_devs)
-        self._modify_virtual_system(vs_man_svc, None, vssd)
+        self._modify_virtual_system(None, vssd)

@@ -115,6 +115,7 @@ class VMUtils(object):
                             constants.HYPERV_VM_STATE_SUSPENDED: 32769}
 
     def __init__(self, host='.'):
+        self._vs_man_svc_attr = None
         self._enabled_states_map = {v: k for k, v in
                                     six.iteritems(self._vm_power_states_map)}
         if sys.platform == 'win32':
@@ -127,6 +128,13 @@ class VMUtils(object):
         if sys.platform == 'win32':
             hostutls = hostutils.HostUtils()
             self._clone_wmi_objs = not hostutls.check_min_windows_version(6, 2)
+
+    @property
+    def _vs_man_svc(self):
+        if not self._vs_man_svc_attr:
+            self._vs_man_svc_attr = (
+                self._conn.Msvm_VirtualSystemManagementService()[0])
+        return self._vs_man_svc_attr
 
     def _init_hyperv_wmi_conn(self, host):
         self._conn = wmi.WMI(moniker='//%s/root/virtualization' % host)
@@ -153,13 +161,12 @@ class VMUtils(object):
     def get_vm_summary_info(self, vm_name):
         vm = self._lookup_vm_check(vm_name)
 
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         vmsettings = vm.associators(
             wmi_association_class=self._SETTINGS_DEFINE_STATE_CLASS,
             wmi_result_class=self._VIRTUAL_SYSTEM_SETTING_DATA_CLASS)
         settings_paths = [v.path_() for v in vmsettings]
         # See http://msdn.microsoft.com/en-us/library/cc160706%28VS.85%29.aspx
-        (ret_val, summary_info) = vs_man_svc.GetSummaryInformation(
+        (ret_val, summary_info) = self._vs_man_svc.GetSummaryInformation(
             [constants.VM_SUMMARY_NUM_PROCS,
              constants.VM_SUMMARY_ENABLED_STATE,
              constants.VM_SUMMARY_MEMORY_USAGE,
@@ -283,13 +290,11 @@ class VMUtils(object):
     def create_vm(self, vm_name, vnuma_enabled, vm_gen, instance_path,
                   notes=None):
         """Creates a VM."""
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
-
         LOG.debug('Creating VM %s', vm_name)
-        self._create_vm_obj(vs_man_svc, vm_name, vnuma_enabled, vm_gen,
+        self._create_vm_obj(vm_name, vnuma_enabled, vm_gen,
                             instance_path, notes)
 
-    def _create_vm_obj(self, vs_man_svc, vm_name, vnuma_enabled, vm_gen,
+    def _create_vm_obj(self, vm_name, vnuma_enabled, vm_gen,
                        instance_path, notes):
         vs_gs_data = self._conn.Msvm_VirtualSystemGlobalSettingData.new()
         vs_gs_data.ElementName = vm_name
@@ -300,8 +305,8 @@ class VMUtils(object):
 
         (vm_path,
          job_path,
-         ret_val) = vs_man_svc.DefineVirtualSystem([], None,
-                                                   vs_gs_data.GetText_(1))
+         ret_val) = self._vs_man_svc.DefineVirtualSystem(
+            [], None, vs_gs_data.GetText_(1))
         self.check_ret_val(ret_val, job_path)
 
         vm = self._get_wmi_obj(vm_path)
@@ -309,12 +314,12 @@ class VMUtils(object):
         if notes:
             vmsetting = self._get_vm_setting_data(vm)
             vmsetting.Notes = '\n'.join(notes)
-            self._modify_virtual_system(vs_man_svc, vm_path, vmsetting)
+            self._modify_virtual_system(vm_path, vmsetting)
 
         return self._get_wmi_obj(vm_path)
 
-    def _modify_virtual_system(self, vs_man_svc, vm_path, vmsetting):
-        (job_path, ret_val) = vs_man_svc.ModifyVirtualSystem(
+    def _modify_virtual_system(self, vm_path, vmsetting):
+        (job_path, ret_val) = self._vs_man_svc.ModifyVirtualSystem(
             ComputerSystem=vm_path,
             SystemSettingData=vmsetting.GetText_(1))[1:]
         self.check_ret_val(ret_val, job_path)
@@ -595,9 +600,8 @@ class VMUtils(object):
     def destroy_vm(self, vm_name):
         vm = self._lookup_vm_check(vm_name)
 
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         # Remove the VM. Does not destroy disks.
-        (job_path, ret_val) = vs_man_svc.DestroyVirtualSystem(vm.path_())
+        (job_path, ret_val) = self._vs_man_svc.DestroyVirtualSystem(vm.path_())
         self.check_ret_val(ret_val, job_path)
 
     def check_ret_val(self, ret_val, job_path, success_values=[0]):
@@ -656,11 +660,11 @@ class VMUtils(object):
 
     def _add_virt_resource(self, res_setting_data, vm_path):
         """Adds a new resource to the VM."""
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         res_xml = [res_setting_data.GetText_(1)]
         (job_path,
          new_resources,
-         ret_val) = vs_man_svc.AddVirtualSystemResources(res_xml, vm_path)
+         ret_val) = self._vs_man_svc.AddVirtualSystemResources(res_xml,
+                                                               vm_path)
         self.check_ret_val(ret_val, job_path)
         return new_resources
 
@@ -670,27 +674,24 @@ class VMUtils(object):
                                 exceptions=(HyperVException, ))
     def _modify_virt_resource(self, res_setting_data, vm_path):
         """Updates a VM resource."""
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
-        (job_path, ret_val) = vs_man_svc.ModifyVirtualSystemResources(
+        (job_path, ret_val) = self._vs_man_svc.ModifyVirtualSystemResources(
             ResourceSettingData=[res_setting_data.GetText_(1)],
             ComputerSystem=vm_path)
         self.check_ret_val(ret_val, job_path)
 
     def _remove_virt_resource(self, res_setting_data, vm_path):
         """Removes a VM resource."""
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         res_path = [res_setting_data.path_()]
-        (job_path, ret_val) = vs_man_svc.RemoveVirtualSystemResources(res_path,
-                                                                      vm_path)
+        (job_path, ret_val) = self._vs_man_svc.RemoveVirtualSystemResources(
+            res_path, vm_path)
         self.check_ret_val(ret_val, job_path)
 
     def take_vm_snapshot(self, vm_name):
         vm = self._lookup_vm_check(vm_name)
 
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
-
         (job_path, ret_val,
-         snp_setting_data) = vs_man_svc.CreateVirtualSystemSnapshot(vm.path_())
+         snp_setting_data) = self._vs_man_svc.CreateVirtualSystemSnapshot(
+            vm.path_())
         self.check_ret_val(ret_val, job_path)
 
         job_wmi_path = job_path.replace('\\', '/')
@@ -700,9 +701,7 @@ class VMUtils(object):
         return snp_setting_data.path_()
 
     def remove_vm_snapshot(self, snapshot_path):
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
-
-        (job_path, ret_val) = vs_man_svc.RemoveVirtualSystemSnapshot(
+        (job_path, ret_val) = self._vs_man_svc.RemoveVirtualSystemSnapshot(
             snapshot_path)
         self.check_ret_val(ret_val, job_path)
 
@@ -905,8 +904,7 @@ class VMUtils(object):
     def _set_boot_order(self, vm_name, device_boot_order):
         vm = self._lookup_vm_check(vm_name)
 
-        vs_man_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         vssd = self._get_vm_setting_data(vm)
         vssd.BootOrder = tuple(device_boot_order)
 
-        self._modify_virtual_system(vs_man_svc, vm.path_(), vssd)
+        self._modify_virtual_system(vm.path_(), vssd)

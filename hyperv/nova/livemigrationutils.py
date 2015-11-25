@@ -31,10 +31,13 @@ LOG = logging.getLogger(__name__)
 
 
 class LiveMigrationUtils(object):
+    _STORAGE_ALLOC_SETTING_DATA_CLASS = 'Msvm_StorageAllocationSettingData'
+    _CIM_RES_ALLOC_SETTING_DATA_CLASS = 'CIM_ResourceAllocationSettingData'
 
     def __init__(self):
         self._vmutils = vmutilsv2.VMUtilsV2()
         self._volutils = volumeutilsv2.VolumeUtilsV2()
+        self._conn_v2 = self._get_conn_v2()
 
     def _get_conn_v2(self, host='localhost'):
         try:
@@ -52,12 +55,9 @@ class LiveMigrationUtils(object):
             raise vmutils.HyperVException(msg)
 
     def check_live_migration_config(self):
-        conn_v2 = self._get_conn_v2()
-        migration_svc = conn_v2.Msvm_VirtualSystemMigrationService()[0]
-        vsmssds = migration_svc.associators(
-            wmi_association_class='Msvm_ElementSettingData',
-            wmi_result_class='Msvm_VirtualSystemMigrationServiceSettingData')
-        vsmssd = vsmssds[0]
+        migration_svc = self._conn_v2.Msvm_VirtualSystemMigrationService()[0]
+        vsmssd = (
+            self._conn_v2.Msvm_VirtualSystemMigrationServiceSettingData()[0])
         if not vsmssd.EnableVirtualSystemMigration:
             raise vmutils.HyperVException(
                 _('Live migration is not enabled on this host'))
@@ -146,13 +146,9 @@ class LiveMigrationUtils(object):
     def _update_planned_vm_disk_resources(self, vmutils_remote, conn_v2_remote,
                                           planned_vm, vm_name,
                                           disk_paths_remote):
-        vm_settings = planned_vm.associators(
-            wmi_association_class='Msvm_SettingsDefineState',
-            wmi_result_class='Msvm_VirtualSystemSettingData')[0]
-
         updated_resource_setting_data = []
-        sasds = vm_settings.associators(
-            wmi_association_class='Msvm_VirtualSystemSettingDataComponent')
+        sasds = self._vmutils.get_vm_associated_class(
+            self._CIM_RES_ALLOC_SETTING_DATA_CLASS, planned_vm.Name)
         for sasd in sasds:
             if (sasd.ResourceType == 17 and sasd.ResourceSubType ==
                     "Microsoft:Hyper-V:Physical Disk Drive" and
@@ -178,14 +174,9 @@ class LiveMigrationUtils(object):
         vmutils_remote.check_ret_val(ret_val, job_path)
 
     def _get_vhd_setting_data(self, vm):
-        vm_settings = vm.associators(
-            wmi_association_class='Msvm_SettingsDefineState',
-            wmi_result_class='Msvm_VirtualSystemSettingData')[0]
-
         new_resource_setting_data = []
-        sasds = vm_settings.associators(
-            wmi_association_class='Msvm_VirtualSystemSettingDataComponent',
-            wmi_result_class='Msvm_StorageAllocationSettingData')
+        sasds = self._vmutils.get_vm_associated_class(
+            self._STORAGE_ALLOC_SETTING_DATA_CLASS, vm.Name)
         for sasd in sasds:
             if (sasd.ResourceType == 31 and sasd.ResourceSubType ==
                     "Microsoft:Hyper-V:Virtual Hard Disk"):
@@ -222,7 +213,7 @@ class LiveMigrationUtils(object):
     def live_migrate_vm(self, vm_name, dest_host):
         self.check_live_migration_config()
 
-        conn_v2_local = self._get_conn_v2()
+        conn_v2_local = self._conn_v2
         conn_v2_remote = self._get_conn_v2(dest_host)
 
         vm = self._get_vm(conn_v2_local, vm_name)

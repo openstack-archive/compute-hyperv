@@ -33,26 +33,29 @@ class LiveMigrationUtilsTestCase(test.NoDBTestCase):
     _RESOURCE_SUB_TYPE_DISK = 'Microsoft:Hyper-V:Physical Disk Drive'
 
     def setUp(self):
+        self._conn = mock.MagicMock()
+        livemigrationutils.LiveMigrationUtils._get_conn_v2 = (
+            mock.MagicMock(return_value=self._conn))
+
         self.liveutils = livemigrationutils.LiveMigrationUtils()
         self.liveutils._vmutils = mock.MagicMock()
         self.liveutils._volutils = mock.MagicMock()
 
-        self._conn = mock.MagicMock()
-        self.liveutils._get_conn_v2 = mock.MagicMock(return_value=self._conn)
-
         super(LiveMigrationUtilsTestCase, self).setUp()
 
     def test_check_live_migration_config(self):
-        mock_migr_svc = self._conn.Msvm_VirtualSystemMigrationService()[0]
+        vsms = self._conn.Msvm_VirtualSystemMigrationService
+        vsmssd = self._conn.Msvm_VirtualSystemMigrationServiceSettingData
 
-        vsmssd = mock.MagicMock()
-        vsmssd.EnableVirtualSystemMigration = True
-        mock_migr_svc.associators.return_value = [vsmssd]
+        mock_migr_svc = vsms.return_value[0]
+        mock_vsmssd = vsmssd.return_value[0]
+        mock_vsmssd.EnableVirtualSystemMigration = True
         mock_migr_svc.MigrationServiceListenerIPAdressList.return_value = [
             mock.sentinel.FAKE_HOST]
 
         self.liveutils.check_live_migration_config()
-        self.assertTrue(mock_migr_svc.associators.called)
+        vsms.assert_called_once_with()
+        vsmssd.assert_called_once_with()
 
     def test_get_vm(self):
         expected_vm = mock.MagicMock()
@@ -179,11 +182,14 @@ class LiveMigrationUtilsTestCase(test.NoDBTestCase):
 
     def test_update_planned_vm_disk_resources(self):
         mock_vm_utils = mock.MagicMock()
+        mock_get_vm_assoc_cls = (
+            self.liveutils._vmutils.get_vm_associated_class)
 
         self._prepare_vm_mocks(self._RESOURCE_TYPE_DISK,
-                               self._RESOURCE_SUB_TYPE_DISK)
-        mock_vm = self._conn.Msvm_ComputerSystem.return_value[0]
-        sasd = mock_vm.associators()[0].associators()[0]
+                               self._RESOURCE_SUB_TYPE_DISK,
+                               mock_get_vm_assoc_cls)
+        mock_vm = mock.Mock(Name='fake_name')
+        sasd = mock_get_vm_assoc_cls.return_value[0]
 
         mock_vsmsvc = self._conn.Msvm_VirtualSystemManagementService()[0]
 
@@ -195,10 +201,14 @@ class LiveMigrationUtilsTestCase(test.NoDBTestCase):
             ResourceSettings=[sasd.GetText_.return_value])
 
     def test_get_vhd_setting_data(self):
+        mock_get_vm_assoc_cls = (
+            self.liveutils._vmutils.get_vm_associated_class)
+
         self._prepare_vm_mocks(self._RESOURCE_TYPE_VHD,
-                               self._RESOURCE_SUB_TYPE_VHD)
-        mock_vm = self._conn.Msvm_ComputerSystem.return_value[0]
-        mock_sasd = mock_vm.associators()[0].associators()[0]
+                               self._RESOURCE_SUB_TYPE_VHD,
+                               mock_get_vm_assoc_cls)
+        mock_vm = mock.Mock(Name='fake_vm_name')
+        mock_sasd = mock_get_vm_assoc_cls.return_value[0]
 
         vhd_sds = self.liveutils._get_vhd_setting_data(mock_vm)
         self.assertEqual([mock_sasd.GetText_.return_value], vhd_sds)
@@ -274,7 +284,8 @@ class LiveMigrationUtilsTestCase(test.NoDBTestCase):
                 self.liveutils._get_vhd_setting_data.return_value,
                 mock.sentinel.FAKE_HOST)
 
-    def _prepare_vm_mocks(self, resource_type, resource_sub_type):
+    def _prepare_vm_mocks(self, resource_type, resource_sub_type,
+                          mock_get_vm_assoc_cls):
         mock_vm_svc = self._conn.Msvm_VirtualSystemManagementService()[0]
         vm = self._get_vm()
         self._conn.Msvm_PlannedComputerSystem.return_value = [vm]
@@ -290,9 +301,7 @@ class LiveMigrationUtilsTestCase(test.NoDBTestCase):
         sasd.HostResource = [mock.sentinel.FAKE_SASD_RESOURCE]
         sasd.path.return_value.RelPath = mock.sentinel.FAKE_DISK_PATH
 
-        vm_settings = mock.MagicMock()
-        vm.associators.return_value = [vm_settings]
-        vm_settings.associators.return_value = [sasd, other_sasd]
+        mock_get_vm_assoc_cls.return_value = [sasd, other_sasd]
 
     def _get_vm(self):
         mock_vm = mock.MagicMock()

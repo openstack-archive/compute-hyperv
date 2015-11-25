@@ -40,8 +40,14 @@ class HostUtils(object):
             self._conn_cimv2 = wmi.WMI(privileges=["Shutdown"])
 
     def get_cpus_info(self):
-        cpus = self._conn_cimv2.query("SELECT * FROM Win32_Processor "
-                                      "WHERE ProcessorType = 3")
+        # NOTE(abalutoiu): Specifying exactly the fields that we need
+        # improves the speed of the query. The LoadPercentage field which
+        # is the load capacity of each processor averaged to the last second,
+        # is time wasted because it will wait one second to get the value.
+        cpus = self._conn_cimv2.query(
+            "SELECT Architecture, Name, Manufacturer, NumberOfCores, "
+            "NumberOfLogicalProcessors FROM Win32_Processor "
+            "WHERE ProcessorType = 3")
         cpus_list = []
         for cpu in cpus:
             cpu_info = {'Architecture': cpu.Architecture,

@@ -149,17 +149,7 @@ class VMUtilsV2(vmutils.VMUtils):
             ResourceSettings=[],
             ReferenceConfiguration=None,
             SystemSettings=vs_data.GetText_(1))
-        job = self.check_ret_val(ret_val, job_path)
-        if not vm_path and job:
-            vm_path = job.associators(self._AFFECTED_JOB_ELEMENT_CLASS)[0]
-        return self._get_wmi_obj(vm_path)
-
-    def _get_vm_setting_data(self, vm):
-        vmsettings = vm.associators(
-            wmi_result_class=self._VIRTUAL_SYSTEM_SETTING_DATA_CLASS)
-        # Avoid snapshots
-        return [s for s in vmsettings if
-                s.VirtualSystemType == self._VIRTUAL_SYSTEM_TYPE_REALIZED][0]
+        self.check_ret_val(ret_val, job_path)
 
     def _get_attached_disks_query_string(self, scsi_controller_path):
         # DVD Drives can be attached to SCSI as well, if the VM Generation is 2
@@ -211,7 +201,7 @@ class VMUtilsV2(vmutils.VMUtils):
                                     mounted_disk_path):
         """Attach a volume to a controller."""
 
-        vm = self._lookup_vm_check(vm_name)
+        vmsettings = self._lookup_vm_check(vm_name)
 
         diskdrive = self._get_new_resource_setting_data(
             self._PHYS_DISK_RES_SUB_TYPE)
@@ -220,7 +210,7 @@ class VMUtilsV2(vmutils.VMUtils):
         diskdrive.Parent = controller_path
         diskdrive.HostResource = [mounted_disk_path]
 
-        self._add_virt_resource(diskdrive, vm.path_())
+        self._add_virt_resource(diskdrive, vmsettings.path_())
 
     def _get_disk_resource_address(self, disk_resource):
         return disk_resource.AddressOnParent
@@ -232,14 +222,14 @@ class VMUtilsV2(vmutils.VMUtils):
 
         scsicontrl.VirtualSystemIdentifiers = ['{' + str(uuid.uuid4()) + '}']
 
-        vm = self._lookup_vm_check(vm_name)
-        self._add_virt_resource(scsicontrl, vm.path_())
+        vmsettings = self._lookup_vm_check(vm_name)
+        self._add_virt_resource(scsicontrl, vmsettings.path_())
 
     def _get_disk_resource_disk_path(self, disk_resource):
         return disk_resource.HostResource
 
     def destroy_vm(self, vm_name):
-        vm = self._lookup_vm_check(vm_name)
+        vm = self._lookup_vm_check(vm_name, as_vssd=False)
 
         # Remove the VM. It does not destroy any associated virtual disk.
         (job_path, ret_val) = self._vs_man_svc.DestroySystem(vm.path_())
@@ -279,7 +269,7 @@ class VMUtilsV2(vmutils.VMUtils):
         return settings['EnabledState']
 
     def take_vm_snapshot(self, vm_name):
-        vm = self._lookup_vm_check(vm_name)
+        vm = self._lookup_vm_check(vm_name, as_vssd=False)
         vs_snap_svc = self._conn.Msvm_VirtualSystemSnapshotService()[0]
 
         (job_path, snp_setting_data, ret_val) = vs_snap_svc.CreateSnapshot(
@@ -287,12 +277,10 @@ class VMUtilsV2(vmutils.VMUtils):
             SnapshotType=self._SNAPSHOT_FULL)
         self.check_ret_val(ret_val, job_path)
 
-        job_wmi_path = job_path.replace('\\', '/')
-        job = wmi.WMI(moniker=job_wmi_path)
-        snp_setting_data = job.associators(
-            wmi_result_class=self._VIRTUAL_SYSTEM_SETTING_DATA_CLASS)[0]
+        snp_setting_data_path = self._conn.Msvm_MostCurrentSnapshotInBranch(
+            Antecedent=vm.path_())[0].Dependent
 
-        return snp_setting_data.path_()
+        return snp_setting_data_path
 
     def remove_vm_snapshot(self, snapshot_path):
         vs_snap_svc = self._conn.Msvm_VirtualSystemSnapshotService()[0]
@@ -309,16 +297,16 @@ class VMUtilsV2(vmutils.VMUtils):
         eth_port_data.Parent = nic_data.path_()
         eth_port_data.ElementName = nic_name
 
-        vm = self._lookup_vm_check(vm_name)
-        self._add_virt_resource(eth_port_data, vm.path_())
+        vmsettings = self._lookup_vm_check(vm_name)
+        self._add_virt_resource(eth_port_data, vmsettings.path_())
 
     def enable_vm_metrics_collection(self, vm_name):
         metric_names = [self._METRIC_AGGR_CPU_AVG,
                         self._METRIC_AGGR_MEMORY_AVG]
 
-        vm = self._lookup_vm_check(vm_name)
+        vmsettings = self._lookup_vm_check(vm_name)
         metric_svc = self._conn.Msvm_MetricService()[0]
-        (disks, volumes) = self._get_vm_disks(vm)
+        (disks, volumes) = self._get_vm_disks(vmsettings)
         filtered_disks = [d for d in disks if
                           d.ResourceSubType is not self._DVD_DISK_RES_SUB_TYPE]
 
@@ -331,7 +319,8 @@ class VMUtilsV2(vmutils.VMUtils):
             if not metric_def:
                 LOG.debug("Metric not found: %s", metric_name)
             else:
-                self._enable_metrics(metric_svc, vm, metric_def[0].path_())
+                self._enable_metrics(metric_svc, vmsettings,
+                                     metric_def[0].path_())
 
     def _enable_metrics(self, metric_svc, element, definition_path=None):
         metric_svc.ControlMetrics(
@@ -340,12 +329,11 @@ class VMUtilsV2(vmutils.VMUtils):
             MetricCollectionEnabled=self._METRIC_ENABLED)
 
     def get_vm_dvd_disk_paths(self, vm_name):
-        vm = self._lookup_vm_check(vm_name)
+        vmsettings = self._lookup_vm_check(vm_name)
 
-        settings = vm.associators(
-            wmi_result_class=self._VIRTUAL_SYSTEM_SETTING_DATA_CLASS)[0]
-        sasds = settings.associators(
-            wmi_result_class=self._STORAGE_ALLOC_SETTING_DATA_CLASS)
+        sasds = self.get_vm_associated_class(
+            self._STORAGE_ALLOC_SETTING_DATA_CLASS,
+            vmsettings.ConfigurationID)
 
         dvd_paths = [sasd.HostResource[0] for sasd in sasds
                      if sasd.ResourceSubType == self._DVD_DISK_RES_SUB_TYPE]
@@ -353,15 +341,14 @@ class VMUtilsV2(vmutils.VMUtils):
         return dvd_paths
 
     def get_vm_gen(self, instance_name):
-        vm = self._lookup_vm_check(instance_name)
-        vm_settings = self._get_vm_setting_data(vm)
+        vm_settings = self._lookup_vm_check(instance_name)
         vm_gen = getattr(vm_settings, 'VirtualSystemSubType',
                          self._VIRTUAL_SYSTEM_SUBTYPE_GEN1)
         return int(vm_gen.split(':')[-1])
 
     def enable_remotefx_video_adapter(self, vm_name, monitor_count,
                                       max_resolution):
-        vm = self._lookup_vm_check(vm_name)
+        vmsettings = self._lookup_vm_check(vm_name)
 
         max_res_value = self._remote_fx_res_map.get(max_resolution)
         if max_res_value is None:
@@ -378,10 +365,9 @@ class VMUtilsV2(vmutils.VMUtils):
                                             "is required that the host CPUs "
                                             "support SLAT"))
 
-        vmsettings = vm.associators(
-            wmi_result_class=self._VIRTUAL_SYSTEM_SETTING_DATA_CLASS)
-        rasds = vmsettings[0].associators(
-            wmi_result_class=self._CIM_RES_ALLOC_SETTING_DATA_CLASS)
+        rasds = self.get_vm_associated_class(
+            self._CIM_RES_ALLOC_SETTING_DATA_CLASS,
+            vmsettings.ConfigurationID)
 
         if [r for r in rasds if r.ResourceSubType ==
                 self._SYNTH_3D_DISP_CTRL_RES_SUB_TYPE]:
@@ -391,7 +377,8 @@ class VMUtilsV2(vmutils.VMUtils):
         synth_disp_ctrl_res_list = [r for r in rasds if r.ResourceSubType ==
                                     self._SYNTH_DISP_CTRL_RES_SUB_TYPE]
         if synth_disp_ctrl_res_list:
-            self._remove_virt_resource(synth_disp_ctrl_res_list[0], vm.path_())
+            self._remove_virt_resource(synth_disp_ctrl_res_list[0],
+                                       vmsettings.path_())
 
         synth_3d_disp_ctrl_res = self._get_new_resource_setting_data(
             self._SYNTH_3D_DISP_CTRL_RES_SUB_TYPE,
@@ -400,18 +387,18 @@ class VMUtilsV2(vmutils.VMUtils):
         synth_3d_disp_ctrl_res.MaximumMonitors = monitor_count
         synth_3d_disp_ctrl_res.MaximumScreenResolution = max_res_value
 
-        self._add_virt_resource(synth_3d_disp_ctrl_res, vm.path_())
+        self._add_virt_resource(synth_3d_disp_ctrl_res,
+                                vmsettings.path_())
 
         s3_disp_ctrl_res = [r for r in rasds if r.ResourceSubType ==
                             self._S3_DISP_CTRL_RES_SUB_TYPE][0]
 
         s3_disp_ctrl_res.Address = self._DISP_CTRL_ADDRESS_DX_11
 
-        self._modify_virt_resource(s3_disp_ctrl_res, vm.path_())
+        self._modify_virt_resource(s3_disp_ctrl_res, vmsettings.path_())
 
     def _get_instance_notes(self, vm_name):
-        vm = self._lookup_vm_check(vm_name)
-        vmsettings = self._get_vm_setting_data(vm)
+        vmsettings = self._lookup_vm_check(vm_name)
         return [note for note in vmsettings.Notes if note]
 
     def set_disk_qos_specs(self, vm_name, disk_path, min_iops, max_iops):
@@ -428,23 +415,22 @@ class VMUtilsV2(vmutils.VMUtils):
         self._modify_virt_resource(disk_resource, None)
 
     def enable_secure_boot(self, vm_name, certificate_required):
-        vm = self._lookup_vm_check(vm_name)
-        vs_data = self._get_vm_setting_data(vm)
-        self._set_secure_boot(vs_data, certificate_required)
+        vmsettings = self._lookup_vm_check(vm_name)
+        self._set_secure_boot(vmsettings, certificate_required)
 
-        self._modify_virtual_system(vm.path_(), vs_data)
+        self._modify_virtual_system(None, vmsettings)
 
-    def _set_secure_boot(self, vs_data, certificate_required):
-        vs_data.SecureBootEnabled = True
+    def _set_secure_boot(self, vmsettings, certificate_required):
+        vmsettings.SecureBootEnabled = True
         if certificate_required:
             raise vmutils.HyperVException(
                 _('UEFI SecureBoot is supported only on Windows instances.'))
 
     @loopingcall.RetryDecorator(max_retry_count=5, max_sleep_time=1,
                                 exceptions=(vmutils.HyperVException, ))
-    def _modify_virtual_system(self, vm_path, vmsetting):
+    def _modify_virtual_system(self, vm_path, vmsettings):
         (job_path, ret_val) = self._vs_man_svc.ModifySystemSettings(
-            SystemSettings=vmsetting.GetText_(1))
+            SystemSettings=vmsettings.GetText_(1))
         self.check_ret_val(ret_val, job_path)
 
     def _is_drive_physical(self, drive_path):
@@ -458,14 +444,11 @@ class VMUtilsV2(vmutils.VMUtils):
         drive = self._get_mounted_disk_resource_from_path(
             drive_path, is_physical=is_physical)
 
-        if is_physical:
-            bssd = drive.associators(
-                wmi_association_class=self._LOGICAL_IDENTITY_CLASS)[0]
-        else:
-            rasd = wmi.WMI(moniker=drive.Parent)
-            bssd = rasd.associators(
-                wmi_association_class=self._LOGICAL_IDENTITY_CLASS)[0]
-        return bssd
+        rasd_path = drive.path_() if is_physical else drive.Parent
+        bssd_path = self._conn.Msvm_LogicalIdentity(
+            SystemElement=rasd_path)[0].SameElement
+
+        return bssd_path
 
     def set_boot_order(self, vm_name, device_boot_order):
         if self.get_vm_gen(vm_name) == constants.VM_GEN_1:
@@ -474,13 +457,20 @@ class VMUtilsV2(vmutils.VMUtils):
             self._set_boot_order_gen2(vm_name, device_boot_order)
 
     def _set_boot_order_gen2(self, vm_name, device_boot_order):
-        new_boot_order = [(self._drive_to_boot_source(device)).path_()
+        new_boot_order = [(self._drive_to_boot_source(device))
                            for device in device_boot_order if device]
 
-        vm = self._lookup_vm_check(vm_name)
+        vmsettings = self._lookup_vm_check(vm_name)
+        old_boot_order = vmsettings.BootSourceOrder
 
-        vssd = self._get_vm_setting_data(vm)
-        old_boot_order = vssd.BootSourceOrder
+        # NOTE(abalutoiu): new_boot_order will contain ROOT uppercase
+        # in the device paths while old_boot_order will contain root
+        # lowercase, which will cause the tupple addition result to contain
+        # each device path twice because of the root lowercase and uppercase.
+        # Forcing all the device paths to uppercase fixes the issue.
+        new_boot_order = [x.upper() for x in new_boot_order]
+        old_boot_order = [x.upper() for x in old_boot_order]
         network_boot_devs = set(old_boot_order) ^ set(new_boot_order)
-        vssd.BootSourceOrder = tuple(new_boot_order) + tuple(network_boot_devs)
-        self._modify_virtual_system(None, vssd)
+        vmsettings.BootSourceOrder = (
+            tuple(new_boot_order) + tuple(network_boot_devs))
+        self._modify_virtual_system(None, vmsettings)

@@ -49,7 +49,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
             'PhysicalSectorSize': self._FAKE_PHYSICAL_SECTOR_SIZE}
 
     def _mock_get_vhd_info(self):
-        mock_img_svc = self._vhdutils._conn.Msvm_ImageManagementService()[0]
+        mock_img_svc = self._vhdutils._image_man_svc
         mock_img_svc.GetVirtualHardDiskSettingData.return_value = (
             self._FAKE_JOB_PATH, self._FAKE_RET_VAL,
             self._FAKE_VHD_INFO_XML)
@@ -69,7 +69,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
         fake_vhd_xml_no_parent = self._FAKE_VHD_INFO_XML.replace(
             self._FAKE_PARENT_PATH, "")
 
-        mock_img_svc = self._vhdutils._conn.Msvm_ImageManagementService()[0]
+        mock_img_svc = self._vhdutils._image_man_svc
         mock_img_svc.GetVirtualHardDiskSettingData.return_value = (
             self._FAKE_JOB_PATH, self._FAKE_RET_VAL, fake_vhd_xml_no_parent)
 
@@ -86,7 +86,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
         self._vhdutils.get_vhd_info = mock.MagicMock(
             return_value={'Format': self._FAKE_FORMAT})
 
-        mock_img_svc = self._vhdutils._conn.Msvm_ImageManagementService()[0]
+        mock_img_svc = self._vhdutils._image_man_svc
         mock_img_svc.CreateVirtualHardDisk.return_value = (self._FAKE_JOB_PATH,
                                                            self._FAKE_RET_VAL)
 
@@ -101,7 +101,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
             return_value={'ParentPath': self._FAKE_PARENT_PATH,
                           'Format': self._FAKE_FORMAT})
 
-        mock_img_svc = self._vhdutils._conn.Msvm_ImageManagementService()[0]
+        mock_img_svc = self._vhdutils._image_man_svc
         mock_img_svc.CreateVirtualHardDisk.return_value = (self._FAKE_JOB_PATH,
                                                            self._FAKE_RET_VAL)
 
@@ -111,7 +111,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
         self.assertTrue(mock_img_svc.CreateVirtualHardDisk.called)
 
     def test_reconnect_parent_vhd(self):
-        mock_img_svc = self._vhdutils._conn.Msvm_ImageManagementService()[0]
+        mock_img_svc = self._vhdutils._image_man_svc
         fake_new_parent_path = 'fake_new_parent_path'
 
         self._vhdutils._get_vhd_info_xml = mock.MagicMock(
@@ -142,7 +142,7 @@ class VHDUtilsV2TestCase(test_vhdutils.VHDUtilsBaseTestCase):
                           mock.sentinel.new_parent_path)
 
     def test_resize_vhd(self):
-        mock_img_svc = self._vhdutils._conn.Msvm_ImageManagementService()[0]
+        mock_img_svc = self._vhdutils._image_man_svc
         mock_img_svc.ResizeVirtualHardDisk.return_value = (self._FAKE_JOB_PATH,
                                                            self._FAKE_RET_VAL)
         self._vhdutils.get_internal_vhd_size_by_file_size = mock.MagicMock(

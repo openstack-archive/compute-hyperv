@@ -56,6 +56,7 @@ class VHDUtilsV2(vhdutils.VHDUtils):
 
     def __init__(self):
         self._vmutils = vmutilsv2.VMUtilsV2()
+        self._image_man_svc_attr = None
         if sys.platform == 'win32':
             self._conn = wmi.WMI(moniker='//./root/virtualization/v2')
 
@@ -90,14 +91,13 @@ class VHDUtilsV2(vhdutils.VHDUtils):
         if max_internal_size:
             vhd_info.MaxInternalSize = max_internal_size
 
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-        (job_path, ret_val) = image_man_svc.CreateVirtualHardDisk(
+        (job_path, ret_val) = self._image_man_svc.CreateVirtualHardDisk(
             VirtualDiskSettingData=vhd_info.GetText_(1))
         self._vmutils.check_ret_val(ret_val, job_path)
 
     def reconnect_parent_vhd(self, child_vhd_path, parent_vhd_path):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-        vhd_info_xml = self._get_vhd_info_xml(image_man_svc, child_vhd_path)
+        vhd_info_xml = self._get_vhd_info_xml(self._image_man_svc,
+                                              child_vhd_path)
 
         et = ElementTree.fromstring(vhd_info_xml)
         item = et.find(".//PROPERTY[@NAME='ParentPath']/VALUE")
@@ -113,14 +113,14 @@ class VHDUtilsV2(vhdutils.VHDUtils):
 
         vhd_info_xml = ElementTree.tostring(et)
 
-        (job_path, ret_val) = image_man_svc.SetVirtualHardDiskSettingData(
+        (job_path,
+         ret_val) = self._image_man_svc.SetVirtualHardDiskSettingData(
             VirtualDiskSettingData=vhd_info_xml)
 
         self._vmutils.check_ret_val(ret_val, job_path)
 
     def _get_resize_method(self):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-        return image_man_svc.ResizeVirtualHardDisk
+        return self._image_man_svc.ResizeVirtualHardDisk
 
     def get_internal_vhd_size_by_file_size(self, vhd_path,
                                            new_vhd_file_size):
@@ -220,8 +220,7 @@ class VHDUtilsV2(vhdutils.VHDUtils):
         return vhd_info_xml.encode('utf8', 'xmlcharrefreplace')
 
     def get_vhd_info(self, vhd_path):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-        vhd_info_xml = self._get_vhd_info_xml(image_man_svc, vhd_path)
+        vhd_info_xml = self._get_vhd_info_xml(self._image_man_svc, vhd_path)
 
         vhd_info_dict = {}
         et = ElementTree.fromstring(vhd_info_xml)

@@ -51,13 +51,19 @@ class VHDUtils(object):
 
     def __init__(self):
         self._vmutils = vmutils.VMUtils()
+        self._image_man_svc_attr = None
         if sys.platform == 'win32':
             self._conn = wmi.WMI(moniker='//./root/virtualization')
 
-    def validate_vhd(self, vhd_path):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
+    @property
+    def _image_man_svc(self):
+        if not self._image_man_svc_attr:
+            self._image_man_svc_attr = (
+                self._conn.Msvm_ImageManagementService()[0])
+        return self._image_man_svc_attr
 
-        (job_path, ret_val) = image_man_svc.ValidateVirtualHardDisk(
+    def validate_vhd(self, vhd_path):
+        (job_path, ret_val) = self._image_man_svc.ValidateVirtualHardDisk(
             Path=vhd_path)
         self._vmutils.check_ret_val(ret_val, job_path)
 
@@ -66,39 +72,32 @@ class VHDUtils(object):
             raise vmutils.HyperVException(_("Unsupported disk format: %s") %
                                           format)
 
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-
-        (job_path, ret_val) = image_man_svc.CreateDynamicVirtualHardDisk(
+        (job_path, ret_val) = self._image_man_svc.CreateDynamicVirtualHardDisk(
             Path=path, MaxInternalSize=max_internal_size)
         self._vmutils.check_ret_val(ret_val, job_path)
 
     def create_differencing_vhd(self, path, parent_path):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-
-        (job_path, ret_val) = image_man_svc.CreateDifferencingVirtualHardDisk(
+        (job_path,
+         ret_val) = self._image_man_svc.CreateDifferencingVirtualHardDisk(
             Path=path, ParentPath=parent_path)
         self._vmutils.check_ret_val(ret_val, job_path)
 
     def reconnect_parent_vhd(self, child_vhd_path, parent_vhd_path):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-
-        (job_path, ret_val) = image_man_svc.ReconnectParentVirtualHardDisk(
+        (job_path,
+         ret_val) = self._image_man_svc.ReconnectParentVirtualHardDisk(
             ChildPath=child_vhd_path,
             ParentPath=parent_vhd_path,
             Force=True)
         self._vmutils.check_ret_val(ret_val, job_path)
 
     def merge_vhd(self, src_vhd_path, dest_vhd_path):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-
-        (job_path, ret_val) = image_man_svc.MergeVirtualHardDisk(
+        (job_path, ret_val) = self._image_man_svc.MergeVirtualHardDisk(
             SourcePath=src_vhd_path,
             DestinationPath=dest_vhd_path)
         self._vmutils.check_ret_val(ret_val, job_path)
 
     def _get_resize_method(self):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-        return image_man_svc.ExpandVirtualHardDisk
+        return self._image_man_svc.ExpandVirtualHardDisk
 
     def resize_vhd(self, vhd_path, new_max_size, is_file_max_size=True):
         if is_file_max_size:
@@ -168,11 +167,9 @@ class VHDUtils(object):
         return self.get_vhd_info(vhd_path).get("ParentPath")
 
     def get_vhd_info(self, vhd_path):
-        image_man_svc = self._conn.Msvm_ImageManagementService()[0]
-
         (vhd_info,
          job_path,
-         ret_val) = image_man_svc.GetVirtualHardDiskInfo(vhd_path)
+         ret_val) = self._image_man_svc.GetVirtualHardDiskInfo(vhd_path)
         self._vmutils.check_ret_val(ret_val, job_path)
 
         vhd_info_dict = {}

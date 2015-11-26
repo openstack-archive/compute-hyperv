@@ -393,13 +393,7 @@ class VMOps(object):
         remote_fx_config = flavor_extra_specs.get(
                 constants.FLAVOR_REMOTE_FX_EXTRA_SPEC_KEY)
         if remote_fx_config:
-            if vm_gen == constants.VM_GEN_2:
-                reason = _("RemoteFX is not supported on generation 2 virtual "
-                           "machines.")
-                raise exception.InstanceUnacceptable(instance_id=instance.uuid,
-                                                     reason=reason)
-            else:
-                self._configure_remotefx(instance, remote_fx_config)
+            self._configure_remotefx(instance, vm_gen, remote_fx_config)
 
         self._vmutils.create_scsi_controller(instance_name)
 
@@ -570,7 +564,7 @@ class VMOps(object):
 
         return memory_per_numa_node, cpus_per_numa_node
 
-    def _configure_remotefx(self, instance, config):
+    def _configure_remotefx(self, instance, vm_gen, config):
         if not CONF.hyperv.enable_remotefx:
             reason = _("enable_remotefx configuration option needs to be set "
                        "to True in order to use RemoteFX")
@@ -584,16 +578,25 @@ class VMOps(object):
             raise exception.InstanceUnacceptable(instance_id=instance.uuid,
                                                  reason=reason)
 
+        if not self._vmutils.vm_gen_supports_remotefx(vm_gen):
+            reason = _("RemoteFX is not supported on generation %s virtual "
+                       "machines on this version of Windows.") % vm_gen
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
+
         instance_name = instance.name
         LOG.debug('Configuring RemoteFX for instance: %s', instance_name)
-
-        (remotefx_max_resolution, remotefx_monitor_count) = config.split(',')
-        remotefx_monitor_count = int(remotefx_monitor_count)
+        remotefx_args = config.split(',')
+        remotefx_max_resolution = remotefx_args[0]
+        remotefx_monitor_count = int(remotefx_args[1])
+        remotefx_vram = remotefx_args[2] if len(remotefx_args) == 3 else None
+        vram_bytes = int(remotefx_vram) * units.Mi if remotefx_vram else None
 
         self._vmutils.enable_remotefx_video_adapter(
             instance_name,
             remotefx_monitor_count,
-            remotefx_max_resolution)
+            remotefx_max_resolution,
+            vram_bytes)
 
     def attach_config_drive(self, instance, configdrive_path, vm_gen):
         configdrive_ext = configdrive_path[(configdrive_path.rfind('.') + 1):]

@@ -553,6 +553,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             if remotefx is True:
                 mock_configure_remotefx.assert_called_once_with(
                     mock_instance,
+                    vm_gen,
                     flavor.extra_specs['hyperv:remotefx'])
 
             self._vmops._vmutils.create_vm.assert_called_once_with(
@@ -1440,34 +1441,45 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_get_instance_vnuma_config_no_topology(self):
         self._check_get_instance_vnuma_config()
 
-    def _test_configure_remotefx(self, fail=False):
-        self.flags(enable_remotefx=True, group='hyperv')
+    def _test_configure_remotefx(self, fail=True, enable_remotefx=True):
+        self.flags(enable_remotefx=enable_remotefx, group='hyperv')
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
         fake_resolution = "1920x1200"
         fake_monitor_count = 3
-        fake_config = "%s,%s" % (fake_resolution, fake_monitor_count)
+        fake_vram_mb = 64
+        fake_config = "%s,%s,%s" % (
+            fake_resolution, fake_monitor_count, fake_vram_mb)
 
-        self._vmops._vmutils.enable_remotefx_video_adapter = mock.MagicMock()
         enable_remotefx = self._vmops._vmutils.enable_remotefx_video_adapter
-        self._vmops._hostutils.check_server_feature = mock.MagicMock()
 
         if fail:
-            self._vmops._hostutils.check_server_feature.return_value = False
             self.assertRaises(exception.InstanceUnacceptable,
                               self._vmops._configure_remotefx,
-                              mock_instance, fake_config)
+                              mock_instance, mock.sentinel.vm_gen, fake_config)
         else:
-            self._vmops._configure_remotefx(mock_instance, fake_config)
+            self._vmops._configure_remotefx(
+                mock_instance, mock.sentinel.vm_gen, fake_config)
             enable_remotefx.assert_called_once_with(mock_instance.name,
                                                     fake_monitor_count,
-                                                    fake_resolution)
+                                                    fake_resolution,
+                                                    fake_vram_mb * units.Mi)
 
-    def test_configure_remotefx_exception(self):
-        self._test_configure_remotefx(fail=True)
+    def test_configure_remotefx_disabled(self):
+        self._test_configure_remotefx(enable_remotefx=False)
+
+    def test_configure_remotefx_no_server_feature(self):
+        self._vmops._hostutils.check_server_feature.return_value = False
+        self._test_configure_remotefx()
+        self._vmops._hostutils.check_server_feature.assert_called_once_with(
+            self._vmops._hostutils.FEATURE_RDS_VIRTUALIZATION)
+
+    def test_configure_remotefx_unsupported_vm_gen(self):
+        self._vmops._vmutils.vm_gen_supports_remotefx.return_value = False
+        self._test_configure_remotefx()
 
     def test_configure_remotefx(self):
-        self._test_configure_remotefx()
+        self._test_configure_remotefx(fail=False)
 
     @mock.patch.object(vmops.VMOps, '_get_vm_state')
     def _test_check_hotplug_is_available(self, mock_get_vm_state, vm_gen,

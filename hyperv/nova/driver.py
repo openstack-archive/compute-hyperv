@@ -23,7 +23,7 @@ from nova.virt import driver
 from oslo_log import log as logging
 from oslo_utils import excutils
 
-from hyperv.i18n import _, _LW
+from hyperv.i18n import _, _LE
 from hyperv.nova import eventhandler
 from hyperv.nova import hostops
 from hyperv.nova import hostutils
@@ -34,6 +34,7 @@ from hyperv.nova import rdpconsoleops
 from hyperv.nova import serialconsoleops
 from hyperv.nova import snapshotops
 from hyperv.nova import vmops
+from hyperv.nova import vmutils
 from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
@@ -47,6 +48,10 @@ class HyperVDriver(driver.ComputeDriver):
     }
 
     def __init__(self, virtapi):
+        # check if the current version of Windows is supported before any
+        # further driver initialisation.
+        self._check_minimum_windows_version()
+
         super(HyperVDriver, self).__init__(virtapi)
 
         self._hostops = hostops.HostOps()
@@ -59,16 +64,17 @@ class HyperVDriver(driver.ComputeDriver):
         self._serialconsoleops = serialconsoleops.SerialConsoleOps()
         self._imagecache = imagecache.ImageCache()
 
-        # check if the current version is older than kernel version 6.2
-        # (Windows Server 2012)
+    def _check_minimum_windows_version(self):
         if not hostutils.HostUtils().check_min_windows_version(6, 2):
-            # the version is Windows Server 2008 R2. Log a warning, letting
-            # users know that this version is deprecated in Liberty.
-            LOG.warning(
-                _LW('You are running nova-compute on Windows / Hyper-V Server '
-                    '2008 R2. This version of Windows is deprecated in the '
-                    'current version of OpenStack and the support for it will '
-                    'be removed in the next cycle.'))
+            # the version is of Windows is older than Windows Server 2012 R2.
+            # Log an error, lettingusers know that this version is not
+            # supported any longer.
+            err_msg = _LE('You are running nova-compute on an unsupported '
+                          'version of Windows (older than Windows / Hyper-V '
+                          'Server 2012). The support for this version of '
+                          'Windows has been removed in Mitaka.')
+            LOG.error(err_msg)
+            raise vmutils.HyperVException(err_msg)
 
     @property
     def need_legacy_block_device_info(self):

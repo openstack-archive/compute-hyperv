@@ -24,10 +24,6 @@ from hyperv.nova import vmutils
 from hyperv.nova import volumeutils
 
 hyper_opts = [
-    cfg.BoolOpt('force_hyperv_utils_v1',
-                default=False,
-                deprecated_for_removal=True,
-                help='Force V1 WMI utility classes'),
     cfg.BoolOpt('force_volumeutils_v1',
                 default=False,
                 help='Force V1 volume utility class'),
@@ -41,27 +37,18 @@ LOG = logging.getLogger(__name__)
 utils = hostutils.HostUtils()
 
 class_utils = {
-    'hostutils': {'HostUtils': {'min_version': 6.0, 'max_version': 6.2},
-                  'HostUtilsV2': {'min_version': 6.2, 'max_version': None}},
-    'livemigrationutils': {'LiveMigrationUtils': {'min_version': 6.0,
+    'hostutils': {'HostUtilsV2': {'min_version': 6.2, 'max_version': None}},
+    'livemigrationutils': {'LiveMigrationUtils': {'min_version': 6.2,
                                                   'max_version': None}},
-    'networkutils': {'NetworkUtils': {'min_version': 6.0,
-                                      'max_version': 6.2},
-                     'NetworkUtilsV2': {'min_version': 6.2,
+    'networkutils': {'NetworkUtilsV2': {'min_version': 6.2,
                                         'max_version': None}},
-    'pathutils': {'PathUtils': {'min_version': 6.0, 'max_version': None}},
-    'vmutils': {'VMUtils': {'min_version': 6.0, 'max_version': 6.2},
-                'VMUtilsV2': {'min_version': 6.2, 'max_version': 10},
+    'pathutils': {'PathUtils': {'min_version': 6.2, 'max_version': None}},
+    'vmutils': {'VMUtilsV2': {'min_version': 6.2, 'max_version': 10},
                 'VMUtils10': {'min_version': 10, 'max_version': None}},
-    'vhdutils': {'VHDUtils': {'min_version': 6.0, 'max_version': 6.2},
-                 'VHDUtilsV2': {'min_version': 6.2, 'max_version': None}},
-    'volumeutils': {'VolumeUtils': {'min_version': 6.0,
-                                    'max_version': 6.2},
-                    'VolumeUtilsV2': {'min_version': 6.2,
+    'vhdutils': {'VHDUtilsV2': {'min_version': 6.2, 'max_version': None}},
+    'volumeutils': {'VolumeUtilsV2': {'min_version': 6.2,
                                       'max_version': None}},
-    'rdpconsoleutils': {'RDPConsoleUtils': {'min_version': 6.0,
-                                            'max_version': 6.2},
-                        'RDPConsoleUtilsV2': {'min_version': 6.2,
+    'rdpconsoleutils': {'RDPConsoleUtilsV2': {'min_version': 6.2,
                                               'max_version': None}},
 }
 

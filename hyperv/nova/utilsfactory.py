@@ -21,7 +21,6 @@ import six
 from hyperv.i18n import _
 from hyperv.nova import hostutils
 from hyperv.nova import vmutils
-from hyperv.nova import volumeutils
 
 CONF = cfg.CONF
 
@@ -32,18 +31,8 @@ utils = hostutils.HostUtils()
 
 class_utils = {
     'hostutils': {'HostUtilsV2': {'min_version': 6.2, 'max_version': None}},
-    'livemigrationutils': {'LiveMigrationUtils': {'min_version': 6.2,
-                                                  'max_version': None}},
-    'networkutils': {'NetworkUtilsV2': {'min_version': 6.2,
-                                        'max_version': None}},
-    'pathutils': {'PathUtils': {'min_version': 6.2, 'max_version': None}},
     'vmutils': {'VMUtilsV2': {'min_version': 6.2, 'max_version': 10},
                 'VMUtils10': {'min_version': 10, 'max_version': None}},
-    'vhdutils': {'VHDUtilsV2': {'min_version': 6.2, 'max_version': None}},
-    'volumeutils': {'VolumeUtilsV2': {'min_version': 6.2,
-                                      'max_version': None}},
-    'rdpconsoleutils': {'RDPConsoleUtilsV2': {'min_version': 6.2,
-                                              'max_version': None}},
 }
 
 
@@ -76,31 +65,5 @@ def get_vmutils(host='.'):
     return _get_class(utils_class_type='vmutils')
 
 
-def get_vhdutils():
-    return _get_class(utils_class_type='vhdutils')
-
-
-def get_networkutils():
-    return _get_class(utils_class_type='networkutils')
-
-
 def get_hostutils():
     return _get_class(utils_class_type='hostutils')
-
-
-def get_pathutils():
-    return _get_class(utils_class_type='pathutils')
-
-
-def get_volumeutils():
-    if CONF.hyperv.force_volumeutils_v1:
-        return volumeutils.VolumeUtils()
-    return _get_class(utils_class_type='volumeutils')
-
-
-def get_livemigrationutils():
-    return _get_class(utils_class_type='livemigrationutils')
-
-
-def get_rdpconsoleutils():
-    return _get_class(utils_class_type='rdpconsoleutils')

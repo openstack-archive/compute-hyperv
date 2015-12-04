@@ -40,7 +40,6 @@ from hyperv.i18n import _, _LE, _LI
 from hyperv.nova import constants
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmops
-from hyperv.nova import vmutils
 
 hyper_host_opts = [
     cfg.IntOpt('evacuate_task_state_timeout',
@@ -270,8 +269,8 @@ class HostOps(object):
             LOG.info(_LI('All vms have been migrated successfully.'
                          'Host is down for maintenance'))
             return 'on_maintenance'
-        raise vmutils.HyperVException(
-            _('Not all vms have been migrated: %s remaining instances.')
+        raise exception.MigrationError(
+            reason=_('Not all vms have been migrated: %s remaining instances.')
             % remaining_vms)
 
     def _set_service_state(self, host, binary, is_disabled):

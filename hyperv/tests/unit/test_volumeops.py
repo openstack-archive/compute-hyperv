@@ -31,7 +31,8 @@ from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF
 
-connection_data = {'target_lun': mock.sentinel.fake_lun,
+connection_data = {'volume_id': 'fake_vol_id',
+                   'target_lun': mock.sentinel.fake_lun,
                    'target_iqn': mock.sentinel.fake_iqn,
                    'target_portal': mock.sentinel.fake_portal,
                    'auth_method': 'chap',
@@ -217,7 +218,7 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
             'min_iops_sec': 2
         }
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.Invalid,
                           self._volumeops.parse_disk_qos_specs,
                           fake_qos_specs)
 
@@ -244,7 +245,7 @@ class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         connection_info = get_fake_connection_info(
             auth_method='fake_auth_method')
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.UnsupportedBDMVolumeAuthMethod,
                           self._volume_driver.login_storage_target,
                           connection_info)
 
@@ -483,7 +484,8 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
                                                         _FAKE_PASSWORD)
     _FAKE_CONNECTION_INFO = {'data': {'export': _FAKE_SHARE,
                                       'name': _FAKE_DISK_NAME,
-                                      'options': _FAKE_SMB_OPTIONS}}
+                                      'options': _FAKE_SMB_OPTIONS,
+                                      'volume_id': 'fake_vol_id'}}
 
     def setUp(self):
         super(SMBFSVolumeDriverTestCase, self).setUp()
@@ -542,7 +544,7 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
                                        mock_ensure_share_mounted):
         self._volume_driver._vmutils.attach_drive.side_effect = (
             vmutils.HyperVException())
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.VolumeAttachFailed,
                           self._volume_driver.attach_volume,
                           self._FAKE_CONNECTION_INFO,
                           mock.sentinel.instance_name)

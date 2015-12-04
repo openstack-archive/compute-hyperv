@@ -14,10 +14,10 @@
 
 
 import mock
+from nova import exception
 
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
-from hyperv.nova import vmutils
 from hyperv.tests.unit import test_base
 
 
@@ -106,7 +106,7 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
                                            mock_get_avail_ctrl_slot,
                                            disk_format,
                                            vm_gen=constants.VM_GEN_1,
-                                           exception=False,
+                                           fail=False,
                                            boot_from_volume=False):
         image_meta = {'disk_format': disk_format}
         bdi = {'root_device': '/dev/sda',
@@ -116,8 +116,8 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
 
         mock_is_boot_from_vol.return_value = boot_from_volume
         mock_get_avail_ctrl_slot.return_value = (0, 0)
-        if exception:
-            self.assertRaises(vmutils.HyperVException,
+        if fail:
+            self.assertRaises(exception.InvalidDiskFormat,
                               self._bdman._check_and_update_root_device,
                               vm_gen, image_meta, bdi,
                               mock.sentinel.SLOT_MAP)
@@ -148,7 +148,7 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
 
     def test_check_and_update_root_device_exception(self):
         self._test_check_and_update_root_device(disk_format='fake_format',
-                                                exception=True)
+                                                fail=True)
 
     def test_check_and_update_root_device_gen1(self):
         self._test_check_and_update_root_device(disk_format='vhd')
@@ -172,15 +172,15 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('nova.virt.configdrive.required_by', return_value=True)
     def _test_get_available_controller_slot(self, mock_config_drive_req,
                                             bus=constants.CTRL_TYPE_IDE,
-                                            exception=False):
+                                            fail=False):
 
         slot_map = self._bdman._initialize_controller_slot_counter(
             mock.sentinel.FAKE_VM, constants.VM_GEN_1)
 
-        if exception:
+        if fail:
             slot_map[constants.CTRL_TYPE_IDE][0] = 0
             slot_map[constants.CTRL_TYPE_IDE][1] = 0
-            self.assertRaises(vmutils.HyperVException,
+            self.assertRaises(exception.Invalid,
                               self._bdman._get_available_controller_slot,
                               constants.CTRL_TYPE_IDE,
                               slot_map)
@@ -196,7 +196,7 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
         self._test_get_available_controller_slot()
 
     def test_get_available_controller_slot_exception(self):
-        self._test_get_available_controller_slot(exception=True)
+        self._test_get_available_controller_slot(fail=True)
 
     def test_get_available_controller_slot_scsi_ctrl(self):
         self._test_get_available_controller_slot(bus=constants.CTRL_TYPE_SCSI)
@@ -265,13 +265,13 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        '_get_available_controller_slot')
     def _test_check_and_update_bdm(self, mock_get_ctrl_slot,
-                                   bdm, exception=False,
+                                   bdm, fail=False,
                                    vm_gen=constants.VM_GEN_1,
                                    slot_map=None):
         mock_get_ctrl_slot.return_value = ((mock.sentinel.DRIVE_ADDR,
                                             mock.sentinel.CTRL_DISK_ADDR))
-        if exception:
-            self.assertRaises(vmutils.HyperVException,
+        if fail:
+            self.assertRaises(exception.InvalidDiskInfo,
                               self._bdman._check_and_update_bdm,
                               slot_map, vm_gen, bdm)
         else:
@@ -297,14 +297,14 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
         bdm = {'device_type': 'cdrom',
                'disk_bus': 'IDE'}
 
-        self._test_check_and_update_bdm(bdm=bdm, exception=True,
+        self._test_check_and_update_bdm(bdm=bdm, fail=True,
                                         slot_map=mock.sentinel.FAKE_SLOT_MAP)
 
     def test_check_and_update_bdm_exception_disk_bus(self):
         bdm = {'device_type': 'disk',
                'disk_bus': 'fake_bus'}
 
-        self._test_check_and_update_bdm(bdm=bdm, exception=True,
+        self._test_check_and_update_bdm(bdm=bdm, fail=True,
                                         slot_map=mock.sentinel.FAKE_SLOT_MAP)
 
     def test_sort_by_boot_order(self):

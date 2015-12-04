@@ -20,10 +20,10 @@ from nova import exception
 from nova import objects
 from nova.tests.unit.objects import test_flavor
 from oslo_config import cfg
+from oslo_utils import units
 
 from hyperv.nova import constants
 from hyperv.nova import imagecache
-from hyperv.nova import vmutils
 from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
@@ -36,6 +36,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
     FAKE_BASE_DIR = 'fake/base/dir'
     FAKE_FORMAT = 'fake_format'
     FAKE_IMAGE_REF = 'fake_image_ref'
+    FAKE_VHD_SIZE_GB = 1
 
     def setUp(self):
         super(ImageCacheTestCase, self).setUp()
@@ -46,6 +47,27 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.imagecache = imagecache.ImageCache()
         self.imagecache._pathutils = mock.MagicMock()
         self.imagecache._vhdutils = mock.MagicMock()
+
+    @mock.patch.object(imagecache.ImageCache, '_get_root_vhd_size_gb')
+    def test_resize_and_cache_vhd_smaller(self, mock_get_vhd_size_gb):
+        self.imagecache._vhdutils.get_vhd_info.return_value = {
+            'MaxInternalSize': (self.FAKE_VHD_SIZE_GB + 1) * units.Gi
+        }
+        mock_get_vhd_size_gb.return_value = self.FAKE_VHD_SIZE_GB
+        mock_internal_vhd_size = (
+            self.imagecache._vhdutils.get_internal_vhd_size_by_file_size)
+        mock_internal_vhd_size.return_value = self.FAKE_VHD_SIZE_GB * units.Gi
+
+        self.assertRaises(exception.FlavorDiskSmallerThanImage,
+                          self.imagecache._resize_and_cache_vhd,
+                          mock.sentinel.instance,
+                          mock.sentinel.vhd_path)
+
+        self.imagecache._vhdutils.get_vhd_info.assert_called_once_with(
+            mock.sentinel.vhd_path)
+        mock_get_vhd_size_gb.assert_called_once_with(mock.sentinel.instance)
+        mock_internal_vhd_size.assert_called_once_with(
+            mock.sentinel.vhd_path, self.FAKE_VHD_SIZE_GB * units.Gi)
 
     def _test_get_root_vhd_size_gb(self, old_flavor=True):
         if old_flavor:
@@ -145,7 +167,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
          expected_vhd_path) = self._prepare_get_cached_image(
             rescue_image_id=fake_rescue_image_id,
             image_format=constants.DISK_FORMAT_VHD)
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.FlavorDiskSmallerThanImage,
                           self.imagecache.get_cached_image,
                           self.context, self.instance,
                           fake_rescue_image_id)

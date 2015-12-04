@@ -23,7 +23,6 @@ from hyperv.nova import namedpipe
 from hyperv.nova import serialconsolehandler
 from hyperv.nova import serialproxy
 from hyperv.nova import utilsfactory
-from hyperv.nova import vmutils
 from hyperv.tests.unit import test_base
 
 
@@ -228,7 +227,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
 
     def test_get_vm_serial_port_mapping_exception(self):
         self._mock_get_port_connections([])
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.NovaException,
                           self._consolehandler._get_vm_serial_port_mapping)
 
     @mock.patch('nova.console.type.ConsoleSerial')

@@ -27,7 +27,6 @@ from hyperv.nova import ioutils
 from hyperv.nova import namedpipe
 from hyperv.nova import serialproxy
 from hyperv.nova import utilsfactory
-from hyperv.nova import vmutils
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
@@ -139,7 +138,7 @@ class SerialConsoleHandler(object):
         if not serial_port_conns:
             err_msg = _("No suitable serial port pipe was found "
                         "for instance %(instance_name)s")
-            raise vmutils.HyperVException(
+            raise exception.NovaException(
                 err_msg % {'instance_name': self._instance_name})
 
         serial_port_mapping = {}

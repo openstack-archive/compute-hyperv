@@ -16,6 +16,7 @@ import os
 import time
 
 import mock
+from nova import exception
 from six.moves import builtins
 
 from hyperv.nova import constants
@@ -200,7 +201,7 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
             side_effect=WindowsError(pathutils.ERROR_INVALID_NAME))
         with mock.patch.object(builtins, 'WindowsError',
                                fake_windows_error, create=True):
-            self.assertRaises(vmutils.HyperVException,
+            self.assertRaises(exception.AdminRequired,
                               self._pathutils._get_instances_sub_dir,
                               fake_dir_name)
 

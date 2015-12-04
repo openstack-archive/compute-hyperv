@@ -21,6 +21,7 @@ import time
 if sys.platform == 'win32':
     import wmi
 
+from nova import exception
 from nova import utils
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -166,7 +167,7 @@ class PathUtils(object):
             return path
         except WindowsError as ex:
             if ex.winerror == ERROR_INVALID_NAME:
-                raise vmutils.HyperVException(_(
+                raise exception.AdminRequired(_(
                     "Cannot access \"%(instances_path)s\", make sure the "
                     "path exists and that you have the proper permissions. "
                     "In particular Nova-Compute must not be executed with the "

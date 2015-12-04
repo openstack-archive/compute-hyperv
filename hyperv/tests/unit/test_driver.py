@@ -20,10 +20,10 @@ Unit tests for the Hyper-V Driver.
 import platform
 
 import mock
+from nova import exception
 from nova.virt import driver as base_driver
 
 from hyperv.nova import driver
-from hyperv.nova import vmutils
 from hyperv.tests.unit import test_base
 
 
@@ -51,7 +51,7 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
     def test_check_minimum_windows_version(self, mock_check_min_win_version):
         mock_check_min_win_version.return_value = False
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.HypervisorTooOld,
                           self.driver._check_minimum_windows_version)
 
     def test_public_api_signatures(self):

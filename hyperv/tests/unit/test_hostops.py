@@ -26,7 +26,6 @@ import six
 
 from hyperv.nova import constants
 from hyperv.nova import hostops
-from hyperv.nova import vmutils
 from hyperv.tests.unit import test_base
 
 CONF = cfg.CONF
@@ -254,7 +253,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
                 host=mock.sentinel.HOST, mode=True)
             self.assertEqual('on_maintenance', result)
         else:
-            self.assertRaises(vmutils.HyperVException,
+            self.assertRaises(exception.MigrationError,
                               self._hostops.host_maintenance_mode,
                               host=mock.sentinel.HOST,
                               mode=True)

@@ -17,14 +17,14 @@ import functools
 import os
 
 from nova import exception
-from nova.i18n import _, _LI, _LE  # noqa
+from nova.i18n import _LI, _LE  # noqa
 from nova import utils
 from oslo_config import cfg
 from oslo_log import log as logging
+import six
 
 from hyperv.nova import serialconsolehandler
 from hyperv.nova import utilsfactory
-from hyperv.nova import vmutils
 
 CONF = cfg.CONF
 
@@ -101,11 +101,8 @@ class SerialConsoleOps(object):
                         log += fp.read()
             return log
         except IOError as err:
-            msg = (_("Could not get instance %(instance_name)s "
-                     "console output. Error: %(err)s") %
-                   {'instance_name': instance_name,
-                    'err': err})
-            raise vmutils.HyperVException(msg)
+            raise exception.ConsoleLogOutputException(
+                instance_id=instance_name, reason=six.text_type(err))
 
     def start_console_handlers(self):
         active_instances = self._vmutils.get_active_instances()

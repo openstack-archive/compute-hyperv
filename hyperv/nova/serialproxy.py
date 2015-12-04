@@ -18,10 +18,10 @@ from eventlet import patcher
 import functools
 import socket
 
+from nova import exception
 from nova.i18n import _
 
 from hyperv.nova import constants
-from hyperv.nova import vmutils
 
 threading = patcher.original('threading')
 
@@ -69,7 +69,7 @@ class SerialProxy(threading.Thread):
                    {'addr': self._addr, 'port': self._port,
                     'instance_name': self._instance_name,
                     'error': err})
-            raise vmutils.HyperVException(msg)
+            raise exception.NovaException(msg)
 
     def stop(self):
         self._stopped.set()

@@ -171,7 +171,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         instance.config_drive = 'True'
         self._migrationops._pathutils.lookup_configdrive_path.return_value = (
             None)
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.ConfigDriveNotFound,
                           self._migrationops._check_and_attach_config_drive,
                           instance,
                           mock.sentinel.FAKE_VM_GEN)
@@ -260,7 +260,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         image_meta = (
             self._migrationops._imagecache.get_image_details.return_value)
         get_image_vm_gen = self._migrationops._vmops.get_image_vm_generation
-        get_image_vm_gen.assert_called_once_with(image_meta)
+        get_image_vm_gen.assert_called_once_with(
+            mock_instance.uuid, image_meta)
         self._migrationops._vmops.create_instance.assert_called_once_with(
             mock_instance, mock.sentinel.network_info, root_device,
             block_device_info, get_image_vm_gen.return_value,
@@ -294,7 +295,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._migrationops._pathutils.lookup_root_vhd_path.return_value = None
 
         self.assertRaises(
-            vmutils.HyperVException,
+            exception.DiskNotFound,
             self._migrationops.finish_revert_migration, self.context,
             mock_instance, mock.sentinel.network_info, bdi, True)
 
@@ -345,7 +346,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_resize_vhd.assert_called_once_with(mock.sentinel.vhd_path, 2)
 
     def test_check_resize_vhd_exception(self):
-        self.assertRaises(vmutils.VHDResizeException,
+        self.assertRaises(exception.CannotResizeDisk,
                           self._migrationops._check_resize_vhd,
                           mock.sentinel.vhd_path,
                           {'MaxInternalSize': 1}, 0)
@@ -436,7 +437,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._migrationops._vhdutils.get_vhd_info.assert_has_calls(
             expected_get_info)
         get_image_vm_gen = self._migrationops._vmops.get_image_vm_generation
-        get_image_vm_gen.assert_called_once_with(mock.sentinel.image_meta)
+        get_image_vm_gen.assert_called_once_with(mock_instance.uuid,
+                                                 mock.sentinel.image_meta)
         self._migrationops._vmops.create_instance.assert_called_once_with(
             mock_instance, mock.sentinel.network_info, root_device,
             block_device_info, get_image_vm_gen.return_value,
@@ -473,7 +475,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._migrationops._pathutils.lookup_root_vhd_path.return_value = None
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.DiskNotFound,
                           self._migrationops.finish_migration,
                           self.context, mock.sentinel.migration,
                           mock_instance, mock.sentinel.disk_info,
@@ -481,7 +483,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                           mock.sentinel.image_meta, True,
                           bdi, True)
 
-    def _test_check_ephemeral_disks(self, exception, resize):
+    def _test_check_ephemeral_disks(self, exc, resize):
         mock_ephemerals = [dict(), dict()]
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_instance.ephemeral_gb = 2
@@ -496,8 +498,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_vhd_format = mock_vhdutils.get_best_supported_vhd_format
         mock_get_vhd_format.return_value = mock.sentinel.VHD_FORMAT
 
-        if exception:
-            self.assertRaises(vmutils.HyperVException,
+        if exc:
+            self.assertRaises(exception.DiskNotFound,
                               self._migrationops._check_ephemeral_disks,
                               mock_instance, mock_ephemerals)
         else:
@@ -518,7 +520,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                 mock_instance.name, mock_ephemerals[1])
 
     def test_check_ephemeral_disks_exception(self):
-        self._test_check_ephemeral_disks(exception=True, resize=False)
+        self._test_check_ephemeral_disks(exc=True, resize=False)
 
     def test_check_ephemeral_disks(self):
-        self._test_check_ephemeral_disks(exception=False, resize=True)
+        self._test_check_ephemeral_disks(exc=False, resize=True)

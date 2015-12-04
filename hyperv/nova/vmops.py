@@ -172,7 +172,7 @@ class VMOps(object):
         path = None
         if root_disk_info['type'] == constants.DISK:
             path = self._create_root_vhd(context, instance)
-            self.check_vm_image_type(vm_gen, path)
+            self.check_vm_image_type(instance.uuid, vm_gen, path)
         elif root_disk_info['type'] == constants.DVD:
             path = self._create_root_iso(context, instance)
         root_disk_info['path'] = path
@@ -249,12 +249,8 @@ class VMOps(object):
 
     def _is_resize_needed(self, vhd_path, old_size, new_size, instance):
         if new_size < old_size:
-            error_msg = _("Cannot resize a VHD to a smaller size, the"
-                          " original size is %(old_size)s, the"
-                          " newer size is %(new_size)s"
-                          ) % {'old_size': old_size,
-                               'new_size': new_size}
-            raise vmutils.VHDResizeException(error_msg)
+            raise exception.FlavorDiskSmallerThanImage(
+                flavor_size=new_size, image_size=old_size)
         elif new_size > old_size:
             LOG.debug("Resizing VHD %(vhd_path)s to new "
                       "size %(new_size)s" %
@@ -296,7 +292,7 @@ class VMOps(object):
         # Make sure we're starting with a clean slate.
         self._delete_disk_files(instance_name)
 
-        vm_gen = self.get_image_vm_generation(image_meta)
+        vm_gen = self.get_image_vm_generation(instance.uuid, image_meta)
 
         self._block_device_manager.validate_and_update_bdi(
             instance, image_meta, vm_gen, block_device_info)
@@ -322,12 +318,13 @@ class VMOps(object):
             with excutils.save_and_reraise_exception():
                 self.destroy(instance)
 
-    def _requires_certificate(self, image_meta):
+    def _requires_certificate(self, instance_id, image_meta):
         os_type = image_meta.get('properties', {}).get('os_type', None)
         if not os_type:
-            raise vmutils.HyperVException(
-                _('For secure boot, os_type must be specified in image '
-                  'properties.'))
+            reason = _('For secure boot, os_type must be specified in image '
+                       'properties.')
+            raise exception.InstanceUnacceptable(instance_id=instance_id,
+                                                 reason=reason)
         elif os_type == 'windows':
             return False
         return True
@@ -349,7 +346,10 @@ class VMOps(object):
         else:
             requires_secure_boot = image_prop_secure_boot == constants.REQUIRED
         if vm_gen != constants.VM_GEN_2 and requires_secure_boot:
-            raise vmutils.HyperVException(_('Secure boot requires gen 2 VM.'))
+
+            reason = _('Secure boot requires generation 2 VM.')
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
         return requires_secure_boot
 
     def create_instance(self, instance, network_info, root_device,
@@ -391,9 +391,10 @@ class VMOps(object):
                 constants.FLAVOR_REMOTE_FX_EXTRA_SPEC_KEY)
         if remote_fx_config:
             if vm_gen == constants.VM_GEN_2:
-                raise vmutils.HyperVException(_("RemoteFX is not supported "
-                                                "on generation 2 virtual "
-                                                "machines."))
+                reason = _("RemoteFX is not supported on generation 2 virtual "
+                           "machines.")
+                raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                     reason=reason)
             else:
                 self._configure_remotefx(instance, remote_fx_config)
 
@@ -452,36 +453,33 @@ class VMOps(object):
             self._vmutils.attach_ide_drive(instance_name, path, drive_addr,
                                            ctrl_disk_addr, drive_type)
 
-    def get_image_vm_generation(self, image_meta):
+    def get_image_vm_generation(self, instance_id, image_meta):
         image_props = image_meta['properties']
         default_vm_gen = self._hostutils.get_default_vm_generation()
         image_prop_vm = image_props.get(constants.IMAGE_PROP_VM_GEN,
                                         default_vm_gen)
         if image_prop_vm not in self._hostutils.get_supported_vm_types():
-            LOG.error(_LE('Requested VM Generation %s is not supported on '
-                         ' this OS.'), image_prop_vm)
-            raise vmutils.HyperVException(
-                _('Requested VM Generation %s is not supported on this '
-                  'OS.') % image_prop_vm)
+            reason = _LE('Requested VM Generation %s is not supported on '
+                         'this OS.') % image_prop_vm
+            raise exception.InstanceUnacceptable(instance_id=instance_id,
+                                                 reason=reason)
 
         return VM_GENERATIONS[image_prop_vm]
 
-    def check_vm_image_type(self, vm_gen, root_vhd_path):
+    def check_vm_image_type(self, instance_id, vm_gen, root_vhd_path):
         if (vm_gen != constants.VM_GEN_1 and root_vhd_path and
                 self._vhdutils.get_vhd_format(
                     root_vhd_path) == constants.DISK_FORMAT_VHD):
-            LOG.error(_LE('Requested VM Generation %s, but provided VHD '
-                          'instead of VHDX.'), vm_gen)
-            raise vmutils.HyperVException(
-                _('Requested VM Generation %s, but provided VHD instead of '
-                  'VHDX.') % vm_gen)
+            reason = _LE('Requested VM Generation %s is not supported on '
+                         'this OS.') % vm_gen
+            raise exception.InstanceUnacceptable(instance_id=instance_id,
+                                                 reason=reason)
 
     def _create_config_drive(self, instance, injected_files, admin_password,
                              network_info, rescue=False):
         if CONF.config_drive_format != 'iso9660':
-            raise vmutils.UnsupportedConfigDriveFormatException(
-                _('Invalid config_drive_format "%s"') %
-                CONF.config_drive_format)
+            raise exception.ConfigDriveUnsupportedFormat(
+                format=CONF.config_drive_format)
 
         LOG.info(_LI('Using config drive for instance'), instance=instance)
 
@@ -570,15 +568,17 @@ class VMOps(object):
 
     def _configure_remotefx(self, instance, config):
         if not CONF.hyperv.enable_remotefx:
-            raise vmutils.HyperVException(
-                _("enable_remotefx configuration option needs to be set to "
-                  "True in order to use RemoteFX"))
+            reason = _("enable_remotefx configuration option needs to be set "
+                       "to True in order to use RemoteFX")
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
 
         if not self._hostutils.check_server_feature(
                         self._hostutils.FEATURE_RDS_VIRTUALIZATION):
-                    raise vmutils.HyperVException(
-                        _("The RDS-Virtualization feature must be installed "
-                          "in order to use RemoteFX"))
+            reason = _("The RDS-Virtualization feature must be installed in "
+                       "order to use RemoteFX")
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
 
         instance_name = instance.name
         LOG.debug('Configuring RemoteFX for instance: %s', instance_name)
@@ -837,9 +837,9 @@ class VMOps(object):
 
             if port_number not in [1, 2]:
                 err_msg = _("Invalid serial port number: %(port_number)s. "
-                            "Only COM 1 and COM 2 are available.")
-                raise vmutils.HyperVException(
-                    err_msg % {'port_number': port_number})
+                            "Only COM 1 and COM 2 are available.") % dict(
+                                port_number=port_number)
+                raise exception.ImageSerialPortNumberInvalid(err_msg)
 
             existing_type = serial_ports.get(port_number)
             if (not existing_type or
@@ -854,24 +854,27 @@ class VMOps(object):
         rescue_vhd_path = self._create_root_vhd(
             context, instance, rescue_image_id=rescue_image_id)
 
-        rescue_vm_gen = self.get_image_vm_generation(image_meta)
+        rescue_vm_gen = self.get_image_vm_generation(instance.uuid, image_meta)
         vm_gen = self._vmutils.get_vm_gen(instance.name)
         if rescue_vm_gen != vm_gen:
             err_msg = _('The requested rescue image requires a different VM '
                         'generation than the actual rescued instance. '
                         'Rescue image VM generation: %(rescue_vm_gen)s. '
-                        'Rescued instance VM generation: %(vm_gen)s.')
-            raise vmutils.HyperVException(err_msg %
-                {'rescue_vm_gen': rescue_vm_gen,
-                 'vm_gen': vm_gen})
-        self.check_vm_image_type(rescue_vm_gen, rescue_vhd_path)
+                        'Rescued instance VM generation: %(vm_gen)s.') % dict(
+                            rescue_vm_gen=rescue_vm_gen,
+                            vm_gen=vm_gen)
+            raise exception.ImageUnacceptable(reason=err_msg,
+                                              image_id=rescue_image_id)
+
+        self.check_vm_image_type(instance.uuid, rescue_vm_gen, rescue_vhd_path)
 
         root_vhd_path = self._pathutils.lookup_root_vhd_path(instance.name)
         if not root_vhd_path:
             err_msg = _('Instance root disk image could not be found. '
                         'Rescuing instances booted from volume is '
                         'not supported.')
-            raise vmutils.HyperVException(err_msg)
+            raise exception.InstanceNotRescuable(reason=err_msg,
+                                                 instance_id=instance.uuid)
 
         controller_type = VM_GENERATIONS_CONTROLLER_TYPES[vm_gen]
 
@@ -904,9 +907,9 @@ class VMOps(object):
 
         if (instance.vm_state == vm_states.RESCUED and
                 not (rescue_vhd_path and root_vhd_path)):
-            err_msg = _('Missing instance root and/or rescue image. '
-                        'The instance cannot be unrescued.')
-            raise vmutils.HyperVException(err_msg)
+            err_msg = _('Missing instance root and/or rescue image.')
+            raise exception.InstanceNotRescuable(reason=err_msg,
+                                                 instance_id=instance.uuid)
 
         vm_gen = self._vmutils.get_vm_gen(instance.name)
         controller_type = VM_GENERATIONS_CONTROLLER_TYPES[vm_gen]

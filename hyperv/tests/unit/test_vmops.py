@@ -154,7 +154,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_cached_image.return_value = fake_vhd_path
         fake_root_path = self._vmops._pathutils.get_root_vhd_path.return_value
 
-        self.assertRaises(vmutils.VHDResizeException,
+        self.assertRaises(exception.FlavorDiskSmallerThanImage,
                           self._vmops._create_root_vhd, self.context,
                           mock_instance)
 
@@ -256,7 +256,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_is_resize_needed_exception(self):
         inst = mock.MagicMock()
         self.assertRaises(
-            vmutils.VHDResizeException, self._vmops._is_resize_needed,
+            exception.FlavorDiskSmallerThanImage,
+            self._vmops._is_resize_needed,
             mock.sentinel.FAKE_PATH, self.FAKE_SIZE, self.FAKE_SIZE - 1, inst)
 
     def test_is_resize_needed_true(self):
@@ -284,7 +285,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_create_root_device.assert_called_once_with(self.context,
             mock_instance)
         mock_check_vm_image_type.assert_called_once_with(
-            mock.sentinel.VM_GEN_1, mock.sentinel.VHD_PATH)
+            mock_instance.uuid, mock.sentinel.VM_GEN_1, mock.sentinel.VHD_PATH)
 
     @mock.patch.object(vmops.VMOps, '_create_root_iso')
     def test_create_root_device_type_iso(self, mock_create_root_iso):
@@ -427,7 +428,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                                             fake_vm_gen)
             mock_create_ephemerals.assert_called_once_with(mock_instance,
                 block_device_info['ephemerals'])
-            mock_get_image_vm_gen.assert_called_once_with(mock_image_meta)
+            mock_get_image_vm_gen.assert_called_once_with(
+                mock_instance.uuid, mock_image_meta)
             mock_create_instance.assert_called_once_with(
                 mock_instance, [fake_network_info], root_device_info,
                 block_device_info, fake_vm_gen, mock_image_meta)
@@ -696,8 +698,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._hostutils.get_supported_vm_types.return_value = [
             constants.IMAGE_PROP_VM_GEN_1, constants.IMAGE_PROP_VM_GEN_2]
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.InstanceUnacceptable,
                           self._vmops.get_image_vm_generation,
+                          mock.sentinel.instance_id,
                           image_meta)
 
     def test_get_image_vm_generation_default(self):
@@ -707,7 +710,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._hostutils.get_supported_vm_types.return_value = [
             constants.IMAGE_PROP_VM_GEN_1, constants.IMAGE_PROP_VM_GEN_2]
 
-        response = self._vmops.get_image_vm_generation(image_meta)
+        response = self._vmops.get_image_vm_generation(
+            mock.sentinel.instance_id, image_meta)
 
         self.assertEqual(constants.VM_GEN_1, response)
 
@@ -717,7 +721,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._hostutils.get_supported_vm_types.return_value = [
             constants.IMAGE_PROP_VM_GEN_1, constants.IMAGE_PROP_VM_GEN_2]
 
-        response = self._vmops.get_image_vm_generation(image_meta)
+        response = self._vmops.get_image_vm_generation(
+            mock.sentinel.instance_id, image_meta)
 
         self.assertEqual(constants.VM_GEN_2, response)
 
@@ -728,9 +733,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vhdutils.get_vhd_format = mock.MagicMock(
             return_value=constants.DISK_FORMAT_VHD)
 
-        self.assertRaises(vmutils.HyperVException,
-            self._vmops.check_vm_image_type, constants.VM_GEN_2,
-            mock.sentinel.FAKE_VHD_PATH)
+        self.assertRaises(exception.InstanceUnacceptable,
+            self._vmops.check_vm_image_type, mock.sentinel.instance_id,
+            constants.VM_GEN_2, mock.sentinel.FAKE_VHD_PATH)
 
     @mock.patch('nova.api.metadata.base.InstanceMetadata')
     @mock.patch('nova.virt.configdrive.ConfigDriveBuilder')
@@ -766,7 +771,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             expected_get_configdrive_path_calls.append(expected_call)
 
         if config_drive_format != self.ISO9660:
-            self.assertRaises(vmutils.UnsupportedConfigDriveFormatException,
+            self.assertRaises(exception.ConfigDriveUnsupportedFormat,
                               self._vmops._create_config_drive,
                               mock_instance, [mock.sentinel.FILE],
                               mock.sentinel.PASSWORD,
@@ -1278,36 +1283,39 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(vmops.VMOps, '_create_root_vhd')
     @mock.patch.object(vmops.VMOps, 'get_image_vm_generation')
-    def _test_rescue_instance_exception(self, mock_get_image_vm_gen,
-                                        mock_create_root_vhd,
-                                        wrong_vm_gen=False,
-                                        boot_from_volume=False):
-        mock_vm_gen = constants.VM_GEN_1
-        image_vm_gen = (mock_vm_gen
-                        if not wrong_vm_gen else constants.VM_GEN_2)
+    def test_rescue_instance_boot_from_volume(self, mock_get_image_vm_gen,
+                                              mock_create_root_vhd):
         mock_image_meta = {'id': mock.sentinel.rescue_image_id}
 
         mock_instance = fake_instance.fake_instance_obj(self.context)
-        mock_get_image_vm_gen.return_value = image_vm_gen
-        self._vmops._vmutils.get_vm_gen.return_value = mock_vm_gen
-        self._vmops._pathutils.lookup_root_vhd_path.return_value = (
-            mock.sentinel.root_vhd_path if not boot_from_volume else None)
+        mock_get_image_vm_gen.return_value = constants.VM_GEN_1
+        self._vmops._vmutils.get_vm_gen.return_value = constants.VM_GEN_1
+        self._vmops._pathutils.lookup_root_vhd_path.return_value = None
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.InstanceNotRescuable,
                           self._vmops.rescue_instance,
                           self.context, mock_instance,
                           mock.sentinel.network_info,
                           mock_image_meta,
                           mock.sentinel.rescue_password)
 
-    def test_rescue_instance_wrong_vm_gen(self):
+    @mock.patch.object(vmops.VMOps, '_create_root_vhd')
+    @mock.patch.object(vmops.VMOps, 'get_image_vm_generation')
+    def test_rescue_instance_wrong_vm_gen(self, mock_get_image_vm_gen,
+                                          mock_create_root_vhd):
         # Test the case when the rescue image requires a different
         # vm generation than the actual rescued instance.
-        self._test_rescue_instance_exception(wrong_vm_gen=True)
+        mock_image_meta = {'id': mock.sentinel.rescue_image_id}
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_get_image_vm_gen.return_value = constants.VM_GEN_1
+        self._vmops._vmutils.get_vm_gen.return_value = constants.VM_GEN_2
 
-    def test_rescue_instance_boot_from_volume(self):
-        # Rescuing instances booted from volume is not supported.
-        self._test_rescue_instance_exception(boot_from_volume=True)
+        self.assertRaises(exception.ImageUnacceptable,
+                          self._vmops.rescue_instance,
+                          self.context, mock_instance,
+                          mock.sentinel.network_info,
+                          mock_image_meta,
+                          mock.sentinel.rescue_password)
 
     @mock.patch.object(fileutils, 'delete_if_exists')
     @mock.patch.object(vmops.VMOps, '_attach_drive')
@@ -1363,7 +1371,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance.vm_state = vm_states.RESCUED
         self._vmops._pathutils.lookup_root_vhd_path.return_value = None
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.InstanceNotRescuable,
                           self._vmops.unrescue_instance,
                           mock_instance)
 
@@ -1423,7 +1431,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_get_instance_vnuma_config_no_topology(self):
         self._check_get_instance_vnuma_config()
 
-    def _test_configure_remotefx(self, exception=False):
+    def _test_configure_remotefx(self, fail=False):
         self.flags(enable_remotefx=True, group='hyperv')
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
@@ -1435,9 +1443,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         enable_remotefx = self._vmops._vmutils.enable_remotefx_video_adapter
         self._vmops._hostutils.check_server_feature = mock.MagicMock()
 
-        if exception:
+        if fail:
             self._vmops._hostutils.check_server_feature.return_value = False
-            self.assertRaises(vmutils.HyperVException,
+            self.assertRaises(exception.InstanceUnacceptable,
                               self._vmops._configure_remotefx,
                               mock_instance, fake_config)
         else:
@@ -1447,7 +1455,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                                     fake_resolution)
 
     def test_configure_remotefx_exception(self):
-        self._test_configure_remotefx(exception=True)
+        self._test_configure_remotefx(fail=True)
 
     def test_configure_remotefx(self):
         self._test_configure_remotefx()
@@ -1570,7 +1578,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         expected_exception = not (logging_port in acceptable_ports and
                                   interactive_port in acceptable_ports)
         if expected_exception:
-            self.assertRaises(vmutils.HyperVException,
+            self.assertRaises(exception.ImageSerialPortNumberInvalid,
                               self._vmops._get_image_serial_port_settings,
                               mock_image_meta)
         else:
@@ -1707,11 +1715,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def _test_requires_certificate(self, os_type):
         image_meta = {'properties': {'os_type': os_type}}
         if not os_type:
-            self.assertRaises(vmutils.HyperVException,
-                              self._vmops._requires_certificate, image_meta)
+            self.assertRaises(exception.InstanceUnacceptable,
+                              self._vmops._requires_certificate,
+                              mock.sentinel.instance_id, image_meta)
         else:
             expected_result = os_type == 'linux'
-            result = self._vmops._requires_certificate(image_meta)
+            result = self._vmops._requires_certificate(
+                mock.sentinel.instance_id, image_meta)
             self.assertEqual(expected_result, result)
 
     def test_requires_certificate_windows(self):

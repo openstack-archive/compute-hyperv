@@ -14,10 +14,10 @@
 #    under the License.
 
 import mock
+from nova import exception
 import socket
 
 from hyperv.nova import serialproxy
-from hyperv.nova import vmutils
 from hyperv.tests.unit import test_base
 
 
@@ -49,7 +49,7 @@ class SerialProxyTestCase(test_base.HyperVBaseTestCase):
 
         fake_socket.listen.side_effect = socket.error
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(exception.NovaException,
                           self._proxy._setup_socket)
 
         fake_socket.setsockopt.assert_called_once_with(socket.SOL_SOCKET,

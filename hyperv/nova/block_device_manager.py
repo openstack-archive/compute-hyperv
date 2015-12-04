@@ -19,12 +19,12 @@ Module contains helper methods for dealing with block device information
 """
 
 from nova import block_device
+from nova import exception
 from nova.virt import configdrive
 from nova.virt import driver
 
 from hyperv.i18n import _
 from hyperv.nova import constants
-from hyperv.nova import vmutils
 from hyperv.nova import volumeops
 
 
@@ -86,9 +86,8 @@ class BlockDeviceInfoManager(object):
             root_disk['type'] = self._TYPE_FOR_DISK_FORMAT.get(
                 image_meta['disk_format'])
             if root_disk['type'] is None:
-                msg = _("Hyper-V driver does not support image type "
-                        "%s.") % image_meta['disk_format']
-                raise vmutils.HyperVException(msg)
+                raise exception.InvalidDiskFormat(
+                    disk_format=image_meta['disk_format'])
             root_disk['path'] = None
             root_disk['connection_info'] = None
 
@@ -115,7 +114,7 @@ class BlockDeviceInfoManager(object):
 
         msg = _("There are no more free slots on controller %s"
                 ) % controller_type
-        raise vmutils.HyperVException(msg)
+        raise exception.Invalid(msg)
 
     def is_boot_from_volume(self, block_device_info):
         if block_device_info:
@@ -156,7 +155,7 @@ class BlockDeviceInfoManager(object):
                     "for generation %(vm_gen)s instances."
                     ) % {'disk_bus': disk_bus,
                          'vm_gen': vm_gen}
-            raise vmutils.HyperVException(msg)
+            raise exception.InvalidDiskInfo(reason=msg)
 
         device_type = bdm.get('device_type')
         if not device_type:
@@ -164,7 +163,7 @@ class BlockDeviceInfoManager(object):
         elif device_type != 'disk':
             msg = _("Hyper-V does not support disk type %s for ephemerals "
                     "or volumes.") % device_type
-            raise vmutils.HyperVException(msg)
+            raise exception.InvalidDiskInfo(reason=msg)
 
         (bdm['drive_addr'],
          bdm['ctrl_disk_addr']) = self._get_available_controller_slot(

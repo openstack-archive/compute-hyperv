@@ -26,6 +26,7 @@ if sys.platform == 'win32':
     import wmi
 
 from nova import exception
+from os_win import exceptions as os_win_exc
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_service import loopingcall
@@ -40,28 +41,9 @@ from hyperv.nova import hostutils
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
 
-
-# TODO(alexpilotti): Move the exceptions to a separate module
-# TODO(alexpilotti): Add more domain exceptions
-class HyperVException(exception.NovaException):
-    def __init__(self, message=None):
-        super(HyperVException, self).__init__(message)
-
-
-# TODO(alexpilotti): Add a storage exception base class
-class VHDResizeException(HyperVException):
-    def __init__(self, message=None):
-        super(HyperVException, self).__init__(message)
-
-
-class HyperVAuthorizationException(HyperVException):
-    def __init__(self, message=None):
-        super(HyperVException, self).__init__(message)
-
-
-class UnsupportedConfigDriveFormatException(HyperVException):
-    def __init__(self, message=None):
-        super(HyperVException, self).__init__(message)
+# NOTE(claudiub): in order to make sure the same exceptions are being raised.
+HyperVException = os_win_exc.HyperVException
+HyperVAuthorizationException = os_win_exc.HyperVAuthorizationException
 
 
 class VMUtils(object):

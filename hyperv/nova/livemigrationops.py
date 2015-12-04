@@ -18,6 +18,7 @@ Management class for live migration VM operations.
 """
 import functools
 
+from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
@@ -25,8 +26,8 @@ from oslo_utils import excutils
 from hyperv.i18n import _
 from hyperv.nova import block_device_manager
 from hyperv.nova import imagecache
+from hyperv.nova import pathutils
 from hyperv.nova import serialconsoleops
-from hyperv.nova import utilsfactory
 from hyperv.nova import vmops
 from hyperv.nova import volumeops
 
@@ -54,7 +55,7 @@ class LiveMigrationOps(object):
         else:
             self._livemigrutils = None
 
-        self._pathutils = utilsfactory.get_pathutils()
+        self._pathutils = pathutils.PathUtils()
         self._vmops = vmops.VMOps()
         self._volumeops = volumeops.VolumeOps()
         self._serial_console_ops = serialconsoleops.SerialConsoleOps()

@@ -14,10 +14,10 @@
 #    under the License.
 
 from nova.console import type as ctype
+from os_win import utilsfactory
 from oslo_log import log as logging
 
 from hyperv.nova import hostops
-from hyperv.nova import utilsfactory
 
 LOG = logging.getLogger(__name__)
 

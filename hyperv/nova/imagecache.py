@@ -22,6 +22,7 @@ from nova import exception
 from nova import utils
 from nova.virt import imagecache
 from nova.virt import images
+from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
@@ -29,7 +30,7 @@ from oslo_utils import units
 from oslo_utils import uuidutils
 
 from hyperv.i18n import _
-from hyperv.nova import utilsfactory
+from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ def synchronize_with_path(f):
 class ImageCache(imagecache.ImageCacheManager):
     def __init__(self):
         super(ImageCache, self).__init__()
-        self._pathutils = utilsfactory.get_pathutils()
+        self._pathutils = pathutils.PathUtils()
         self._vhdutils = utilsfactory.get_vhdutils()
         self.used_images = []
         self.unexplained_images = []
@@ -67,8 +68,7 @@ class ImageCache(imagecache.ImageCacheManager):
             return instance.root_gb
 
     def _resize_and_cache_vhd(self, instance, vhd_path):
-        vhd_info = self._vhdutils.get_vhd_info(vhd_path)
-        vhd_size = vhd_info['MaxInternalSize']
+        vhd_size = self._vhdutils.get_vhd_size(vhd_path)['VirtualSize']
 
         root_vhd_size_gb = self._get_root_vhd_size_gb(instance)
         root_vhd_size = root_vhd_size_gb * units.Gi
@@ -166,7 +166,7 @@ class ImageCache(imagecache.ImageCacheManager):
     def _verify_rescue_image(self, instance, rescue_image_id,
                              rescue_image_path):
         rescue_image_info = self._vhdutils.get_vhd_info(rescue_image_path)
-        rescue_image_size = rescue_image_info['MaxInternalSize']
+        rescue_image_size = rescue_image_info['VirtualSize']
         flavor_disk_size = instance.root_gb * units.Gi
 
         if rescue_image_size > flavor_disk_size:

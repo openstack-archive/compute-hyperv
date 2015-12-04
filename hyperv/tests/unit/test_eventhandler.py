@@ -16,11 +16,11 @@
 import eventlet
 import mock
 
-from nova import exception
+from os_win import exceptions as os_win_exc
+from os_win import utilsfactory
 
 from hyperv.nova import constants
 from hyperv.nova import eventhandler
-from hyperv.nova import utilsfactory
 from hyperv.tests.unit import test_base
 
 
@@ -139,7 +139,8 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
             side_effect = (mock.sentinel.instance_uuid
                            if not missing_uuid else None, )
         else:
-            side_effect = exception.InstanceNotFound('fake_instance_uuid')
+            side_effect = os_win_exc.HyperVVMNotFoundException(
+                vm_name=mock.sentinel.instance_name)
         mock_get_uuid = self._event_handler._vmutils.get_instance_uuid
         mock_get_uuid.side_effect = side_effect
 

@@ -16,11 +16,11 @@ import os
 
 import mock
 from nova import exception
+from os_win import exceptions as os_win_exc
 from oslo_utils import units
 
 from hyperv.nova import constants
 from hyperv.nova import migrationops
-from hyperv.nova import vmutils
 from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
@@ -315,7 +315,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         recon_parent_vhd.assert_called_once_with(fake_diff_vhd_path,
                                                  base_vhd_copy_path)
         self._migrationops._vhdutils.merge_vhd.assert_called_once_with(
-            fake_diff_vhd_path, base_vhd_copy_path)
+            fake_diff_vhd_path)
         self._migrationops._pathutils.rename.assert_called_once_with(
             base_vhd_copy_path, fake_diff_vhd_path)
 
@@ -327,10 +327,10 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             os.path.basename(fake_base_vhd_path))
 
         self._migrationops._vhdutils.reconnect_parent_vhd.side_effect = (
-            vmutils.HyperVException)
+            os_win_exc.HyperVException)
         self._migrationops._pathutils.exists.return_value = True
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(os_win_exc.HyperVException,
                           self._migrationops._merge_base_vhd,
                           fake_diff_vhd_path, fake_base_vhd_path)
         self._migrationops._pathutils.exists.assert_called_once_with(
@@ -341,7 +341,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(migrationops.MigrationOps, '_resize_vhd')
     def test_check_resize_vhd(self, mock_resize_vhd):
         self._migrationops._check_resize_vhd(
-            vhd_path=mock.sentinel.vhd_path, vhd_info={'MaxInternalSize': 1},
+            vhd_path=mock.sentinel.vhd_path, vhd_info={'VirtualSize': 1},
             new_size=2)
         mock_resize_vhd.assert_called_once_with(mock.sentinel.vhd_path, 2)
 
@@ -349,7 +349,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertRaises(exception.CannotResizeDisk,
                           self._migrationops._check_resize_vhd,
                           mock.sentinel.vhd_path,
-                          {'MaxInternalSize': 1}, 0)
+                          {'VirtualSize': 1}, 0)
 
     @mock.patch.object(migrationops.MigrationOps, '_merge_base_vhd')
     def test_resize_vhd(self, mock_merge_base_vhd):

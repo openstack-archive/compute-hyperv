@@ -18,20 +18,19 @@ import mock
 from nova import exception
 
 from hyperv.nova import constants
-from hyperv.nova import ioutils
-from hyperv.nova import namedpipe
 from hyperv.nova import serialconsolehandler
 from hyperv.nova import serialproxy
-from hyperv.nova import utilsfactory
 from hyperv.tests.unit import test_base
 
 
 class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
-    @mock.patch.object(utilsfactory, 'get_pathutils')
-    def setUp(self, mock_get_pathutils):
+
+    _FAKE_INSTANCE_NAME = 'fake_instance_name'
+
+    def setUp(self):
         super(SerialConsoleHandlerTestCase, self).setUp()
         self._consolehandler = serialconsolehandler.SerialConsoleHandler(
-            mock.sentinel.instance_name)
+            self._FAKE_INSTANCE_NAME)
 
         self._consolehandler._log_path = mock.sentinel.log_path
         self._consolehandler._pathutils = mock.Mock()
@@ -88,7 +87,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(serialproxy, 'SerialProxy')
     @mock.patch('nova.console.serial.acquire_port')
     @mock.patch.object(serialconsolehandler.threading, 'Event')
-    @mock.patch.object(ioutils, 'IOQueue')
+    @mock.patch.object(serialconsolehandler.ioutils, 'IOQueue')
     def test_setup_serial_proxy_handler(self, mock_io_queue, mock_event,
                                         mock_acquire_port,
                                         mock_serial_proxy_class):
@@ -105,7 +104,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
         self._consolehandler._setup_serial_proxy_handler()
 
         mock_serial_proxy_class.assert_called_once_with(
-            mock.sentinel.instance_name,
+            self._FAKE_INSTANCE_NAME,
             mock.sentinel.host, mock.sentinel.port,
             mock_input_queue,
             mock_output_queue,
@@ -161,8 +160,9 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
                                     enable_logging=False)]
         mock_get_handler.assert_has_calls(expected_calls, any_order=True)
 
-    @mock.patch.object(namedpipe, 'NamedPipeHandler')
-    def _test_get_named_pipe_handler(self, mock_pipe_handler_class,
+    @mock.patch.object(serialconsolehandler.utilsfactory,
+                       'get_named_pipe_handler')
+    def _test_get_named_pipe_handler(self, mock_get_pipe_handler,
                                      pipe_type=None, enable_logging=False):
         expected_args = {}
 
@@ -182,8 +182,8 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
         ret_val = self._consolehandler._get_named_pipe_handler(
             mock.sentinel.pipe_path, pipe_type, enable_logging)
 
-        self.assertEqual(mock_pipe_handler_class.return_value, ret_val)
-        mock_pipe_handler_class.assert_called_once_with(
+        self.assertEqual(mock_get_pipe_handler.return_value, ret_val)
+        mock_get_pipe_handler.assert_called_once_with(
             mock.sentinel.pipe_path,
             **expected_args)
 

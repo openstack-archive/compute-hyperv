@@ -38,6 +38,7 @@ from oslo_utils import units
 
 from hyperv.i18n import _, _LE, _LI
 from hyperv.nova import constants
+from hyperv.nova import pathutils
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmops
 
@@ -58,7 +59,7 @@ LOG = logging.getLogger(__name__)
 class HostOps(object):
     def __init__(self):
         self._hostutils = utilsfactory.get_hostutils()
-        self._pathutils = utilsfactory.get_pathutils()
+        self._pathutils = pathutils.PathUtils()
         self._vmutils = utilsfactory.get_vmutils()
         self._vmops = vmops.VMOps()
         self._api = api.API()

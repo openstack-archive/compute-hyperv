@@ -17,17 +17,21 @@
 A Hyper-V Nova Compute driver.
 """
 
+import functools
 import platform
+import sys
 
 from nova import exception
 from nova.virt import driver
+from os_win import exceptions as os_win_exc
+from os_win import utilsfactory
 from oslo_log import log as logging
 from oslo_utils import excutils
+import six
 
 from hyperv.i18n import _, _LE
 from hyperv.nova import eventhandler
 from hyperv.nova import hostops
-from hyperv.nova import hostutils
 from hyperv.nova import imagecache
 from hyperv.nova import livemigrationops
 from hyperv.nova import migrationops
@@ -40,6 +44,55 @@ from hyperv.nova import volumeops
 LOG = logging.getLogger(__name__)
 
 
+def convert_exceptions(function, exception_map):
+    expected_exceptions = tuple(exception_map.keys())
+
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except expected_exceptions as ex:
+            raised_exception = exception_map.get(type(ex))
+            if not raised_exception:
+                # exception might be a subclass of an expected exception.
+                for expected in expected_exceptions:
+                    if isinstance(ex, expected):
+                        raised_exception = exception_map[expected]
+                        break
+
+            exc_info = sys.exc_info()
+            # NOTE(claudiub): Python 3 raises the exception object given as
+            # the second argument in six.reraise.
+            # The original message will be maintained by passing the original
+            # exception.
+            exc = raised_exception(exc_info[1])
+            six.reraise(raised_exception, exc, exc_info[2])
+    return wrapper
+
+
+def decorate_all_methods(decorator, *args, **kwargs):
+    def decorate(cls):
+        for attr in cls.__dict__:
+            class_member = getattr(cls, attr)
+            if callable(class_member):
+                setattr(cls, attr, decorator(class_member, *args, **kwargs))
+        return cls
+
+    return decorate
+
+
+exception_conversion_map = {
+    # expected_exception: converted_exception
+    os_win_exc.OSWinException: exception.NovaException,
+    os_win_exc.HyperVVMNotFoundException: exception.InstanceNotFound,
+}
+
+# NOTE(claudiub): the purpose of the decorator below is to prevent any
+# os_win exceptions (subclasses of OSWinException) to leak outside of the
+# HyperVDriver.
+
+
+@decorate_all_methods(convert_exceptions, exception_conversion_map)
 class HyperVDriver(driver.ComputeDriver):
     capabilities = {
         "has_imagecache": True,
@@ -65,7 +118,7 @@ class HyperVDriver(driver.ComputeDriver):
         self._imagecache = imagecache.ImageCache()
 
     def _check_minimum_windows_version(self):
-        if not hostutils.HostUtils().check_min_windows_version(6, 2):
+        if not utilsfactory.get_hostutils().check_min_windows_version(6, 2):
             # the version is of Windows is older than Windows Server 2012 R2.
             # Log an error, lettingusers know that this version is not
             # supported any longer.

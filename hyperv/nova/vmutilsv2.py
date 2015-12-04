@@ -251,6 +251,8 @@ class VMUtilsV2(vmutils.VMUtils):
         (job_path, ret_val) = self._vs_man_svc.DestroySystem(vm.path_())
         self.check_ret_val(ret_val, job_path)
 
+    @loopingcall.RetryDecorator(max_retry_count=5, max_sleep_time=1,
+                                exceptions=(vmutils.HyperVException, ))
     def _add_virt_resource(self, res_setting_data, vm_path):
         """Adds a new resource to the VM."""
         res_xml = [res_setting_data.GetText_(1)]
@@ -444,6 +446,8 @@ class VMUtilsV2(vmutils.VMUtils):
             raise vmutils.HyperVException(
                 _('UEFI SecureBoot is supported only on Windows instances.'))
 
+    @loopingcall.RetryDecorator(max_retry_count=5, max_sleep_time=1,
+                                exceptions=(vmutils.HyperVException, ))
     def _modify_virtual_system(self, vm_path, vmsetting):
         (job_path, ret_val) = self._vs_man_svc.ModifySystemSettings(
             SystemSettings=vmsetting.GetText_(1))

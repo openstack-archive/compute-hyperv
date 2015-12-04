@@ -318,6 +318,8 @@ class VMUtils(object):
 
         return self._get_wmi_obj(vm_path)
 
+    @loopingcall.RetryDecorator(max_retry_count=5, max_sleep_time=1,
+                                exceptions=(HyperVException, ))
     def _modify_virtual_system(self, vm_path, vmsetting):
         (job_path, ret_val) = self._vs_man_svc.ModifyVirtualSystem(
             ComputerSystem=vm_path,
@@ -658,6 +660,8 @@ class VMUtils(object):
     def _get_wmi_obj(self, path):
         return wmi.WMI(moniker=path.replace('\\', '/'))
 
+    @loopingcall.RetryDecorator(max_retry_count=5, max_sleep_time=1,
+                                exceptions=(HyperVException, ))
     def _add_virt_resource(self, res_setting_data, vm_path):
         """Adds a new resource to the VM."""
         res_xml = [res_setting_data.GetText_(1)]

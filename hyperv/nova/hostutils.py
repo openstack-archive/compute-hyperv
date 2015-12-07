@@ -26,6 +26,8 @@ from hyperv.nova import constants
 
 class HostUtils(object):
 
+    _windows_version = None
+
     _HOST_FORCED_REBOOT = 6
     _HOST_FORCED_SHUTDOWN = 12
     _DEFAULT_VM_GENERATION = constants.IMAGE_PROP_VM_GEN_1
@@ -84,8 +86,10 @@ class HostUtils(object):
         return map(int, version_str.split('.')) >= [major, minor, build]
 
     def get_windows_version(self):
-        if self._conn_cimv2:
-            return self._conn_cimv2.Win32_OperatingSystem()[0].Version
+        if not HostUtils._windows_version and self._conn_cimv2:
+            Win32_OperatingSystem = self._conn_cimv2.Win32_OperatingSystem()[0]
+            HostUtils._windows_version = Win32_OperatingSystem.Version
+        return HostUtils._windows_version
 
     def get_local_ips(self):
         addr_info = socket.getaddrinfo(socket.gethostname(), None, 0, 0, 0)

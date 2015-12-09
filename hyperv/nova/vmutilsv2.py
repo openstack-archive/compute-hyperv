@@ -30,7 +30,6 @@ from oslo_service import loopingcall
 
 from hyperv.i18n import _, _LW
 from hyperv.nova import constants
-from hyperv.nova import hostutils
 from hyperv.nova import pathutils
 from hyperv.nova import vmutils
 
@@ -97,11 +96,6 @@ class VMUtilsV2(vmutils.VMUtils):
 
     def __init__(self, host='.'):
         if sys.platform == 'win32':
-            # A separate WMI class for VM serial ports has been introduced
-            # in Windows 10 / Windows Server 2016
-            if hostutils.HostUtils().check_min_windows_version(10, 0):
-                self._SERIAL_PORT_SETTING_DATA_CLASS = (
-                    "Msvm_SerialPortSettingData")
             self._pathutils = pathutils.PathUtils()
         super(VMUtilsV2, self).__init__(host)
 

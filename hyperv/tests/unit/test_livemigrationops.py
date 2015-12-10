@@ -129,3 +129,12 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.block_device_info)
         self._livemigrops._pathutils.get_instance_dir.assert_called_once_with(
             mock.sentinel.instance.name, create_dir=False, remove_dir=True)
+
+    @mock.patch.object(livemigrationops.vmops.VMOps, 'post_start_vifs')
+    def test_post_live_migration_at_destination(self, mock_post_start_vifs):
+        self._livemigrops.post_live_migration_at_destination(
+            mock.sentinel.context, mock.sentinel.instance,
+            mock.sentinel.network_info, mock.sentinel.block_migration)
+
+        mock_post_start_vifs.assert_called_once_with(
+            mock.sentinel.instance, mock.sentinel.network_info)

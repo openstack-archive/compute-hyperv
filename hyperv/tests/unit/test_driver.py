@@ -319,6 +319,14 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.context, mock.sentinel.instance,
             mock.sentinel.block_device_info)
 
+    def test_post_live_migration_at_source(self):
+        self.driver.post_live_migration_at_source(
+            mock.sentinel.context, mock.sentinel.instance,
+            mock.sentinel.network_info)
+
+        self.driver._vmops.unplug_vifs.assert_called_once_with(
+            mock.sentinel.instance, mock.sentinel.network_info)
+
     def test_post_live_migration_at_destination(self):
         self.driver.post_live_migration_at_destination(
             mock.sentinel.context, mock.sentinel.instance,

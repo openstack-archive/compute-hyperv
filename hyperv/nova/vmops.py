@@ -638,10 +638,7 @@ class VMOps(object):
 
             if destroy_disks:
                 self._delete_disk_files(instance_name)
-            if network_info:
-                for vif in network_info:
-                    vif_driver = self._get_vif_driver(vif.get('type'))
-                    vif_driver.unplug(instance, vif)
+            self.unplug_vifs(instance, network_info)
         except Exception:
             with excutils.save_and_reraise_exception():
                 LOG.exception(_LE('Failed to destroy instance: %s'),
@@ -755,10 +752,7 @@ class VMOps(object):
                                                            block_device_info)
 
         self._set_vm_state(instance, constants.HYPERV_VM_STATE_ENABLED)
-        if network_info:
-            for vif in network_info:
-                vif_driver = self._get_vif_driver(vif.get('type'))
-                vif_driver.post_start(instance, vif)
+        self.post_start_vifs(instance, network_info)
 
     def _set_vm_state(self, instance, req_state):
         instance_name = instance.name
@@ -930,6 +924,18 @@ class VMOps(object):
             self.attach_config_drive(instance, configdrive_path, vm_gen)
 
         self.power_on(instance)
+
+    def unplug_vifs(self, instance, network_info):
+        if network_info:
+            for vif in network_info:
+                vif_driver = self._get_vif_driver(vif.get('type'))
+                vif_driver.unplug(instance, vif)
+
+    def post_start_vifs(self, instance, network_info):
+        if network_info:
+            for vif in network_info:
+                vif_driver = self._get_vif_driver(vif.get('type'))
+                vif_driver.post_start(instance, vif)
 
     def _check_hotplug_is_available(self, instance):
         if (self._get_vm_state(instance.name) ==

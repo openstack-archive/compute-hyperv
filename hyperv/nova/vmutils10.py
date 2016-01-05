@@ -18,6 +18,8 @@ from hyperv.nova import vmutilsv2
 
 class VMUtils10(vmutilsv2.VMUtilsV2):
 
+    _SERIAL_PORT_SETTING_DATA_CLASS = "Msvm_SerialPortSettingData"
+
     _UEFI_CERTIFICATE_AUTH = 'MicrosoftUEFICertificateAuthority'
 
     def _set_secure_boot(self, vs_data, certificate_required):

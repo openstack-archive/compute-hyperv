@@ -41,7 +41,8 @@ def fake_db_instance(**updates):
                   'numa_topology': None,
                   'vcpu_model': None,
                  },
-        'tags': []
+        'tags': [],
+        'services': []
         }
 
     for name, field in six.iteritems(objects.Instance.fields):

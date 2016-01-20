@@ -46,6 +46,7 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver._rdpconsoleops = mock.MagicMock()
         self.driver._serialconsoleops = mock.MagicMock()
         self.driver._imagecache = mock.MagicMock()
+        self.driver._image_api = mock.MagicMock()
 
     @mock.patch.object(driver.hostutils.HostUtils, 'check_min_windows_version')
     def test_check_minimum_windows_version(self, mock_check_min_win_version):
@@ -81,16 +82,20 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver.list_instances()
         self.driver._vmops.list_instances.assert_called_once_with()
 
-    def test_spawn(self):
+    @mock.patch.object(driver.HyperVDriver, '_recreate_image_meta')
+    def test_spawn(self, mock_recreate_img_meta):
         self.driver.spawn(
             mock.sentinel.context, mock.sentinel.instance,
             mock.sentinel.image_meta, mock.sentinel.injected_files,
             mock.sentinel.admin_password, mock.sentinel.network_info,
             mock.sentinel.block_device_info)
 
+        mock_recreate_img_meta.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.instance,
+            mock.sentinel.image_meta)
         self.driver._vmops.spawn.assert_called_once_with(
             mock.sentinel.context, mock.sentinel.instance,
-            mock.sentinel.image_meta, mock.sentinel.injected_files,
+            mock_recreate_img_meta.return_value, mock.sentinel.injected_files,
             mock.sentinel.admin_password, mock.sentinel.network_info,
             mock.sentinel.block_device_info)
 
@@ -352,7 +357,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.network_info, mock.sentinel.block_device_info,
             mock.sentinel.power_on)
 
-    def test_finish_migration(self):
+    @mock.patch.object(driver.HyperVDriver, '_recreate_image_meta')
+    def test_finish_migration(self, mock_recreate_img_meta):
         self.driver.finish_migration(
             mock.sentinel.context, mock.sentinel.migration,
             mock.sentinel.instance, mock.sentinel.disk_info,
@@ -360,10 +366,13 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.resize_instance, mock.sentinel.block_device_info,
             mock.sentinel.power_on)
 
+        mock_recreate_img_meta.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.instance,
+            mock.sentinel.image_meta)
         self.driver._migrationops.finish_migration.assert_called_once_with(
             mock.sentinel.context, mock.sentinel.migration,
             mock.sentinel.instance, mock.sentinel.disk_info,
-            mock.sentinel.network_info, mock.sentinel.image_meta,
+            mock.sentinel.network_info, mock_recreate_img_meta.return_value,
             mock.sentinel.resize_instance, mock.sentinel.block_device_info,
             mock.sentinel.power_on)
 
@@ -393,3 +402,26 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
                                        mock.sentinel.all_instances)
         self.driver._imagecache.update.assert_called_once_with(
             mock.sentinel.context, mock.sentinel.all_instances)
+
+    def _check_recreate_image_meta(self, mock_image_meta, image_ref):
+        system_meta = {'image_base_image_ref': mock.sentinel.instance_img_ref}
+        mock_instance = mock.MagicMock(system_metadata=system_meta)
+        self.driver._image_api.get.return_value = {}
+
+        image_meta = self.driver._recreate_image_meta(
+            mock.sentinel.context, mock_instance, mock_image_meta)
+
+        self.driver._image_api.get.assert_called_once_with(
+            mock.sentinel.context, image_ref)
+        self.assertEqual(image_ref, image_meta['id'])
+
+    def test_recreate_image_meta_has_id(self):
+        mock_image_meta = mock.MagicMock(id=mock.sentinel.image_meta_id)
+        self._check_recreate_image_meta(
+            mock_image_meta, mock.sentinel.image_meta_id)
+
+    def test_recreate_image_meta_instance(self):
+        mock_image_meta = mock.MagicMock()
+        mock_image_meta.obj_attr_is_set.return_value = False
+        self._check_recreate_image_meta(
+            mock_image_meta, mock.sentinel.instance_img_ref)

@@ -55,7 +55,7 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
     @mock.patch('eventlet.greenthread.sleep')
     def _check_modify_virt_resource_max_retries(
             self, mock_sleep, side_effect, num_calls=1, expected_fail=False):
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
+        mock_svc = self._vmutils._vs_man_svc
         mock_svc.ModifyResourceSettings.side_effect = side_effect
         mock_res_setting_data = mock.MagicMock()
         mock_res_setting_data.GetText_.return_value = mock.sentinel.res_data
@@ -171,7 +171,6 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
     @mock.patch('hyperv.nova.vmutilsv2.VMUtilsV2._get_wmi_obj')
     def _test_create_vm_obj(self, mock_get_wmi_obj, mock_check_ret_val,
                             vm_path, vnuma_enabled=True):
-        mock_vs_man_svc = mock.MagicMock()
         mock_vs_data = mock.MagicMock()
         mock_job = mock.MagicMock()
         fake_job_path = 'fake job path'
@@ -181,13 +180,13 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
 
         mock_check_ret_val.return_value = mock_job
         _conn.new.return_value = mock_vs_data
+        mock_vs_man_svc = self._vmutils._vs_man_svc
         mock_vs_man_svc.DefineSystem.return_value = (fake_job_path,
                                                      vm_path,
                                                      fake_ret_val)
         mock_job.associators.return_value = ['fake vm path']
 
         response = self._vmutils._create_vm_obj(
-            vs_man_svc=mock_vs_man_svc,
             vm_name=fake_vm_name,
             vm_gen=constants.VM_GEN_2,
             notes='fake notes',
@@ -408,12 +407,11 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
 
     @mock.patch.object(vmutils.VMUtils, 'check_ret_val')
     def test_modify_virtual_system(self, mock_check_ret_val):
-        mock_vs_man_svc = mock.MagicMock()
         mock_vmsettings = mock.MagicMock()
+        mock_vs_man_svc = self._vmutils._vs_man_svc
         mock_vs_man_svc.ModifySystemSettings.return_value = (
             mock.sentinel.fake_job_path, mock.sentinel.fake_ret_val)
-        self._vmutils._modify_virtual_system(vs_man_svc=mock_vs_man_svc,
-                                             vm_path=None,
+        self._vmutils._modify_virtual_system(vm_path=None,
                                              vmsetting=mock_vmsettings)
         mock_vs_man_svc.ModifySystemSettings.assert_called_once_with(
             SystemSettings=mock_vmsettings.GetText_.return_value)
@@ -439,7 +437,6 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
                                 mock_modify_virtual_system):
         vm = mock_lookup_vm_check.return_value
         vs_data = mock_get_vm_setting_data.return_value
-        vs_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
 
         with mock.patch.object(self._vmutils,
                                '_set_secure_boot') as mock_set_secure_boot:
@@ -451,7 +448,7 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
             mock_set_secure_boot.assert_called_once_with(
                 vs_data, mock.sentinel.certificate_required)
             mock_modify_virtual_system.assert_called_once_with(
-                vs_svc, vm.path_(), vs_data)
+                vm.path_(), vs_data)
 
     def _test_is_drive_physical(self, is_physical):
         self._vmutils._pathutils.exists.return_value = not is_physical
@@ -523,7 +520,6 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
                             mock_get_vm_setting_data):
         mock_vm = self._lookup_vm()
 
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
         mock_vssd = mock_get_vm_setting_data.return_value
         fake_dev_boot_order = [mock.sentinel.BOOT_DEV1,
                                mock.sentinel.BOOT_DEV2]
@@ -531,7 +527,7 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
             mock_vm.name, fake_dev_boot_order)
 
         mock_modify_virt_syst.assert_called_once_with(
-            mock_svc, mock_vm.path_.return_value, mock_vssd)
+            mock_vm.path_.return_value, mock_vssd)
         self.assertEqual(mock_vssd.BootOrder, tuple(fake_dev_boot_order))
 
     @mock.patch.object(vmutilsv2.VMUtilsV2, '_get_vm_setting_data')
@@ -548,7 +544,6 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
         fake_dev_order = [fake_boot_dev1, fake_boot_dev2]
         mock_drive_to_boot_source.side_effect = fake_dev_order
         mock_vm = self._lookup_vm()
-        mock_svc = self._vmutils._conn.Msvm_VirtualSystemManagementService()[0]
         mock_vssd = mock_get_vm_setting_data.return_value
         old_boot_order = tuple([mock.sentinel.BOOT_SOURCE2,
                                 mock.sentinel.BOOT_SOURCE1,
@@ -561,5 +556,5 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
         self._vmutils._set_boot_order_gen2(mock_vm.name, fake_dev_order)
 
         mock_modify_virtual_system.assert_called_once_with(
-            mock_svc, None, mock_vssd)
+            None, mock_vssd)
         self.assertEqual(expected_boot_order, mock_vssd.BootSourceOrder)

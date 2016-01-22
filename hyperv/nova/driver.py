@@ -311,10 +311,19 @@ class HyperVDriver(driver.ComputeDriver):
         return self._hostops.host_maintenance_mode(host, mode)
 
     def _recreate_image_meta(self, context, instance, image_meta):
+        # TODO(claudiub): Cleanup this method. instance.system_metadata might
+        # already contain all the image metadata properties we need anyways.
         if image_meta.obj_attr_is_set("id"):
             image_ref = image_meta.id
         else:
             image_ref = instance.system_metadata['image_base_image_ref']
-        image_meta = self._image_api.get(context, image_ref)
+
+        if image_ref:
+            image_meta = self._image_api.get(context, image_ref)
+        else:
+            # boot from volume does not have an image_ref.
+            image_meta = image_meta.obj_to_primitive()['nova_object.data']
+            image_meta['properties'] = {k.replace('image_', '', 1): v for k, v
+                                        in instance.system_metadata.items()}
         image_meta["id"] = image_ref
         return image_meta

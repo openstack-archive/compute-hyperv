@@ -403,16 +403,23 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver._imagecache.update.assert_called_once_with(
             mock.sentinel.context, mock.sentinel.all_instances)
 
-    def _check_recreate_image_meta(self, mock_image_meta, image_ref):
-        system_meta = {'image_base_image_ref': mock.sentinel.instance_img_ref}
+    def _check_recreate_image_meta(self, mock_image_meta, image_ref='',
+                                   instance_img_ref=''):
+        system_meta = {'image_base_image_ref': instance_img_ref}
         mock_instance = mock.MagicMock(system_metadata=system_meta)
         self.driver._image_api.get.return_value = {}
 
         image_meta = self.driver._recreate_image_meta(
             mock.sentinel.context, mock_instance, mock_image_meta)
 
-        self.driver._image_api.get.assert_called_once_with(
-            mock.sentinel.context, image_ref)
+        if image_ref:
+            self.driver._image_api.get.assert_called_once_with(
+                mock.sentinel.context, image_ref)
+        else:
+            mock_image_meta.obj_to_primitive.assert_called_once_with()
+            self.assertEqual({'base_image_ref': image_ref},
+                              image_meta['properties'])
+
         self.assertEqual(image_ref, image_meta['id'])
 
     def test_recreate_image_meta_has_id(self):
@@ -424,4 +431,13 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         mock_image_meta = mock.MagicMock()
         mock_image_meta.obj_attr_is_set.return_value = False
         self._check_recreate_image_meta(
-            mock_image_meta, mock.sentinel.instance_img_ref)
+            mock_image_meta, mock.sentinel.instance_img_ref,
+            mock.sentinel.instance_img_ref)
+
+    def test_recreate_image_meta_boot_from_volume(self):
+        mock_image_meta = mock.MagicMock()
+        mock_image_meta.obj_attr_is_set.return_value = False
+        mock_image_meta.obj_to_primitive.return_value = {
+            'nova_object.data': {}}
+
+        self._check_recreate_image_meta(mock_image_meta)

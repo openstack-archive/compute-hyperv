@@ -19,12 +19,13 @@ import os
 from nova import exception
 from nova.i18n import _LI, _LE  # noqa
 from nova import utils
+from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 import six
 
+from hyperv.nova import pathutils
 from hyperv.nova import serialconsolehandler
-from hyperv.nova import utilsfactory
 
 CONF = cfg.CONF
 
@@ -46,7 +47,7 @@ def instance_synchronized(func):
 class SerialConsoleOps(object):
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
-        self._pathutils = utilsfactory.get_pathutils()
+        self._pathutils = pathutils.PathUtils()
 
     @instance_synchronized
     def start_console_handler(self, instance_name):

@@ -50,8 +50,8 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(imagecache.ImageCache, '_get_root_vhd_size_gb')
     def test_resize_and_cache_vhd_smaller(self, mock_get_vhd_size_gb):
-        self.imagecache._vhdutils.get_vhd_info.return_value = {
-            'MaxInternalSize': (self.FAKE_VHD_SIZE_GB + 1) * units.Gi
+        self.imagecache._vhdutils.get_vhd_size.return_value = {
+            'VirtualSize': (self.FAKE_VHD_SIZE_GB + 1) * units.Gi
         }
         mock_get_vhd_size_gb.return_value = self.FAKE_VHD_SIZE_GB
         mock_internal_vhd_size = (
@@ -63,7 +63,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
                           mock.sentinel.instance,
                           mock.sentinel.vhd_path)
 
-        self.imagecache._vhdutils.get_vhd_info.assert_called_once_with(
+        self.imagecache._vhdutils.get_vhd_size.assert_called_once_with(
             mock.sentinel.vhd_path)
         mock_get_vhd_size_gb.assert_called_once_with(mock.sentinel.instance)
         mock_internal_vhd_size.assert_called_once_with(
@@ -162,7 +162,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         fake_rescue_image_id = 'fake_rescue_image_id'
 
         self.imagecache._vhdutils.get_vhd_info.return_value = {
-            'MaxInternalSize': self.instance.root_gb + 1}
+            'VirtualSize': self.instance.root_gb + 1}
         (expected_path,
          expected_vhd_path) = self._prepare_get_cached_image(
             rescue_image_id=fake_rescue_image_id,

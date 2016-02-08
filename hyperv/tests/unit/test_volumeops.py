@@ -17,6 +17,7 @@
 import os
 
 import mock
+from os_win import exceptions as os_win_exc
 from oslo_config import cfg
 
 from nova import exception
@@ -24,8 +25,6 @@ from nova.tests.unit import fake_block_device
 from oslo_utils import units
 
 from hyperv.nova import constants
-from hyperv.nova import pathutils
-from hyperv.nova import vmutils
 from hyperv.nova import volumeops
 from hyperv.tests.unit import test_base
 
@@ -145,16 +144,15 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
         fake_volume_driver.disconnect_volumes.assert_called_once_with(
             block_device_mapping)
 
-    def test_ebs_root_in_block_devices(self):
+    @mock.patch('nova.block_device.volume_in_mapping')
+    def test_ebs_root_in_block_devices(self, mock_vol_in_mapping):
         block_device_info = get_fake_block_dev_info()
 
         response = self._volumeops.ebs_root_in_block_devices(block_device_info)
 
-        self._volumeops._volutils.volume_in_mapping.assert_called_once_with(
+        mock_vol_in_mapping.assert_called_once_with(
             self._volumeops._default_root_device, block_device_info)
-        self.assertEqual(
-            self._volumeops._volutils.volume_in_mapping.return_value,
-            response)
+        self.assertEqual(mock_vol_in_mapping.return_value, response)
 
     def test_get_volume_connector(self):
         mock_instance = mock.DEFAULT
@@ -316,9 +314,9 @@ class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):
                                      mock_logout_storage_target,
                                      mock_get_mounted_disk):
         connection_info = get_fake_connection_info()
-        mock_get_mounted_disk.side_effect = vmutils.HyperVException
+        mock_get_mounted_disk.side_effect = os_win_exc.HyperVException
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(os_win_exc.HyperVException,
                           self._volume_driver.attach_volume, connection_info,
                           mock.sentinel.instance_name)
         mock_logout_storage_target.assert_called_with(mock.sentinel.fake_iqn)
@@ -491,7 +489,8 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         super(SMBFSVolumeDriverTestCase, self).setUp()
         self._volume_driver = volumeops.SMBFSVolumeDriver()
         self._volume_driver._vmutils = mock.MagicMock()
-        self._volume_driver._pathutils = mock.MagicMock()
+        self._volume_driver._smbutils = mock.MagicMock()
+        self._volume_driver._volutils = mock.MagicMock()
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, 'ensure_share_mounted')
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_get_disk_path')
@@ -543,15 +542,14 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     def test_attach_non_existing_image(self, mock_get_disk_path,
                                        mock_ensure_share_mounted):
         self._volume_driver._vmutils.attach_drive.side_effect = (
-            vmutils.HyperVException())
+            os_win_exc.HyperVException)
         self.assertRaises(exception.VolumeAttachFailed,
                           self._volume_driver.attach_volume,
                           self._FAKE_CONNECTION_INFO,
                           mock.sentinel.instance_name)
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_get_disk_path')
-    @mock.patch.object(pathutils.PathUtils, 'unmount_smb_share')
-    def test_detach_volume(self, mock_unmount_smb_share, mock_get_disk_path):
+    def test_detach_volume(self, mock_get_disk_path):
         mock_get_disk_path.return_value = (
             mock.sentinel.disk_path)
 
@@ -586,9 +584,9 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_parse_credentials')
     def _test_ensure_mounted(self, mock_parse_credentials, is_mounted=False):
-        mock_mount_smb_share = self._volume_driver._pathutils.mount_smb_share
+        mock_mount_smb_share = self._volume_driver._smbutils.mount_smb_share
         mock_check_smb_mapping = (
-            self._volume_driver._pathutils.check_smb_mapping)
+            self._volume_driver._smbutils.check_smb_mapping)
         mock_check_smb_mapping.return_value = is_mounted
         mock_parse_credentials.return_value = (
             self._FAKE_USERNAME, self._FAKE_PASSWORD)
@@ -613,7 +611,7 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
 
     def test_disconnect_volumes(self):
         mock_unmount_smb_share = (
-            self._volume_driver._pathutils.unmount_smb_share)
+            self._volume_driver._smbutils.unmount_smb_share)
         block_device_mapping = [
             {'connection_info': self._FAKE_CONNECTION_INFO}]
         self._volume_driver.disconnect_volumes(block_device_mapping)

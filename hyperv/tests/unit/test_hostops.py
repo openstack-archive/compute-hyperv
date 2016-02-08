@@ -47,6 +47,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
         self._hostops = hostops.HostOps()
         self._hostops._api = mock.MagicMock()
         self._hostops._vmops = mock.MagicMock()
+        self._hostops._pathutils = mock.MagicMock()
 
     def test_get_cpu_info(self):
         mock_processors = mock.MagicMock()

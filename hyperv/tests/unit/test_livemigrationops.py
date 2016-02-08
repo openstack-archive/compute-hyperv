@@ -14,10 +14,10 @@
 #    under the License.
 
 import mock
+from os_win import exceptions as os_win_exc
 from oslo_config import cfg
 
 from hyperv.nova import livemigrationops
-from hyperv.nova import vmutils
 from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
@@ -32,6 +32,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self.context = 'fake_context'
         self._livemigrops = livemigrationops.LiveMigrationOps()
         self._livemigrops._block_dev_man = mock.MagicMock()
+        self._livemigrops._pathutils = mock.MagicMock()
 
     @mock.patch('hyperv.nova.serialconsoleops.SerialConsoleOps.'
                 'stop_console_handler')
@@ -44,8 +45,8 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         fake_dest = mock.sentinel.DESTINATION
         self._livemigrops._livemigrutils.live_migrate_vm.side_effect = [
             side_effect]
-        if side_effect is vmutils.HyperVException:
-            self.assertRaises(vmutils.HyperVException,
+        if side_effect is os_win_exc.HyperVException:
+            self.assertRaises(os_win_exc.HyperVException,
                               self._livemigrops.live_migration,
                               self.context, mock_instance, fake_dest,
                               mock_post, mock_recover, False, None)
@@ -73,7 +74,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._test_live_migration(side_effect=None)
 
     def test_live_migration_exception(self):
-        self._test_live_migration(side_effect=vmutils.HyperVException)
+        self._test_live_migration(side_effect=os_win_exc.HyperVException)
 
     def test_live_migration_wrong_os_version(self):
         self._livemigrops._livemigrutils = None

@@ -18,15 +18,15 @@ from nova.console import serial as serial_console
 from nova.console import type as ctype
 from nova import exception
 from nova.i18n import _, _LI  # noqa
+from os_win.utils.io import ioutils
+from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 import six
 
 from hyperv.nova import constants
-from hyperv.nova import ioutils
-from hyperv.nova import namedpipe
+from hyperv.nova import pathutils
 from hyperv.nova import serialproxy
-from hyperv.nova import utilsfactory
 
 CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class SerialConsoleHandler(object):
     """Handles serial console ops related to a given instance."""
     def __init__(self, instance_name):
         self._vmutils = utilsfactory.get_vmutils()
-        self._pathutils = utilsfactory.get_pathutils()
+        self._pathutils = pathutils.PathUtils()
 
         self._instance_name = instance_name
         self._log_path = self._pathutils.get_vm_console_log_paths(
@@ -128,7 +128,7 @@ class SerialConsoleHandler(object):
         if enable_logging:
             kwargs['log_file'] = self._log_path
 
-        handler = namedpipe.NamedPipeHandler(pipe_path, **kwargs)
+        handler = utilsfactory.get_named_pipe_handler(pipe_path, **kwargs)
         return handler
 
     def _get_vm_serial_port_mapping(self):

@@ -21,21 +21,21 @@ import mock
 
 from hyperv.nova import utilsfactory
 from hyperv.nova import vmutils
-from hyperv.nova import volumeutilsv2
+from hyperv.nova import vmutilsv2
 from hyperv.tests import test
 
 
 class TestHyperVUtilsFactory(test.NoDBTestCase):
 
-    def test_get_class(self):
-        expected_instance = volumeutilsv2.VolumeUtilsV2()
-        utilsfactory.utils = mock.MagicMock()
-        utilsfactory.utils.get_windows_version.return_value = '6.2'
-        instance = utilsfactory._get_class('volumeutils')
+    @mock.patch.object(utilsfactory.utils, 'get_windows_version')
+    def test_get_class(self, mock_get_windows_version):
+        expected_instance = vmutilsv2.VMUtilsV2()
+        mock_get_windows_version.return_value = '6.2'
+        instance = utilsfactory._get_class('vmutils')
         self.assertEqual(type(expected_instance), type(instance))
 
-    def test_get_class_not_found(self):
-        utilsfactory.utils = mock.MagicMock()
-        utilsfactory.utils.get_windows_version.return_value = '5.2'
+    @mock.patch.object(utilsfactory.utils, 'get_windows_version')
+    def test_get_class_not_found(self, mock_get_windows_version):
+        mock_get_windows_version.return_value = '5.2'
         self.assertRaises(vmutils.HyperVException, utilsfactory._get_class,
-                          'hostutils')
+                          'vmutils')

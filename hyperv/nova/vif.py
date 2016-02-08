@@ -18,11 +18,11 @@ import abc
 
 from nova.i18n import _
 from nova.network import model as network_model
+from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 
 from hyperv.nova import ovsutils
-from hyperv.nova import utilsfactory
 
 
 hyperv_opts = [
@@ -62,22 +62,11 @@ class HyperVNovaNetworkVIFDriver(HyperVBaseVIFDriver):
     """Nova network VIF driver."""
 
     def __init__(self):
-        self._vmutils = utilsfactory.get_vmutils()
         self._netutils = utilsfactory.get_networkutils()
 
     def plug(self, instance, vif):
-        vswitch_path = self._netutils.get_external_vswitch(
-            CONF.hyperv.vswitch_name)
-
-        vm_name = instance.name
-        LOG.debug('Creating vswitch port for instance: %s', vm_name)
-        if self._netutils.vswitch_port_needed():
-            vswitch_data = self._netutils.create_vswitch_port(vswitch_path,
-                                                              vm_name)
-        else:
-            vswitch_data = vswitch_path
-
-        self._vmutils.set_nic_connection(vm_name, vif['id'], vswitch_data)
+        self._netutils.connect_vnic_to_vswitch(CONF.hyperv.vswitch_name,
+                                               vif['id'])
 
 
 class HyperVOVSVIFDriver(HyperVNovaNetworkVIFDriver):

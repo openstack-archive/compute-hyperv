@@ -29,6 +29,8 @@ from nova import objects
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import hardware
+from os_win import exceptions as os_win_exc
+from os_win import utilsfactory
 from oslo_concurrency import processutils
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -43,10 +45,10 @@ from hyperv.i18n import _, _LI, _LE, _LW
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
 from hyperv.nova import imagecache
+from hyperv.nova import pathutils
 from hyperv.nova import serialconsoleops
-from hyperv.nova import utilsfactory
+from hyperv.nova import utilsfactory as old_utilsfactory
 from hyperv.nova import vif as vif_utils
-from hyperv.nova import vmutils
 from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
@@ -126,10 +128,10 @@ class VMOps(object):
     _ROOT_DISK_CTRL_ADDR = 0
 
     def __init__(self):
-        self._vmutils = utilsfactory.get_vmutils()
+        self._vmutils = old_utilsfactory.get_vmutils()
         self._vhdutils = utilsfactory.get_vhdutils()
-        self._pathutils = utilsfactory.get_pathutils()
         self._hostutils = utilsfactory.get_hostutils()
+        self._pathutils = pathutils.PathUtils()
         self._serial_console_ops = serialconsoleops.SerialConsoleOps()
         self._volumeops = volumeops.VolumeOps()
         self._imagecache = imagecache.ImageCache()
@@ -191,7 +193,7 @@ class VMOps(object):
         base_vhd_path = self._imagecache.get_cached_image(context, instance,
                                                           rescue_image_id)
         base_vhd_info = self._vhdutils.get_vhd_info(base_vhd_path)
-        base_vhd_size = base_vhd_info['MaxInternalSize']
+        base_vhd_size = base_vhd_info['VirtualSize']
         format_ext = base_vhd_path.split('.')[-1]
 
         root_vhd_path = self._pathutils.get_root_vhd_path(instance.name,
@@ -270,8 +272,7 @@ class VMOps(object):
 
     def _create_ephemeral_disk(self, instance_name, eph_info):
         self._vhdutils.create_dynamic_vhd(eph_info['path'],
-                                          eph_info['size'] * units.Gi,
-                                          eph_info['format'])
+                                          eph_info['size'] * units.Gi)
 
     def set_boot_order(self, vm_gen, block_device_info, instance_name):
         boot_order = self._block_device_manager.get_boot_order(
@@ -682,7 +683,7 @@ class VMOps(object):
                     LOG.info(_LI("Soft shutdown succeeded."),
                              instance=instance)
                     return True
-            except vmutils.HyperVException as e:
+            except os_win_exc.HyperVException as e:
                 # Exception is raised when trying to shutdown the instance
                 # while it is still booting.
                 LOG.debug("Soft shutdown failed: %s", e, instance=instance)
@@ -737,7 +738,7 @@ class VMOps(object):
 
             self._set_vm_state(instance,
                                constants.HYPERV_VM_STATE_DISABLED)
-        except exception.InstanceNotFound:
+        except os_win_exc.HyperVVMNotFoundException:
             # The manager can call the stop API after receiving instance
             # power off events. If this is triggered when the instance
             # is being deleted, it might attempt to power off an unexisting

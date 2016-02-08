@@ -22,9 +22,12 @@ import os
 import re
 import time
 
+from nova import block_device
 from nova import exception
 from nova import utils
 from nova.virt import driver
+from os_win import exceptions as os_win_exc
+from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
@@ -34,8 +37,6 @@ from six.moves import range
 
 from hyperv.i18n import _, _LE, _LW
 from hyperv.nova import constants
-from hyperv.nova import utilsfactory
-from hyperv.nova import vmutils
 
 LOG = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class VolumeOps(object):
 
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
-        self._volutils = utilsfactory.get_volumeutils()
+        self._volutils = utilsfactory.get_iscsi_initiator_utils()
         self._initiator = None
         self._default_root_device = 'vda'
         self.volume_drivers = {'smbfs': SMBFSVolumeDriver(),
@@ -121,8 +122,8 @@ class VolumeOps(object):
             root_device = block_device_info.get('root_device_name')
             if not root_device:
                 root_device = self._default_root_device
-            return self._volutils.volume_in_mapping(root_device,
-                                                    block_device_info)
+            return block_device.volume_in_mapping(root_device,
+                                                  block_device_info)
 
     def fix_instance_volume_disk_paths(self, instance_name, block_device_info):
         mapping = driver.block_device_info_get_mapping(block_device_info)
@@ -212,7 +213,7 @@ class VolumeOps(object):
 class ISCSIVolumeDriver(object):
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
-        self._volutils = utilsfactory.get_volumeutils()
+        self._volutils = utilsfactory.get_iscsi_initiator_utils()
 
     def login_storage_target(self, connection_info):
         data = connection_info['data']
@@ -413,9 +414,8 @@ def export_path_synchronized(f):
 
 class SMBFSVolumeDriver(object):
     def __init__(self):
-        self._pathutils = utilsfactory.get_pathutils()
+        self._smbutils = utilsfactory.get_smbutils()
         self._vmutils = utilsfactory.get_vmutils()
-        self._volutils = utilsfactory.get_volumeutils()
         self._username_regex = re.compile(r'user(?:name)?=([^, ]+)')
         self._password_regex = re.compile(r'pass(?:word)?=([^, ]+)')
 
@@ -443,7 +443,7 @@ class SMBFSVolumeDriver(object):
                                        disk_path,
                                        ctrller_path,
                                        slot)
-        except vmutils.HyperVException as exn:
+        except os_win_exc.HyperVException as exn:
             LOG.exception(_LE('Attach volume failed to %(instance_name)s: '
                               '%(exn)s'), {'instance_name': instance_name,
                                            'exn': exn})
@@ -486,12 +486,12 @@ class SMBFSVolumeDriver(object):
     def ensure_share_mounted(self, connection_info):
         export_path = self._get_export_path(connection_info)
 
-        if not self._pathutils.check_smb_mapping(export_path):
+        if not self._smbutils.check_smb_mapping(export_path):
             opts_str = connection_info['data'].get('options', '')
             username, password = self._parse_credentials(opts_str)
-            self._pathutils.mount_smb_share(export_path,
-                                            username=username,
-                                            password=password)
+            self._smbutils.mount_smb_share(export_path,
+                                           username=username,
+                                           password=password)
 
     def _parse_credentials(self, opts_str):
         match = self._username_regex.findall(opts_str)
@@ -516,7 +516,7 @@ class SMBFSVolumeDriver(object):
         # an instance.
         @utils.synchronized(export_path)
         def unmount_synchronized():
-            self._pathutils.unmount_smb_share(export_path)
+            self._smbutils.unmount_smb_share(export_path)
         unmount_synchronized()
 
     def set_disk_qos_specs(self, connection_info, instance_name,

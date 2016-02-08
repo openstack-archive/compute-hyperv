@@ -22,6 +22,7 @@ from nova.objects import flavor as flavor_obj
 from nova.tests.unit.objects import test_flavor
 from nova.tests.unit.objects import test_virtual_interface
 from nova.virt import hardware
+from os_win import exceptions as os_win_exc
 from oslo_concurrency import processutils
 from oslo_config import cfg
 from oslo_utils import fileutils
@@ -31,7 +32,6 @@ import six
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
 from hyperv.nova import vmops
-from hyperv.nova import vmutils
 from hyperv.nova import volumeops
 from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
@@ -134,7 +134,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_instance.root_gb = self.FAKE_SIZE
         self.flags(use_cow_images=use_cow_images)
-        self._vmops._vhdutils.get_vhd_info.return_value = {'MaxInternalSize':
+        self._vmops._vhdutils.get_vhd_info.return_value = {'VirtualSize':
                                                            vhd_size * units.Gi}
         self._vmops._vhdutils.get_vhd_format.return_value = vhd_format
         root_vhd_internal_size = mock_instance.root_gb * units.Gi
@@ -348,7 +348,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                            mock_ephemeral_info)
 
         mock_create_dynamic_vhd.assert_called_once_with('fake_eph_path',
-                                                        10 * units.Gi, 'vhd')
+                                                        10 * units.Gi)
 
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        'get_boot_order')
@@ -406,8 +406,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               self.context, mock_instance, mock_image_meta,
                               [mock.sentinel.FILE], mock.sentinel.PASSWORD,
                               mock.sentinel.INFO, block_device_info)
-        elif fail is vmutils.HyperVException:
-            self.assertRaises(vmutils.HyperVException, self._vmops.spawn,
+        elif fail is os_win_exc.HyperVException:
+            self.assertRaises(os_win_exc.HyperVException, self._vmops.spawn,
                               self.context, mock_instance, mock_image_meta,
                               [mock.sentinel.FILE], mock.sentinel.PASSWORD,
                               mock.sentinel.INFO, block_device_info)
@@ -464,7 +464,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._test_spawn(exists=False, root_device_info=root_device_info,
                          block_device_info=block_device_info,
                          configdrive_required=True,
-                         fail=vmutils.HyperVException)
+                         fail=os_win_exc.HyperVException)
 
     def test_spawn_not_required(self):
         root_device_info = mock.sentinel.ROOT_DEV_INFO
@@ -475,8 +475,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     def test_spawn_no_admin_permissions(self):
         self._vmops._vmutils.check_admin_permissions.side_effect = (
-            vmutils.HyperVException)
-        self.assertRaises(vmutils.HyperVException,
+            os_win_exc.HyperVException)
+        self.assertRaises(os_win_exc.HyperVException,
                           self._vmops.spawn,
                           self.context, mock.DEFAULT, mock.DEFAULT,
                           [mock.sentinel.FILE], mock.sentinel.PASSWORD,
@@ -532,7 +532,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance.flavor = flavor
 
         if remotefx is True and vm_gen == constants.VM_GEN_2:
-            self.assertRaises(vmutils.HyperVException,
+            self.assertRaises(os_win_exc.HyperVException,
                               self._vmops.create_instance,
                               instance=mock_instance,
                               network_info=[fake_network_info],
@@ -923,10 +923,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('hyperv.nova.vmops.VMOps.power_off')
     def test_destroy_exception(self, mock_power_off):
         mock_instance = fake_instance.fake_instance_obj(self.context)
-        self._vmops._vmutils.destroy_vm.side_effect = vmutils.HyperVException
+        self._vmops._vmutils.destroy_vm.side_effect = (
+            os_win_exc.HyperVException)
         self._vmops._vmutils.vm_exists.return_value = True
 
-        self.assertRaises(vmutils.HyperVException,
+        self.assertRaises(os_win_exc.HyperVException,
                           self._vmops.destroy, mock_instance)
 
     def test_reboot_hard(self):
@@ -949,10 +950,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_reboot_soft_exception(self, mock_soft_shutdown, mock_power_on):
         mock_soft_shutdown.return_value = True
-        mock_power_on.side_effect = vmutils.HyperVException("Expected failure")
+        mock_power_on.side_effect = os_win_exc.HyperVException(
+            "Expected failure")
         instance = fake_instance.fake_instance_obj(self.context)
 
-        self.assertRaises(vmutils.HyperVException, self._vmops.reboot,
+        self.assertRaises(os_win_exc.HyperVException, self._vmops.reboot,
                           instance, {}, vmops.REBOOT_TYPE_SOFT)
 
         mock_soft_shutdown.assert_called_once_with(instance)
@@ -983,7 +985,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         instance = fake_instance.fake_instance_obj(self.context)
 
         mock_shutdown_vm = self._vmops._vmutils.soft_shutdown_vm
-        mock_shutdown_vm.side_effect = vmutils.HyperVException(
+        mock_shutdown_vm.side_effect = os_win_exc.HyperVException(
             "Expected failure.")
 
         result = self._vmops._soft_shutdown(instance, self._FAKE_TIMEOUT)
@@ -1071,8 +1073,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_power_off_unexisting_instance(self, mock_soft_shutdown):
-        mock_soft_shutdown.side_effect = (
-            exception.InstanceNotFound('fake_instance_uuid'))
+        mock_soft_shutdown.side_effect = os_win_exc.HyperVVMNotFoundException(
+            vm_name=mock.sentinel.vm_name)
         self._test_power_off(timeout=1, set_state_expected=False)
 
     @mock.patch("hyperv.nova.vmops.VMOps._set_vm_state")
@@ -1144,8 +1146,10 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     def test_set_vm_state_exception(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
-        self._vmops._vmutils.set_vm_state.side_effect = vmutils.HyperVException
-        self.assertRaises(vmutils.HyperVException, self._vmops._set_vm_state,
+        self._vmops._vmutils.set_vm_state.side_effect = (
+            os_win_exc.HyperVException)
+        self.assertRaises(os_win_exc.HyperVException,
+                          self._vmops._set_vm_state,
                           mock_instance, mock.sentinel.STATE)
 
     def test_get_vm_state(self):
@@ -1682,7 +1686,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         else:
             expected_result = image_prop_secure_boot == 'required'
         if fake_vm_gen != constants.VM_GEN_2 and expected_result:
-            self.assertRaises(vmutils.HyperVException,
+            self.assertRaises(os_win_exc.HyperVException,
                               self._vmops._requires_secure_boot,
                               mock_instance, mock_image_meta)
         else:

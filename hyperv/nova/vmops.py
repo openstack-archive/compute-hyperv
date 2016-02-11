@@ -48,7 +48,6 @@ from hyperv.nova import constants
 from hyperv.nova import imagecache
 from hyperv.nova import pathutils
 from hyperv.nova import serialconsoleops
-from hyperv.nova import utilsfactory as old_utilsfactory
 from hyperv.nova import vif as vif_utils
 from hyperv.nova import volumeops
 
@@ -129,7 +128,7 @@ class VMOps(object):
     _ROOT_DISK_CTRL_ADDR = 0
 
     def __init__(self):
-        self._vmutils = old_utilsfactory.get_vmutils()
+        self._vmutils = utilsfactory.get_vmutils()
         self._vhdutils = utilsfactory.get_vhdutils()
         self._hostutils = utilsfactory.get_hostutils()
         self._pathutils = pathutils.PathUtils()
@@ -858,7 +857,7 @@ class VMOps(object):
             context, instance, rescue_image_id=rescue_image_id)
 
         rescue_vm_gen = self.get_image_vm_generation(instance.uuid, image_meta)
-        vm_gen = self._vmutils.get_vm_gen(instance.name)
+        vm_gen = self._vmutils.get_vm_generation(instance.name)
         if rescue_vm_gen != vm_gen:
             err_msg = _('The requested rescue image requires a different VM '
                         'generation than the actual rescued instance. '
@@ -914,7 +913,7 @@ class VMOps(object):
             raise exception.InstanceNotRescuable(reason=err_msg,
                                                  instance_id=instance.uuid)
 
-        vm_gen = self._vmutils.get_vm_gen(instance.name)
+        vm_gen = self._vmutils.get_vm_generation(instance.name)
         controller_type = VM_GENERATIONS_CONTROLLER_TYPES[vm_gen]
 
         self._vmutils.detach_vm_disk(instance.name, root_vhd_path,
@@ -931,7 +930,7 @@ class VMOps(object):
         configdrive_path = self._pathutils.lookup_configdrive_path(
             instance.name)
         if configdrive_path and not self._vmutils.is_disk_attached(
-                instance.name, configdrive_path, is_physical=False):
+                configdrive_path, is_physical=False):
             self.attach_config_drive(instance, configdrive_path, vm_gen)
 
         self.power_on(instance)
@@ -947,7 +946,7 @@ class VMOps(object):
             raise exception.InterfaceAttachFailed(
                 instance_uuid=instance.uuid)
 
-        if (self._vmutils.get_vm_gen(instance.name) ==
+        if (self._vmutils.get_vm_generation(instance.name) ==
                 constants.VM_GEN_1):
             LOG.error(_LE("Cannot hot plug vNIC to a first generation "
                           "VM."))

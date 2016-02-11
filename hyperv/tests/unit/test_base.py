@@ -18,7 +18,6 @@ import mock
 from os_win import utilsfactory
 from six.moves import builtins
 
-from hyperv.nova import utilsfactory as old_utilsfactory
 from hyperv.tests import test
 
 
@@ -31,15 +30,11 @@ class HyperVBaseTestCase(test.NoDBTestCase):
                                         new=self._mock_wmi)
         platform_patcher = mock.patch('sys.platform', 'win32')
         utilsfactory_patcher = mock.patch.object(utilsfactory, '_get_class')
-        old_utilsfactory_patcher = mock.patch.object(old_utilsfactory,
-                                                     '_get_class')
 
         platform_patcher.start()
         wmi_patcher.start()
         utilsfactory_patcher.start()
-        old_utilsfactory_patcher.start()
 
         self.addCleanup(wmi_patcher.stop)
         self.addCleanup(platform_patcher.stop)
         self.addCleanup(utilsfactory_patcher.stop)
-        self.addCleanup(old_utilsfactory_patcher.stop)

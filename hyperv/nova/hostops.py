@@ -31,6 +31,7 @@ from nova.compute import vm_states
 from nova import context
 from nova import exception
 from nova import objects
+from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_serialization import jsonutils
@@ -39,7 +40,6 @@ from oslo_utils import units
 from hyperv.i18n import _, _LE, _LI
 from hyperv.nova import constants
 from hyperv.nova import pathutils
-from hyperv.nova import utilsfactory
 from hyperv.nova import vmops
 
 hyper_host_opts = [

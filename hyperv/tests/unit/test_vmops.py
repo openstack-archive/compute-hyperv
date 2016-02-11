@@ -1253,7 +1253,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_configdrive_required.return_value = True
         mock_create_root_vhd.return_value = mock.sentinel.rescue_vhd_path
         mock_get_image_vm_gen.return_value = mock_vm_gen
-        self._vmops._vmutils.get_vm_gen.return_value = mock_vm_gen
+        self._vmops._vmutils.get_vm_generation.return_value = mock_vm_gen
         self._vmops._pathutils.lookup_root_vhd_path.return_value = (
             mock.sentinel.root_vhd_path)
         mock_create_config_drive.return_value = (
@@ -1294,7 +1294,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_get_image_vm_gen.return_value = constants.VM_GEN_1
-        self._vmops._vmutils.get_vm_gen.return_value = constants.VM_GEN_1
+        self._vmops._vmutils.get_vm_generation.return_value = (
+            constants.VM_GEN_1)
         self._vmops._pathutils.lookup_root_vhd_path.return_value = None
 
         self.assertRaises(exception.InstanceNotRescuable,
@@ -1313,7 +1314,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_image_meta = {'id': mock.sentinel.rescue_image_id}
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_get_image_vm_gen.return_value = constants.VM_GEN_1
-        self._vmops._vmutils.get_vm_gen.return_value = constants.VM_GEN_2
+        self._vmops._vmutils.get_vm_generation.return_value = (
+            constants.VM_GEN_2)
 
         self.assertRaises(exception.ImageUnacceptable,
                           self._vmops.rescue_instance,
@@ -1336,7 +1338,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_vm_gen = constants.VM_GEN_2
 
-        self._vmops._vmutils.get_vm_gen.return_value = mock_vm_gen
+        self._vmops._vmutils.get_vm_generation.return_value = mock_vm_gen
         self._vmops._vmutils.is_disk_attached.return_value = False
         self._vmops._pathutils.lookup_root_vhd_path.side_effect = (
             mock.sentinel.root_vhd_path, mock.sentinel.rescue_vhd_path)
@@ -1364,8 +1366,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_delete_if_exists.assert_called_once_with(
             mock.sentinel.rescue_vhd_path)
         self._vmops._vmutils.is_disk_attached.assert_called_once_with(
-            mock_instance.name, mock.sentinel.configdrive_path,
-            is_physical=False)
+            mock.sentinel.configdrive_path, is_physical=False)
         mock_attach_configdrive.assert_called_once_with(
             mock_instance, mock.sentinel.configdrive_path, mock_vm_gen)
         mock_power_on.assert_called_once_with(mock_instance)
@@ -1470,7 +1471,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                          windows_version, vm_state):
         fake_vm = fake_instance.fake_instance_obj(self.context)
         mock_get_vm_state.return_value = vm_state
-        self._vmops._vmutils.get_vm_gen.return_value = vm_gen
+        self._vmops._vmutils.get_vm_generation.return_value = vm_gen
         fake_check_win_vers = self._vmops._hostutils.check_min_windows_version
         if windows_version == self._WIN_VERSION_6_3:
             fake_check_win_vers.return_value = False

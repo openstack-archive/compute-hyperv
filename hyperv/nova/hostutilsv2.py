@@ -41,6 +41,26 @@ class HostUtilsV2(hostutils.HostUtils):
         if sys.platform == 'win32':
             self._conn_virt = wmi.WMI(moniker='//./root/virtualization/v2')
 
+    def get_cpus_info(self):
+        # NOTE(abalutoiu): Specifying exactly the fields that we need
+        # improves the speed of the query. The LoadPercentage field which
+        # is the load capacity of each processor averaged to the last second,
+        # is time wasted because it will wait one second to get the value.
+        cpus = self._conn_cimv2.query(
+            "SELECT Architecture, Name, Manufacturer, NumberOfCores, "
+            "NumberOfLogicalProcessors FROM Win32_Processor "
+            "WHERE ProcessorType = 3")
+        cpus_list = []
+        for cpu in cpus:
+            cpu_info = {'Architecture': cpu.Architecture,
+                        'Name': cpu.Name,
+                        'Manufacturer': cpu.Manufacturer,
+                        'NumberOfCores': cpu.NumberOfCores,
+                        'NumberOfLogicalProcessors':
+                        cpu.NumberOfLogicalProcessors}
+            cpus_list.append(cpu_info)
+        return cpus_list
+
     def get_numa_nodes(self):
         numa_nodes = self._conn_virt.Msvm_NumaNode()
         nodes_info = []

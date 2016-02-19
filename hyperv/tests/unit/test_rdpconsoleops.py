@@ -25,6 +25,7 @@ from hyperv.tests.unit import test_base
 
 class RDPConsoleOpsTestCase(test_base.HyperVBaseTestCase):
 
+    @mock.patch.object(rdpconsoleops.hostops, 'api', mock.MagicMock())
     def setUp(self):
         super(RDPConsoleOpsTestCase, self).setUp()
 

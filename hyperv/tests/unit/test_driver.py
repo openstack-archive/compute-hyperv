@@ -33,6 +33,7 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
 
     FAKE_WIN_2008R2_VERSION = '6.0.0'
 
+    @mock.patch.object(driver.hostops, 'api', mock.MagicMock())
     @mock.patch.object(driver.HyperVDriver, '_check_minimum_windows_version')
     def setUp(self, mock_check_minimum_windows_version):
         super(HyperVDriverTestCase, self).setUp()

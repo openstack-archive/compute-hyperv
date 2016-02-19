@@ -42,6 +42,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
     FAKE_LOCAL_IP = '10.11.12.13'
     FAKE_TICK_COUNT = 1000000
 
+    @mock.patch.object(hostops, 'api', mock.MagicMock())
     def setUp(self):
         super(HostOpsTestCase, self).setUp()
         self._hostops = hostops.HostOps()

@@ -58,7 +58,6 @@ class HostUtilsV2TestCase(test_base.HyperVBaseTestCase):
         host_cpu = mock.MagicMock(DeviceID=self._DEVICE_ID)
         mock_get_cpu_info.return_value = [host_cpu]
         numa_node = mock.MagicMock(NodeID=self._NODE_ID)
-        numa_node.associators.return_value = [numa_memory, host_cpu]
         self._hostutils._conn_virt.Msvm_NumaNode.return_value = [
             numa_node, numa_node]
 
@@ -75,38 +74,36 @@ class HostUtilsV2TestCase(test_base.HyperVBaseTestCase):
         self.assertEqual([expected_info, expected_info], nodes_info)
 
     def test_get_numa_memory_info(self):
-        numa_memory = mock.MagicMock(
-            CreationClassName=self._hostutils._MSVM_MEMORY,
-            Primordial=True)
-        vm_memory = mock.MagicMock(
-            CreationClassName=self._hostutils._MSVM_MEMORY,
-            Primordial=False)
-
+        host_memory = mock.MagicMock()
+        host_memory.path_.return_value = 'fake_wmi_obj_path'
+        vm_memory = mock.MagicMock()
+        numa_node_assoc_path = ['fake_wmi_obj_path']
         memory_info = self._hostutils._get_numa_memory_info(
-            [numa_memory, vm_memory])
+            numa_node_assoc_path, [host_memory, vm_memory])
 
-        self.assertEqual(numa_memory, memory_info)
+        self.assertEqual(host_memory, memory_info)
 
     def test_get_numa_memory_info_not_found(self):
         other = mock.MagicMock()
-        memory_info = self._hostutils._get_numa_memory_info([other])
+        numa_node_assoc_path = []
+        memory_info = self._hostutils._get_numa_memory_info(
+            numa_node_assoc_path, [other])
 
         self.assertIsNone(memory_info)
 
     def test_get_numa_cpu_info(self):
-        host_cpu = mock.MagicMock(
-            CreationClassName=self._hostutils._MSVM_PROCESSOR,
-            Role=self._hostutils._CENTRAL_PROCESSOR)
-        vm_cpu = mock.MagicMock(
-            CreationClassName=self._hostutils._MSVM_PROCESSOR)
-
-        cpu_info = self._hostutils._get_numa_cpu_info([host_cpu, vm_cpu])
-
+        host_cpu = mock.MagicMock()
+        host_cpu.path_.return_value = 'fake_wmi_obj_path'
+        vm_cpu = mock.MagicMock()
+        vm_cpu.path_return_value = 'fake_wmi_obj_path1'
+        numa_node_proc_path = ['fake_wmi_obj_path']
+        cpu_info = self._hostutils._get_numa_cpu_info(numa_node_proc_path,
+                                                      [host_cpu, vm_cpu])
         self.assertEqual([host_cpu], cpu_info)
 
     def test_get_numa_cpu_info_not_found(self):
         other = mock.MagicMock()
-        cpu_info = self._hostutils._get_numa_cpu_info([other])
+        cpu_info = self._hostutils._get_numa_cpu_info([], [other])
 
         self.assertIsNone(cpu_info)
 

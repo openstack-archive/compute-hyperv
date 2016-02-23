@@ -423,7 +423,8 @@ class VMOps(object):
         secure_boot_enabled = self._requires_secure_boot(
             instance, image_meta, vm_gen)
         if secure_boot_enabled:
-            certificate_required = self._requires_certificate(image_meta)
+            certificate_required = self._requires_certificate(instance.uuid,
+                                                              image_meta)
             self._vmutils.enable_secure_boot(instance.name,
                                              certificate_required)
 

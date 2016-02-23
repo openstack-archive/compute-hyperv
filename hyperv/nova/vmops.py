@@ -49,6 +49,7 @@ from hyperv.nova import block_device_manager
 from hyperv.nova import constants
 from hyperv.nova import imagecache
 from hyperv.nova import pathutils
+from hyperv.nova import pdk
 from hyperv.nova import serialconsoleops
 from hyperv.nova import vif as vif_utils
 from hyperv.nova import volumeops
@@ -108,6 +109,7 @@ class VMOps(object):
         self._vif_driver_cache = {}
         self._block_device_manager = (
             block_device_manager.BlockDeviceInfoManager())
+        self._pdk = pdk.PDK()
 
     def list_instance_uuids(self):
         instance_uuids = []
@@ -273,7 +275,7 @@ class VMOps(object):
 
         try:
             with self.wait_vif_plug_events(instance, network_info):
-                self.create_instance(instance, network_info,
+                self.create_instance(context, instance, network_info,
                                      root_device, block_device_info,
                                      vm_gen, image_meta)
 
@@ -359,7 +361,7 @@ class VMOps(object):
                                                  reason=reason)
         return requires_secure_boot
 
-    def create_instance(self, instance, network_info, root_device,
+    def create_instance(self, context, instance, network_info, root_device,
                         block_device_info, vm_gen, image_meta):
         instance_name = instance.name
         instance_path = os.path.join(CONF.instances_path, instance_name)
@@ -427,6 +429,8 @@ class VMOps(object):
                                                               image_meta)
             self._vmutils.enable_secure_boot(instance.name,
                                              certificate_required)
+        self._configure_secure_vm(context, instance, image_meta,
+                                  secure_boot_enabled)
 
     def _attach_root_device(self, instance_name, root_dev_info):
         if root_dev_info['type'] == constants.VOLUME:
@@ -1024,3 +1028,106 @@ class VMOps(object):
                 if scope == 'storage_qos':
                     storage_qos_specs[key] = value
         return self._volumeops.parse_disk_qos_specs(storage_qos_specs)
+
+    def _configure_secure_vm(self, context, instance, image_meta,
+                             secure_boot_enabled):
+        """Adds and enables a vTPM, encrypting the disks.
+        Shielding option implies encryption option enabled.
+        """
+
+        requires_encryption = False
+        requires_shielded = self._feature_requested(
+            instance,
+            image_meta,
+            constants.IMAGE_PROP_VTPM_SHIELDED)
+
+        if not requires_shielded:
+            requires_encryption = self._feature_requested(
+                instance,
+                image_meta,
+                constants.IMAGE_PROP_VTPM)
+
+        if not (requires_shielded or requires_encryption):
+            return
+
+        self._check_vtpm_requirements(instance, image_meta,
+                                      secure_boot_enabled)
+
+        with self._pathutils.temporary_file('.fsk') as fsk_filepath, \
+                self._pathutils.temporary_file('.pdk') as pdk_filepath:
+            self._create_fsk(instance, fsk_filepath)
+
+            self._pdk.create_pdk(context, instance, image_meta, pdk_filepath)
+            self._vmutils.add_vtpm(instance.name, pdk_filepath,
+                                   shielded=requires_shielded)
+            LOG.info(_LI("VTPM was added."), instance=instance)
+            self._vmutils.provision_vm(instance.name, fsk_filepath,
+                                       pdk_filepath)
+
+    def _feature_requested(self, instance, image_meta, image_prop):
+        image_props = image_meta['properties']
+        image_prop_option = image_props.get(image_prop)
+
+        feature_requested = image_prop_option == constants.REQUIRED
+
+        return feature_requested
+
+    def _check_vtpm_requirements(self, instance, image_meta,
+                                 secure_boot_enabled):
+        if not secure_boot_enabled:
+            reason = _("Adding a vtpm requires secure boot to be enabled.")
+            raise exception.InstanceUnacceptable(
+                instance_id=instance.uuid, reason=reason)
+
+        os_type = image_meta.get('properties', {}).get('os_type')
+        if os_type not in os_win_const.VTPM_SUPPORTED_OS:
+            reason = _('vTPM is not supported for this OS type: %(os_type)s. '
+                       ' Supported OS types: %(supported_os_types)s') % {
+                       'os_type': os_type,
+                       'supported_os_types':
+                       ','.join(os for os in os_win_const.VTPM_SUPPORTED_OS)}
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
+
+        if not self._hostutils.is_host_guarded():
+            reason = _('This host in not guarded.')
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
+
+    def _create_fsk(self, instance, fsk_filepath):
+        """Writes in the fsk file all the substitution strings and their
+        values which will populate the unattended file used when
+        creating the pdk.
+        """
+
+        fsk_pairs = self._get_fsk_data(instance)
+        self._vmutils.populate_fsk(fsk_filepath, fsk_pairs)
+
+    def _get_fsk_data(self, instance):
+        """The unattended file may contain substitution strings. Those with
+        their coresponding values are passed as metadata and will be added
+        to a fsk file.
+        """
+
+        fsk_pairs = {'@@%s@@' % key.split('fsk:')[1]: value
+                     for key, value in instance.metadata.items()
+                     if key.startswith('fsk:')}
+
+        fsk_computername_key = '@@%s@@' % os_win_const.FSK_COMPUTERNAME
+        fsk_computer_name = fsk_pairs.get(fsk_computername_key)
+
+        if instance.hostname != fsk_computer_name and fsk_computer_name:
+            err_msg = _("The FSK mappings contain ComputerName "
+                        "%(fsk_computer_name)s, which does not match the "
+                        "instance name %(instance_name)s.") % {
+                        'fsk_computer_name': fsk_computer_name,
+                        'instance_name': instance.hostname}
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=err_msg)
+
+        # In case of not specifying the computer name as a FSK metadata value,
+        # it will be added by default in order to avoid a reboot when
+        # configuring the instance hostname
+        if not fsk_computer_name:
+            fsk_pairs[fsk_computername_key] = instance.hostname
+        return fsk_pairs

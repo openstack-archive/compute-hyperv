@@ -585,6 +585,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 mock_requires_secure_boot.assert_called_once_with(
                     mock_instance, mock.sentinel.image_meta, vm_gen)
                 mock_requires_certificate.assert_called_once_with(
+                    mock_instance.uuid,
                     mock.sentinel.image_meta)
                 enable_secure_boot = self._vmops._vmutils.enable_secure_boot
                 enable_secure_boot.assert_called_once_with(

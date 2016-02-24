@@ -20,7 +20,6 @@ from nova.i18n import _
 from nova.network import model as network_model
 from os_win import utilsfactory
 from oslo_config import cfg
-from oslo_log import log as logging
 
 from hyperv.nova import ovsutils
 
@@ -35,8 +34,6 @@ hyperv_opts = [
 CONF = cfg.CONF
 CONF.register_opts(hyperv_opts, 'hyperv')
 CONF.import_opt('network_api_class', 'nova.network')
-
-LOG = logging.getLogger(__name__)
 
 
 class HyperVBaseVIFDriver(object):

@@ -18,6 +18,7 @@ Unit tests for the Hyper-V Driver.
 """
 
 import platform
+import sys
 
 import mock
 from nova import exception
@@ -90,6 +91,25 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             os_win_exc.HyperVVMNotFoundException(vm_name='foofoo'))
         self.assertRaises(exception.InstanceNotFound,
                           self.driver.get_info, mock.sentinel.instance)
+
+    def test_assert_original_traceback_maintained(self):
+        def bar(self):
+            foo = "foofoo"
+            raise os_win_exc.HyperVVMNotFoundException(vm_name=foo)
+
+        self.driver._vmops.get_info.side_effect = bar
+        try:
+            self.driver.get_info(mock.sentinel.instance)
+            self.fail("Test expected exception, but it was not raised.")
+        except exception.InstanceNotFound:
+            # exception has been raised as expected.
+            _, _, trace = sys.exc_info()
+            while trace.tb_next:
+                # iterate until the original exception source, bar.
+                trace = trace.tb_next
+
+            # original frame will contain the 'foo' variable.
+            self.assertEqual('foofoo', trace.tb_frame.f_locals['foo'])
 
     def test_need_legacy_block_device_info(self):
         self.assertFalse(self.driver.need_legacy_block_device_info)

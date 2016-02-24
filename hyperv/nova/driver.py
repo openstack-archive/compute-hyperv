@@ -66,7 +66,7 @@ def convert_exceptions(function, exception_map):
             # the second argument in six.reraise.
             # The original message will be maintained by passing the original
             # exception.
-            exc = raised_exception(exc_info[1])
+            exc = raised_exception(six.text_type(exc_info[1]))
             six.reraise(raised_exception, exc, exc_info[2])
     return wrapper
 

@@ -30,6 +30,7 @@ from nova import objects
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import hardware
+from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_concurrency import processutils
@@ -129,6 +130,7 @@ class VMOps(object):
 
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
+        self._metricsutils = utilsfactory.get_metricsutils()
         self._vhdutils = utilsfactory.get_vhdutils()
         self._hostutils = utilsfactory.get_hostutils()
         self._pathutils = pathutils.PathUtils()
@@ -419,7 +421,7 @@ class VMOps(object):
             vif_driver.plug(instance, vif)
 
         if CONF.hyperv.enable_instance_metrics_collection:
-            self._vmutils.enable_vm_metrics_collection(instance_name)
+            self._metricsutils.enable_vm_metrics_collection(instance_name)
         secure_boot_enabled = self._requires_secure_boot(
             instance, image_meta, vm_gen)
         if secure_boot_enabled:
@@ -658,7 +660,7 @@ class VMOps(object):
                 return
 
         self._set_vm_state(instance,
-                           constants.HYPERV_VM_STATE_REBOOT)
+                           os_win_const.HYPERV_VM_STATE_REBOOT)
 
     def _soft_shutdown(self, instance,
                        timeout=CONF.hyperv.wait_soft_reboot_seconds,
@@ -700,25 +702,25 @@ class VMOps(object):
         """Pause VM instance."""
         LOG.debug("Pause instance", instance=instance)
         self._set_vm_state(instance,
-                           constants.HYPERV_VM_STATE_PAUSED)
+                           os_win_const.HYPERV_VM_STATE_PAUSED)
 
     def unpause(self, instance):
         """Unpause paused VM instance."""
         LOG.debug("Unpause instance", instance=instance)
         self._set_vm_state(instance,
-                           constants.HYPERV_VM_STATE_ENABLED)
+                           os_win_const.HYPERV_VM_STATE_ENABLED)
 
     def suspend(self, instance):
         """Suspend the specified instance."""
         LOG.debug("Suspend instance", instance=instance)
         self._set_vm_state(instance,
-                           constants.HYPERV_VM_STATE_SUSPENDED)
+                           os_win_const.HYPERV_VM_STATE_SUSPENDED)
 
     def resume(self, instance):
         """Resume the suspended VM instance."""
         LOG.debug("Resume instance", instance=instance)
         self._set_vm_state(instance,
-                           constants.HYPERV_VM_STATE_ENABLED)
+                           os_win_const.HYPERV_VM_STATE_ENABLED)
 
     def power_off(self, instance, timeout=0, retry_interval=0):
         """Power off the specified instance."""
@@ -738,7 +740,7 @@ class VMOps(object):
                 return
 
             self._set_vm_state(instance,
-                               constants.HYPERV_VM_STATE_DISABLED)
+                               os_win_const.HYPERV_VM_STATE_DISABLED)
         except os_win_exc.HyperVVMNotFoundException:
             # The manager can call the stop API after receiving instance
             # power off events. If this is triggered when the instance
@@ -755,7 +757,7 @@ class VMOps(object):
             self._volumeops.fix_instance_volume_disk_paths(instance.name,
                                                            block_device_info)
 
-        self._set_vm_state(instance, constants.HYPERV_VM_STATE_ENABLED)
+        self._set_vm_state(instance, os_win_const.HYPERV_VM_STATE_ENABLED)
         if network_info:
             for vif in network_info:
                 vif_driver = self._get_vif_driver(vif.get('type'))
@@ -788,7 +790,7 @@ class VMOps(object):
                     False otherwise.
         """
 
-        desired_vm_states = [constants.HYPERV_VM_STATE_DISABLED]
+        desired_vm_states = [os_win_const.HYPERV_VM_STATE_DISABLED]
 
         def _check_vm_status(instance_name):
             if self._get_vm_state(instance_name) in desired_vm_states:
@@ -937,7 +939,7 @@ class VMOps(object):
 
     def _check_hotplug_is_available(self, instance):
         if (self._get_vm_state(instance.name) ==
-                constants.HYPERV_VM_STATE_DISABLED):
+                os_win_const.HYPERV_VM_STATE_DISABLED):
             return False
 
         if not self._hostutils.check_min_windows_version(6, 4):

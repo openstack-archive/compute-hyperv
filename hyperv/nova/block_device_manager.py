@@ -22,6 +22,7 @@ from nova import block_device
 from nova import exception
 from nova.virt import configdrive
 from nova.virt import driver
+from os_win import constants as os_win_const
 
 from hyperv.i18n import _
 from hyperv.nova import constants
@@ -48,8 +49,9 @@ class BlockDeviceInfoManager(object):
         # we have 2 IDE controllers, for a total of 4 slots
         free_slots_by_device_type = {
             constants.CTRL_TYPE_IDE: [
-                constants.IDE_CONTROLLER_SLOTS_NUMBER] * 2,
-            constants.CTRL_TYPE_SCSI: [constants.SCSI_CONTROLLER_SLOTS_NUMBER]
+                os_win_const.IDE_CONTROLLER_SLOTS_NUMBER] * 2,
+            constants.CTRL_TYPE_SCSI: [
+                os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER]
             }
         if configdrive.required_by(instance):
             if vm_gen == constants.VM_GEN_1:
@@ -102,9 +104,9 @@ class BlockDeviceInfoManager(object):
         block_device_info['root_disk'] = root_disk
 
     def _get_available_controller_slot(self, controller_type, slot_map):
-        max_slots = (constants.IDE_CONTROLLER_SLOTS_NUMBER if
+        max_slots = (os_win_const.IDE_CONTROLLER_SLOTS_NUMBER if
                      controller_type == constants.CTRL_TYPE_IDE else
-                     constants.SCSI_CONTROLLER_SLOTS_NUMBER)
+                     os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER)
         for idx, ctrl in enumerate(slot_map[controller_type]):
             if slot_map[controller_type][idx] >= 1:
                 drive_addr = idx

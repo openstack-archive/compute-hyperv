@@ -19,7 +19,6 @@ Management class for host operations.
 import datetime
 import os
 import platform
-import six
 import time
 
 
@@ -31,6 +30,7 @@ from nova.compute import vm_states
 from nova import context
 from nova import exception
 from nova import objects
+from os_win import constants as os_win_const
 from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -87,7 +87,7 @@ class HostOps(object):
         cpu_info['topology'] = topology
 
         features = list()
-        for fkey, fname in six.iteritems(constants.PROCESSOR_FEATURE):
+        for fkey, fname in os_win_const.PROCESSOR_FEATURE.items():
             if self._hostutils.is_cpu_feature_present(fkey):
                 features.append(fname)
         cpu_info['features'] = features

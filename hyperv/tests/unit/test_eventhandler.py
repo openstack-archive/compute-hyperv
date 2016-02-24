@@ -16,10 +16,10 @@
 import eventlet
 import mock
 
+from os_win import constants
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 
-from hyperv.nova import constants
 from hyperv.nova import eventhandler
 from hyperv.tests.unit import test_base
 

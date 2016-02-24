@@ -22,6 +22,7 @@ from nova.objects import flavor as flavor_obj
 from nova.tests.unit.objects import test_flavor
 from nova.tests.unit.objects import test_virtual_interface
 from nova.virt import hardware
+from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
 from oslo_concurrency import processutils
 from oslo_config import cfg
@@ -62,6 +63,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         self._vmops = vmops.VMOps()
         self._vmops._vmutils = mock.MagicMock()
+        self._vmops._metricsutils = mock.MagicMock()
         self._vmops._vhdutils = mock.MagicMock()
         self._vmops._pathutils = mock.MagicMock()
         self._vmops._hostutils = mock.MagicMock()
@@ -579,7 +581,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 mock_instance.name, mock.sentinel.ID, mock.sentinel.ADDRESS)
             mock_vif_driver.plug.assert_called_once_with(mock_instance,
                                                          fake_network_info)
-            mock_enable = self._vmops._vmutils.enable_vm_metrics_collection
+            mock_enable = (
+                self._vmops._metricsutils.enable_vm_metrics_collection)
             if enable_instance_metrics:
                 mock_enable.assert_called_once_with(mock_instance.name)
             mock_set_qos_specs.assert_called_once_with(mock_instance)
@@ -933,19 +936,19 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     def test_reboot_hard(self):
         self._test_reboot(vmops.REBOOT_TYPE_HARD,
-                          constants.HYPERV_VM_STATE_REBOOT)
+                          os_win_const.HYPERV_VM_STATE_REBOOT)
 
     @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_reboot_soft(self, mock_soft_shutdown):
         mock_soft_shutdown.return_value = True
         self._test_reboot(vmops.REBOOT_TYPE_SOFT,
-                          constants.HYPERV_VM_STATE_ENABLED)
+                          os_win_const.HYPERV_VM_STATE_ENABLED)
 
     @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
     def test_reboot_soft_failed(self, mock_soft_shutdown):
         mock_soft_shutdown.return_value = False
         self._test_reboot(vmops.REBOOT_TYPE_SOFT,
-                          constants.HYPERV_VM_STATE_REBOOT)
+                          os_win_const.HYPERV_VM_STATE_REBOOT)
 
     @mock.patch("hyperv.nova.vmops.VMOps.power_on")
     @mock.patch("hyperv.nova.vmops.VMOps._soft_shutdown")
@@ -1029,28 +1032,28 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._vmops.pause(instance=mock_instance)
         mock_set_vm_state.assert_called_once_with(
-            mock_instance, constants.HYPERV_VM_STATE_PAUSED)
+            mock_instance, os_win_const.HYPERV_VM_STATE_PAUSED)
 
     @mock.patch('hyperv.nova.vmops.VMOps._set_vm_state')
     def test_unpause(self, mock_set_vm_state):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._vmops.unpause(instance=mock_instance)
         mock_set_vm_state.assert_called_once_with(
-            mock_instance, constants.HYPERV_VM_STATE_ENABLED)
+            mock_instance, os_win_const.HYPERV_VM_STATE_ENABLED)
 
     @mock.patch('hyperv.nova.vmops.VMOps._set_vm_state')
     def test_suspend(self, mock_set_vm_state):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._vmops.suspend(instance=mock_instance)
         mock_set_vm_state.assert_called_once_with(
-            mock_instance, constants.HYPERV_VM_STATE_SUSPENDED)
+            mock_instance, os_win_const.HYPERV_VM_STATE_SUSPENDED)
 
     @mock.patch('hyperv.nova.vmops.VMOps._set_vm_state')
     def test_resume(self, mock_set_vm_state):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._vmops.resume(instance=mock_instance)
         mock_set_vm_state.assert_called_once_with(
-            mock_instance, constants.HYPERV_VM_STATE_ENABLED)
+            mock_instance, os_win_const.HYPERV_VM_STATE_ENABLED)
 
     def _test_power_off(self, timeout, set_state_expected=True):
         instance = fake_instance.fake_instance_obj(self.context)
@@ -1062,7 +1065,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 instance.name)
             if set_state_expected:
                 mock_set_state.assert_called_once_with(
-                    instance, constants.HYPERV_VM_STATE_DISABLED)
+                    instance, os_win_const.HYPERV_VM_STATE_DISABLED)
 
     def test_power_off_hard(self):
         self._test_power_off(timeout=0)
@@ -1097,7 +1100,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops.power_on(mock_instance)
 
         mock_set_vm_state.assert_called_once_with(
-            mock_instance, constants.HYPERV_VM_STATE_ENABLED)
+            mock_instance, os_win_const.HYPERV_VM_STATE_ENABLED)
 
     @mock.patch('hyperv.nova.volumeops.VolumeOps'
                 '.fix_instance_volume_disk_paths')
@@ -1111,7 +1114,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_fix_instance_vol_paths.assert_called_once_with(
             mock_instance.name, mock.sentinel.block_device_info)
         mock_set_vm_state.assert_called_once_with(
-            mock_instance, constants.HYPERV_VM_STATE_ENABLED)
+            mock_instance, os_win_const.HYPERV_VM_STATE_ENABLED)
 
     @mock.patch.object(vmops.VMOps, '_get_vif_driver')
     def test_power_on_with_network_info(self, mock_get_vif_driver):
@@ -1137,13 +1140,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance.name, state)
 
     def test_set_vm_state_disabled(self):
-        self._test_set_vm_state(state=constants.HYPERV_VM_STATE_DISABLED)
+        self._test_set_vm_state(state=os_win_const.HYPERV_VM_STATE_DISABLED)
 
     def test_set_vm_state_enabled(self):
-        self._test_set_vm_state(state=constants.HYPERV_VM_STATE_ENABLED)
+        self._test_set_vm_state(state=os_win_const.HYPERV_VM_STATE_ENABLED)
 
     def test_set_vm_state_reboot(self):
-        self._test_set_vm_state(state=constants.HYPERV_VM_STATE_REBOOT)
+        self._test_set_vm_state(state=os_win_const.HYPERV_VM_STATE_REBOOT)
 
     def test_set_vm_state_exception(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -1154,18 +1157,18 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           mock_instance, mock.sentinel.STATE)
 
     def test_get_vm_state(self):
-        summary_info = {'EnabledState': constants.HYPERV_VM_STATE_DISABLED}
+        summary_info = {'EnabledState': os_win_const.HYPERV_VM_STATE_DISABLED}
 
         with mock.patch.object(self._vmops._vmutils,
                                'get_vm_summary_info') as mock_get_summary_info:
             mock_get_summary_info.return_value = summary_info
 
             response = self._vmops._get_vm_state(mock.sentinel.FAKE_VM_NAME)
-            self.assertEqual(response, constants.HYPERV_VM_STATE_DISABLED)
+            self.assertEqual(response, os_win_const.HYPERV_VM_STATE_DISABLED)
 
     @mock.patch.object(vmops.VMOps, '_get_vm_state')
     def test_wait_for_power_off_true(self, mock_get_state):
-        mock_get_state.return_value = constants.HYPERV_VM_STATE_DISABLED
+        mock_get_state.return_value = os_win_const.HYPERV_VM_STATE_DISABLED
         result = self._vmops._wait_for_power_off(
             mock.sentinel.FAKE_VM_NAME, vmops.SHUTDOWN_TIME_INCREMENT)
         mock_get_state.assert_called_with(mock.sentinel.FAKE_VM_NAME)
@@ -1484,7 +1487,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 self._vmops._check_hotplug_is_available, fake_vm)
         else:
             ret = self._vmops._check_hotplug_is_available(fake_vm)
-            if vm_state == constants.HYPERV_VM_STATE_DISABLED:
+            if vm_state == os_win_const.HYPERV_VM_STATE_DISABLED:
                 self.assertFalse(ret)
             else:
                 self.assertTrue(ret)
@@ -1492,22 +1495,22 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_check_if_hotplug_is_available_gen1(self):
         self._test_check_hotplug_is_available(vm_gen=constants.VM_GEN_1,
             windows_version=self._WIN_VERSION_6_4,
-            vm_state=constants.HYPERV_VM_STATE_ENABLED)
+            vm_state=os_win_const.HYPERV_VM_STATE_ENABLED)
 
     def test_check_if_hotplug_is_available_gen2(self):
         self._test_check_hotplug_is_available(vm_gen=constants.VM_GEN_2,
             windows_version=self._WIN_VERSION_6_4,
-            vm_state=constants.HYPERV_VM_STATE_ENABLED)
+            vm_state=os_win_const.HYPERV_VM_STATE_ENABLED)
 
     def test_check_if_hotplug_is_available_win_6_3(self):
         self._test_check_hotplug_is_available(vm_gen=constants.VM_GEN_2,
             windows_version=self._WIN_VERSION_6_3,
-            vm_state=constants.HYPERV_VM_STATE_ENABLED)
+            vm_state=os_win_const.HYPERV_VM_STATE_ENABLED)
 
     def test_check_if_hotplug_is_available_vm_disabled(self):
         self._test_check_hotplug_is_available(vm_gen=constants.VM_GEN_2,
             windows_version=self._WIN_VERSION_6_4,
-            vm_state=constants.HYPERV_VM_STATE_DISABLED)
+            vm_state=os_win_const.HYPERV_VM_STATE_DISABLED)
 
     @mock.patch.object(vmops.VMOps, '_get_vif_driver')
     def _test_create_and_attach_interface(self, mock_get_vif_driver, hot_plug):

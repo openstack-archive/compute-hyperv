@@ -22,12 +22,12 @@ if sys.platform == 'win32':
 
 from nova.i18n import _LW
 from nova.virt import event as virtevent
+from os_win import constants
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from hyperv.nova import constants
 from hyperv.nova import serialconsoleops
 
 LOG = logging.getLogger(__name__)

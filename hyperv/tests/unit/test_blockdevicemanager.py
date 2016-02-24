@@ -15,6 +15,7 @@
 
 import mock
 from nova import exception
+from os_win import constants as os_win_const
 
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
@@ -36,22 +37,22 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.FAKE_INSTANCE, vm_gen)
         if vm_gen == constants.VM_GEN_1:
             self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][0],
-                             constants.IDE_CONTROLLER_SLOTS_NUMBER)
+                             os_win_const.IDE_CONTROLLER_SLOTS_NUMBER)
             self.assertEqual(slot_map[constants.CTRL_TYPE_SCSI][0],
-                             constants.SCSI_CONTROLLER_SLOTS_NUMBER)
+                             os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER)
             if configdrive:
                 self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][1],
-                                 constants.IDE_CONTROLLER_SLOTS_NUMBER - 1)
+                                 os_win_const.IDE_CONTROLLER_SLOTS_NUMBER - 1)
             else:
                 self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][1],
-                                 constants.IDE_CONTROLLER_SLOTS_NUMBER)
+                                 os_win_const.IDE_CONTROLLER_SLOTS_NUMBER)
         else:
             if configdrive:
                 self.assertEqual(slot_map[constants.CTRL_TYPE_SCSI][0],
-                                 constants.SCSI_CONTROLLER_SLOTS_NUMBER - 1)
+                                 os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER - 1)
             else:
                 self.assertEqual(slot_map[constants.CTRL_TYPE_SCSI][0],
-                                 constants.SCSI_CONTROLLER_SLOTS_NUMBER)
+                                 os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER)
 
     def test_init_controller_slot_counter_gen1(self):
         self._test_init_controller_slot_counter(vm_gen=constants.VM_GEN_1)

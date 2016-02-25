@@ -125,20 +125,25 @@ class VolumeOps(object):
             return block_device.volume_in_mapping(root_device,
                                                   block_device_info)
 
-    def fix_instance_volume_disk_paths(self, instance_name, block_device_info):
-        mapping = driver.block_device_info_get_mapping(block_device_info)
+    def fix_instance_volume_disk_paths(self, instance_name,
+                                       block_device_info):
+        # Mapping containing the current disk paths for each volume.
+        actual_disk_mapping = self.get_disk_path_mapping(block_device_info)
+        if not actual_disk_mapping:
+            return
 
-        if self.ebs_root_in_block_devices(block_device_info):
-            mapping = mapping[1:]
+        # Mapping containing virtual disk resource path and the physical
+        # disk path for each volume serial number. The physical path
+        # associated with this resource may not be the right one,
+        # as physical disk paths can get swapped after host reboots.
+        vm_disk_mapping = self._vmutils.get_vm_physical_disk_mapping(
+            instance_name)
 
-        disk_address = 0
-        for vol in mapping:
-            connection_info = vol['connection_info']
-            volume_driver = self._get_volume_driver(
-                connection_info=connection_info)
-            volume_driver.fix_instance_volume_disk_path(
-                instance_name, connection_info, disk_address)
-            disk_address += 1
+        for serial, vm_disk in vm_disk_mapping.items():
+            actual_disk_path = actual_disk_mapping[serial]
+            if vm_disk['mounted_disk_path'] != actual_disk_path:
+                self._vmutils.set_disk_host_res(vm_disk['resource_path'],
+                                                actual_disk_path)
 
     def get_volume_connector(self, instance):
         if not self._initiator:
@@ -195,6 +200,17 @@ class VolumeOps(object):
         # Hyper-v uses normalized IOPS (8 KB increments)
         # as IOPS allocation units.
         return (no_bytes + self._IOPS_BASE_SIZE - 1) // self._IOPS_BASE_SIZE
+
+    def get_disk_path_mapping(self, block_device_info):
+        block_mapping = driver.block_device_info_get_mapping(block_device_info)
+        disk_path_mapping = {}
+        for vol in block_mapping:
+            connection_info = vol['connection_info']
+            disk_serial = connection_info['serial']
+
+            disk_path = self.get_mounted_disk_path_from_volume(connection_info)
+            disk_path_mapping[disk_serial] = disk_path
+        return disk_path_mapping
 
     def _group_block_devices_by_type(self, block_device_mapping):
         block_devices = collections.defaultdict(list)
@@ -379,18 +395,6 @@ class ISCSIVolumeDriver(object):
     def get_target_from_disk_path(self, physical_drive_path):
         return self._volutils.get_target_from_disk_path(physical_drive_path)
 
-    def fix_instance_volume_disk_path(self, instance_name, connection_info,
-                                      disk_address):
-        data = connection_info['data']
-        target_lun = data['target_lun']
-        target_iqn = data['target_iqn']
-
-        mounted_disk_path = self._get_mounted_disk_from_lun(
-            target_iqn, target_lun, True)
-        ctrller_path = self._vmutils.get_vm_scsi_controller(instance_name)
-        self._vmutils.set_disk_host_resource(
-            instance_name, ctrller_path, disk_address, mounted_disk_path)
-
     def get_target_lun_count(self, target_iqn):
         return self._volutils.get_target_lun_count(target_iqn)
 
@@ -503,10 +507,6 @@ class SMBFSVolumeDriver(object):
         password = match[0] if match else None
 
         return username, password
-
-    def fix_instance_volume_disk_path(self, instance_name, connection_info,
-                                      disk_address):
-        self.ensure_share_mounted(connection_info)
 
     def initialize_volume_connection(self, connection_info):
         self.ensure_share_mounted(connection_info)

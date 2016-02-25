@@ -79,8 +79,8 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('hyperv.nova.volumeops.VolumeOps.get_disk_path_mapping')
     @mock.patch('hyperv.nova.imagecache.ImageCache.get_cached_image')
     @mock.patch('hyperv.nova.volumeops.VolumeOps'
-                '.initialize_volumes_connection')
-    def _test_pre_live_migration(self, mock_initialize_connection,
+                '.connect_volumes')
+    def _test_pre_live_migration(self, mock_connect_volumes,
                                  mock_get_cached_image,
                                  mock_get_disk_path_mapping,
                                  phys_disks_attached=True):
@@ -105,7 +105,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.BLOCK_INFO)
         mock_get_cached_image.assert_called_once_with(self.context,
                                                       mock_instance)
-        mock_initialize_connection.assert_called_once_with(
+        mock_connect_volumes.assert_called_once_with(
             mock.sentinel.BLOCK_INFO)
         if phys_disks_attached:
             livemigrutils = self._livemigrops._livemigrutils

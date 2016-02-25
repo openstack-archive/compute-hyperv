@@ -371,7 +371,7 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
                                    fake_eph2],
                     'block_device_mapping': [fake_bdm]}
 
-        self._bdman._volops.get_mounted_disk_path_from_volume = (
+        self._bdman._volops.get_disk_resource_path = (
             mock.MagicMock(return_value=fake_bdm['connection_info']))
 
         expected_res = [mock.sentinel.FAKE_ROOT_PATH,

@@ -205,6 +205,6 @@ class BlockDeviceInfoManager(object):
 
         self._sort_by_boot_order(boot_order)
 
-        return [self._volops.get_mounted_disk_path_from_volume(
+        return [self._volops.get_disk_resource_path(
                 boot_dev['connection_info']) if boot_dev.get('connection_info')
                 else boot_dev['path'] for boot_dev in boot_order]

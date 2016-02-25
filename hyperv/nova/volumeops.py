@@ -294,6 +294,7 @@ class ISCSIVolumeDriver(object):
 
             mounted_disk_path = self.get_mounted_disk_path_from_volume(
                 connection_info)
+            serial = connection_info['serial']
 
             if disk_bus == constants.CTRL_TYPE_IDE:
                 # Find the IDE controller for the vm.
@@ -310,7 +311,8 @@ class ISCSIVolumeDriver(object):
             self._vmutils.attach_volume_to_controller(instance_name,
                                                       ctrller_path,
                                                       slot,
-                                                      mounted_disk_path)
+                                                      mounted_disk_path,
+                                                      serial=serial)
         except Exception:
             with excutils.save_and_reraise_exception():
                 LOG.error(_LE('Unable to attach volume to instance %s'),

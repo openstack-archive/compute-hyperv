@@ -19,12 +19,9 @@ import time
 from nova import exception
 from os_win.utils import pathutils
 from oslo_config import cfg
-from oslo_log import log as logging
 
 from hyperv.i18n import _
 from hyperv.nova import constants
-
-LOG = logging.getLogger(__name__)
 
 hyperv_opts = [
     cfg.StrOpt('instances_path_share',

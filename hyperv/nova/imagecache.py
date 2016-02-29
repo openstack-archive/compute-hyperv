@@ -18,12 +18,12 @@ Image caching and management.
 import os
 import re
 
+import nova.conf
 from nova import exception
 from nova import utils
 from nova.virt import imagecache
 from nova.virt import images
 from os_win import utilsfactory
-from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
@@ -34,7 +34,7 @@ from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
 
-CONF = cfg.CONF
+CONF = nova.conf.CONF
 CONF.import_opt('use_cow_images', 'nova.virt.driver')
 CONF.import_opt('instances_path', 'nova.compute.manager')
 CONF.import_opt('remove_unused_original_minimum_age_seconds',

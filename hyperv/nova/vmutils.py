@@ -816,7 +816,7 @@ class VMUtils(object):
     def get_active_instances(self):
         """Return the names of all the active instances known to Hyper-V."""
         vm_names = self.list_instances()
-        vms = [self._lookup_vm(vm_name) for vm_name in vm_names]
+        vms = [self._lookup_vm(vm_name, as_vssd=False) for vm_name in vm_names]
         active_vm_names = [v.ElementName for v in vms
             if v.EnabledState == constants.HYPERV_VM_STATE_ENABLED]
 

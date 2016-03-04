@@ -198,14 +198,14 @@ class VMUtils(object):
                              'UpTime': up_time}
         return summary_info_dict
 
-    def _lookup_vm_check(self, vm_name):
+    def _lookup_vm_check(self, vm_name, as_vssd=False):
 
         vm = self._lookup_vm(vm_name)
         if not vm:
             raise exception.InstanceNotFound(_('VM not found: %s') % vm_name)
         return vm
 
-    def _lookup_vm(self, vm_name):
+    def _lookup_vm(self, vm_name, as_vssd=False):
         vms = self._conn.Msvm_ComputerSystem(ElementName=vm_name)
         n = len(vms)
         if n == 0:
@@ -816,7 +816,7 @@ class VMUtils(object):
     def get_active_instances(self):
         """Return the names of all the active instances known to Hyper-V."""
         vm_names = self.list_instances()
-        vms = [self._lookup_vm(vm_name) for vm_name in vm_names]
+        vms = [self._lookup_vm(vm_name, as_vssd=False) for vm_name in vm_names]
         active_vm_names = [v.ElementName for v in vms
             if v.EnabledState == constants.HYPERV_VM_STATE_ENABLED]
 

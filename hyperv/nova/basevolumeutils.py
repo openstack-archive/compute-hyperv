@@ -67,7 +67,7 @@ class BaseVolumeUtils(object):
                    "iSCSI\\Discovery")
         try:
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keypath, 0,
-                                 winreg.KEY_ALL_ACCESS)
+                                 (_winreg.KEY_WOW64_64KEY +_winreg.KEY_ALL_ACCESS))
             temp = winreg.QueryValueEx(key, 'DefaultInitiatorName')
             initiator_name = str(temp[0])
             winreg.CloseKey(key)

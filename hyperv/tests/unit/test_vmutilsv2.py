@@ -210,21 +210,31 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
     @mock.patch.object(vmutilsv2, 'wmi', create=True)
     @mock.patch.object(vmutilsv2.VMUtilsV2, 'check_ret_val')
     def test_take_vm_snapshot(self, mock_check_ret_val, mock_wmi):
-        self._lookup_vm()
+        mock_vm = self._lookup_vm()
 
         mock_svc = self._get_snapshot_service()
         mock_svc.CreateSnapshot.return_value = (self._FAKE_JOB_PATH,
                                                 mock.MagicMock(),
                                                 self._FAKE_RET_VAL)
+        mock_snp_setting_data = mock.MagicMock()
+        self._vmutils._conn.query.return_value = [
+            mock.Mock(Dependent=mock_snp_setting_data)]
 
-        self._vmutils.take_vm_snapshot(self._FAKE_VM_NAME)
+        returned_snp_path = self._vmutils.take_vm_snapshot(self._FAKE_VM_NAME)
 
         mock_svc.CreateSnapshot.assert_called_with(
             AffectedSystem=self._FAKE_VM_PATH,
             SnapshotType=self._vmutils._SNAPSHOT_FULL)
-
+        expected_query = (
+            "SELECT * FROM %(class_name)s "
+            "WHERE Antecedent = '%(vm_path)s'"
+            % {'class_name': self._vmutils._MOST_CURRENT_SNAPSHOT_CLASS,
+               'vm_path': mock_vm.path_.return_value})
+        self._vmutils._conn.query.assert_called_once_with(expected_query)
         mock_check_ret_val.assert_called_once_with(self._FAKE_RET_VAL,
                                                    self._FAKE_JOB_PATH)
+        expected_snp_path = mock_snp_setting_data.path_.return_value
+        self.assertEqual(expected_snp_path, returned_snp_path)
 
     @mock.patch.object(vmutilsv2.VMUtilsV2, 'get_free_controller_slot')
     @mock.patch.object(vmutilsv2.VMUtilsV2, '_get_vm_scsi_controller')
@@ -751,24 +761,24 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
         mock_job2 = mock.MagicMock(Cancellable=True)
         mock_job3 = mock.MagicMock(Cancellable=True)
 
-        self._vmutils._get_wmi_obj = mock.MagicMock(
-            side_effect=[mock_job1, mock_job2, mock_job3])
-
         mock_job1.JobState = 2
         mock_job2.JobState = 3
         mock_job3.JobState = constants.JOB_STATE_KILLED
 
-        mock_affecting_job = mock.Mock(AffectingElement=self._FAKE_VM_PATH)
+        mock_jobs_affecting_vm = [
+            mock.Mock(AffectingElement=x) for x in [
+                mock_job1, mock_job2, mock_job3]]
 
-        mock_jobs_affecting_vm = [mock_affecting_job] * 3
-
-        self._vmutils._conn.Msvm_AffectedJobElement.return_value = (
-            mock_jobs_affecting_vm)
+        self._vmutils._conn.query.return_value = mock_jobs_affecting_vm
 
         self._vmutils.stop_vm_jobs(mock.sentinel.FAKE_VM_NAME)
 
-        self._vmutils._conn.Msvm_AffectedJobElement.assert_called_once_with(
-            AffectedElement=mock_vm.path_.return_value)
+        expected_query = (
+            "SELECT * FROM %(class_name)s "
+            "WHERE AffectedElement = '%(vm_path)s'"
+            % {'class_name': self._vmutils._AFFECTED_JOB_ELEMENT_CLASS,
+               'vm_path': mock_vm.path_.return_value})
+        self._vmutils._conn.query.assert_called_once_with(expected_query)
         mock_job1.RequestStateChange.assert_called_once_with(
             self._vmutils._KILL_JOB_STATE_CHANGE_REQUEST)
         mock_job2.RequestStateChange.assert_called_once_with(
@@ -795,23 +805,27 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
                                   mock_is_drive_physical):
         mock_is_drive_physical.return_value = True
         mock_drive = mock.MagicMock()
-        mock_logical_identity = mock.MagicMock()
+        mock_same_element = mock.MagicMock()
+        mock_logical_identity = mock.Mock(SameElement=mock_same_element)
 
         mock_rasd_path = mock_drive.path_.return_value
-        mock_logical_identity.SystemElement.upper.return_value = (
-            mock_rasd_path.upper.return_value)
         mock_logical_identities = [mock_logical_identity]
-        self._vmutils._conn.Msvm_LogicalIdentity.return_value = (
-            mock_logical_identities)
+        self._vmutils._conn.query.return_value = mock_logical_identities
         mock_get_disk_res_from_path.return_value = mock_drive
 
         ret = self._vmutils._drive_to_boot_source(mock.sentinel.drive_path)
 
+        expected_query = (
+            "SELECT * FROM %(class_name)s "
+            "WHERE SystemElement = '%(rasd_path)s'"
+            % {'class_name': self._vmutils._LOGICAL_IDENTITY_CLASS,
+               'rasd_path': mock_rasd_path})
+        self._vmutils._conn.query.assert_called_once_with(expected_query)
         mock_is_drive_physical.assert_called_once_with(
             mock.sentinel.drive_path)
         mock_get_disk_res_from_path.assert_called_once_with(
             mock.sentinel.drive_path, is_physical=True)
-        expected_bssd_path = mock_logical_identity.SameElement
+        expected_bssd_path = mock_same_element.path_.return_value
         self.assertEqual(expected_bssd_path, ret)
 
     @mock.patch.object(vmutilsv2.VMUtilsV2, '_set_boot_order')

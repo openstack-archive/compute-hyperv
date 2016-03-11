@@ -38,7 +38,7 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(serialconsolehandler, 'SerialConsoleHandler')
     @mock.patch.object(serialconsoleops.SerialConsoleOps,
-                       '_stop_console_handler')
+                       'stop_console_handler_unsync')
     def _test_start_console_handler(self, mock_stop_handler,
                                     mock_console_handler,
                                     raise_exception=False):

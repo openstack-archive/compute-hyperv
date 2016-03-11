@@ -52,7 +52,7 @@ class SerialConsoleOps(object):
     @instance_synchronized
     def start_console_handler(self, instance_name):
         # Cleanup existing workers.
-        self._stop_console_handler(instance_name)
+        self.stop_console_handler_unsync(instance_name)
         handler = None
 
         try:
@@ -70,9 +70,9 @@ class SerialConsoleOps(object):
 
     @instance_synchronized
     def stop_console_handler(self, instance_name):
-        self._stop_console_handler(instance_name)
+        self.stop_console_handler_unsync(instance_name)
 
-    def _stop_console_handler(self, instance_name):
+    def stop_console_handler_unsync(self, instance_name):
         handler = _console_handlers.get(instance_name)
         if handler:
             LOG.info(_LI("Stopping instance %(instance_name)s "

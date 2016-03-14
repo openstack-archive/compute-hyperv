@@ -58,6 +58,8 @@ class VMUtilsV2(vmutils.VMUtils):
         'Msvm_Synthetic3DDisplayControllerSettingData')
 
     _LOGICAL_IDENTITY_CLASS = 'Msvm_LogicalIdentity'
+    _AFFECTED_JOB_ELEMENT_CLASS = 'Msvm_AffectedJobElement'
+    _MOST_CURRENT_SNAPSHOT_CLASS = 'Msvm_MostCurrentSnapshotInBranch'
 
     _VIRTUAL_SYSTEM_TYPE_REALIZED = 'Microsoft:Hyper-V:System:Realized'
     _VIRTUAL_SYSTEM_SUBTYPE_GEN1 = 'Microsoft:Hyper-V:SubType:1'
@@ -455,10 +457,19 @@ class VMUtilsV2(vmutils.VMUtils):
             SnapshotType=self._SNAPSHOT_FULL)
         self.check_ret_val(ret_val, job_path)
 
-        snp_setting_data_path = self._conn.Msvm_MostCurrentSnapshotInBranch(
-            Antecedent=vm.path_())[0].Dependent
+        # The WMI module does not handle building queries properly if the
+        # path is passed directly as parameter in the case of association
+        # classses. The query string has to be built manually to maintain
+        # the compatibility with the WMI module.
+        snp_setting_data_query = (
+            "SELECT * FROM %(class_name)s "
+            "WHERE Antecedent = '%(vm_path)s'"
+            % {'class_name': self._MOST_CURRENT_SNAPSHOT_CLASS,
+               'vm_path': vm.path_()})
+        snp_setting_data = self._conn.query(
+            snp_setting_data_query)[0].Dependent
 
-        return snp_setting_data_path
+        return snp_setting_data.path_()
 
     def remove_vm_snapshot(self, snapshot_path):
         vs_snap_svc = self._conn.Msvm_VirtualSystemSnapshotService()[0]
@@ -621,11 +632,14 @@ class VMUtilsV2(vmutils.VMUtils):
 
     def stop_vm_jobs(self, vm_name):
         vm = self._lookup_vm_check(vm_name, as_vssd=False)
-        jobs_affecting_vm = self._conn.Msvm_AffectedJobElement(
-            AffectedElement=vm.path_())
+        jobs_query = ("SELECT * FROM %(class_name)s "
+                      "WHERE AffectedElement = '%(vm_path)s'"
+                      % {'class_name': self._AFFECTED_JOB_ELEMENT_CLASS,
+                         'vm_path': vm.path_()})
+        jobs_affecting_vm = self._conn.query(jobs_query)
         vm_jobs = []
         for job in jobs_affecting_vm:
-            vm_jobs.append(self._get_wmi_obj(job.AffectingElement))
+            vm_jobs.append(job.AffectingElement)
 
         for job in vm_jobs:
             if job and job.Cancellable and not self._is_job_completed(job):
@@ -646,10 +660,13 @@ class VMUtilsV2(vmutils.VMUtils):
             drive_path, is_physical=is_physical)
 
         rasd_path = drive.path_() if is_physical else drive.Parent
-        bssd_path = self._conn.Msvm_LogicalIdentity(
-            SystemElement=rasd_path)[0].SameElement
+        bssd_query = ("SELECT * FROM %(class_name)s "
+                      "WHERE SystemElement = '%(rasd_path)s'"
+                      % {'class_name': self._LOGICAL_IDENTITY_CLASS,
+                         'rasd_path': rasd_path})
+        bssd = self._conn.query(bssd_query)[0].SameElement
 
-        return bssd_path
+        return bssd.path_()
 
     def set_boot_order(self, vm_name, device_boot_order):
         if self.get_vm_gen(vm_name) == constants.VM_GEN_1:

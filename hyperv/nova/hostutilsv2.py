@@ -75,16 +75,16 @@ class HostUtilsV2(hostutils.HostUtils):
             numa_assoc_query = ("SELECT * FROM Msvm_HostedDependency "
                                 "WHERE Antecedent = '%s'" % node.path_())
             numa_assoc = self._conn_virt.query(numa_assoc_query)
-            numa_node_assoc_paths = [item.Dependent for item in numa_assoc]
+            numa_node_assoc = [item.Dependent for item in numa_assoc]
 
-            memory_info = self._get_numa_memory_info(numa_node_assoc_paths,
+            memory_info = self._get_numa_memory_info(numa_node_assoc,
                                                      system_memory)
             if not memory_info:
                 LOG.warning(_LW("Could not find memory information for NUMA "
                                 "node. Skipping node measurements."))
                 continue
 
-            cpu_info = self._get_numa_cpu_info(numa_node_assoc_paths,
+            cpu_info = self._get_numa_cpu_info(numa_node_assoc,
                                                processors)
             if not cpu_info:
                 LOG.warning(_LW("Could not find CPU information for NUMA "
@@ -109,18 +109,18 @@ class HostUtilsV2(hostutils.HostUtils):
 
         return nodes_info
 
-    def _get_numa_memory_info(self, numa_node_assoc_paths, system_memory):
+    def _get_numa_memory_info(self, numa_node_assoc, system_memory):
         memory_info = []
-        paths = [x.upper() for x in numa_node_assoc_paths]
+        paths = [x.path_().upper() for x in numa_node_assoc]
         for memory in system_memory:
             if memory.path_().upper() in paths:
                 memory_info.append(memory)
         if memory_info:
             return memory_info[0]
 
-    def _get_numa_cpu_info(self, numa_node_assoc_paths, processors):
+    def _get_numa_cpu_info(self, numa_node_assoc, processors):
         cpu_info = []
-        paths = [x.upper() for x in numa_node_assoc_paths]
+        paths = [x.path_().upper() for x in numa_node_assoc]
         for proc in processors:
             if proc.path_().upper() in paths:
                 cpu_info.append(proc)

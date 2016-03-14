@@ -22,6 +22,56 @@ from hyperv.nova import vmutils
 from hyperv.tests import test
 
 
+class RetryDecoratorTestCase(test.NoDBTestCase):
+
+    def _get_fake_func_with_retry_decorator(self, side_effect,
+                                            *args, **kwargs):
+        func_side_effect = mock.Mock(side_effect=side_effect)
+
+        @vmutils.retry_decorator(*args, **kwargs)
+        def fake_func(*_args, **_kwargs):
+            return func_side_effect(*_args, **_kwargs)
+
+        return fake_func, func_side_effect
+
+    @mock.patch('time.sleep')
+    def test_retry_decorator(self, mock_sleep):
+        max_retry_count = 5
+        max_sleep_time = 4
+
+        raised_exc = vmutils.HyperVException(message='fake_exc')
+        side_effect = [raised_exc] * max_retry_count
+        side_effect.append(mock.sentinel.ret_val)
+
+        fake_func = self._get_fake_func_with_retry_decorator(
+            exceptions=vmutils.HyperVException,
+            max_retry_count=max_retry_count,
+            max_sleep_time=max_sleep_time,
+            side_effect=side_effect)[0]
+
+        ret_val = fake_func()
+        self.assertEqual(mock.sentinel.ret_val, ret_val)
+        mock_sleep.assert_has_calls([mock.call(sleep_time)
+                                     for sleep_time in [1, 2, 3, 4, 4]])
+
+    @mock.patch('time.sleep')
+    def test_retry_decorator_unexpected_exc(self, mock_sleep):
+        expected_exceptions = (IOError, AttributeError)
+        raised_exc = vmutils.HyperVException(message='fake_exc')
+        fake_func, fake_func_side_effect = (
+            self._get_fake_func_with_retry_decorator(
+                exceptions=expected_exceptions,
+                side_effect=raised_exc))
+
+        self.assertRaises(vmutils.HyperVException,
+                          fake_func, mock.sentinel.arg,
+                          fake_kwarg=mock.sentinel.kwarg)
+
+        self.assertFalse(mock_sleep.called)
+        fake_func_side_effect.assert_called_once_with(
+            mock.sentinel.arg, fake_kwarg=mock.sentinel.kwarg)
+
+
 class VMUtilsTestCase(test.NoDBTestCase):
     """Unit tests for the Hyper-V VMUtils class."""
 
@@ -549,7 +599,7 @@ class VMUtilsTestCase(test.NoDBTestCase):
         self._check_modify_virt_resource_max_retries(side_effect=side_effect,
                                                      num_calls=5)
 
-    @mock.patch('eventlet.greenthread.sleep')
+    @mock.patch('time.sleep')
     def _check_modify_virt_resource_max_retries(
             self, mock_sleep, side_effect, num_calls=1, expected_fail=False):
         mock_svc = self._vmutils._vs_man_svc

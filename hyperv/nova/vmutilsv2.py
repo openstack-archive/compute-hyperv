@@ -26,7 +26,6 @@ if sys.platform == 'win32':
 
 from oslo_config import cfg
 from oslo_log import log as logging
-from oslo_service import loopingcall
 
 from hyperv.i18n import _, _LW
 from hyperv.nova import constants
@@ -417,6 +416,10 @@ class VMUtilsV2(vmutils.VMUtils):
         (job_path, ret_val) = self._vs_man_svc.DestroySystem(vm.path_())
         self.check_ret_val(ret_val, job_path)
 
+    # _add_virt_resource can fail, especially while setting up the VM's
+    # serial port connection. Retrying the operation will yield success.
+    @vmutils.retry_decorator(max_retry_count=5, max_sleep_time=1,
+                             exceptions=(vmutils.HyperVException, ))
     def _add_virt_resource(self, res_setting_data, vm_path):
         """Adds a new resource to the VM."""
         res_xml = [res_setting_data.GetText_(1)]
@@ -428,8 +431,8 @@ class VMUtilsV2(vmutils.VMUtils):
 
     # _modify_virt_resource can fail, especially while setting up the VM's
     # serial port connection. Retrying the operation will yield success.
-    @loopingcall.RetryDecorator(max_retry_count=5, max_sleep_time=1,
-                                exceptions=(vmutils.HyperVException, ))
+    @vmutils.retry_decorator(max_retry_count=5, max_sleep_time=1,
+                             exceptions=(vmutils.HyperVException, ))
     def _modify_virt_resource(self, res_setting_data, vm_path):
         """Updates a VM resource."""
         (job_path,
@@ -438,6 +441,10 @@ class VMUtilsV2(vmutils.VMUtils):
             ResourceSettings=[res_setting_data.GetText_(1)])
         self.check_ret_val(ret_val, job_path)
 
+    # _remove_virt_resource can fail, especially while setting up the VM's
+    # serial port connection. Retrying the operation will yield success.
+    @vmutils.retry_decorator(max_retry_count=5, max_sleep_time=1,
+                             exceptions=(vmutils.HyperVException, ))
     def _remove_virt_resource(self, res_setting_data, vm_path):
         """Removes a VM resource."""
         res_path = [res_setting_data.path_()]
@@ -625,6 +632,10 @@ class VMUtilsV2(vmutils.VMUtils):
             raise vmutils.HyperVException(
                 _('UEFI SecureBoot is supported only on Windows instances.'))
 
+    # _modify_virtual_system can fail, especially while setting up the VM's
+    # serial port connection. Retrying the operation will yield success.
+    @vmutils.retry_decorator(max_retry_count=5, max_sleep_time=1,
+                             exceptions=(vmutils.HyperVException, ))
     def _modify_virtual_system(self, vm_path, vmsetting):
         (job_path, ret_val) = self._vs_man_svc.ModifySystemSettings(
             SystemSettings=vmsetting.GetText_(1))

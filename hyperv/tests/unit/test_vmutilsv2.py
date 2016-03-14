@@ -186,7 +186,7 @@ class VMUtilsV2TestCase(test_vmutils.VMUtilsTestCase):
         self._check_modify_virt_resource_max_retries(side_effect=side_effect,
                                                      num_calls=5)
 
-    @mock.patch('eventlet.greenthread.sleep')
+    @mock.patch('time.sleep')
     def _check_modify_virt_resource_max_retries(
             self, mock_sleep, side_effect, num_calls=1, expected_fail=False):
         mock_svc = self._vmutils._vs_man_svc

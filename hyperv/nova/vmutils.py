@@ -28,7 +28,8 @@ if sys.platform == 'win32':
 from nova import exception
 from oslo_config import cfg
 from oslo_log import log as logging
-from oslo_service import loopingcall
+from oslo_utils import excutils
+from oslo_utils import reflection
 from oslo_utils import uuidutils
 import six
 from six.moves import range
@@ -62,6 +63,41 @@ class HyperVAuthorizationException(HyperVException):
 class UnsupportedConfigDriveFormatException(HyperVException):
     def __init__(self, message=None):
         super(HyperVException, self).__init__(message)
+
+
+def retry_decorator(max_retry_count=5, inc_sleep_time=1,
+                    max_sleep_time=1, exceptions=()):
+    def wrapper(f):
+        def inner(*args, **kwargs):
+            try_count = 0
+            sleep_time = 0
+
+            while True:
+                try:
+                    return f(*args, **kwargs)
+                except exceptions as exc:
+                    with excutils.save_and_reraise_exception() as ctxt:
+                        should_retry = try_count < max_retry_count
+                        ctxt.reraise = not should_retry
+
+                        if should_retry:
+                            try_count += 1
+                            func_name = reflection.get_callable_name(f)
+                            LOG.debug("Got expected exception %(exc)s while "
+                                      "calling function %(func_name)s. "
+                                      "Retries left: %(retries_left)d. "
+                                      "Retrying in %(sleep_time)s seconds.",
+                                      dict(exc=exc,
+                                           func_name=func_name,
+                                           retries_left=(
+                                               max_retry_count - try_count),
+                                           sleep_time=sleep_time))
+
+                            sleep_time = min(sleep_time + inc_sleep_time,
+                                             max_sleep_time)
+                            time.sleep(sleep_time)
+        return inner
+    return wrapper
 
 
 class VMUtils(object):
@@ -318,6 +354,10 @@ class VMUtils(object):
 
         return self._get_wmi_obj(vm_path)
 
+    # _modify_virtual_system can fail, especially while setting up the VM's
+    # serial port connection. Retrying the operation will yield success.
+    @retry_decorator(max_retry_count=5, max_sleep_time=1,
+                     exceptions=(HyperVException, ))
     def _modify_virtual_system(self, vm_path, vmsetting):
         (job_path, ret_val) = self._vs_man_svc.ModifyVirtualSystem(
             ComputerSystem=vm_path,
@@ -658,6 +698,10 @@ class VMUtils(object):
     def _get_wmi_obj(self, path):
         return wmi.WMI(moniker=path.replace('\\', '/'))
 
+    # _add_virt_resource can fail, especially while setting up the VM's
+    # serial port connection. Retrying the operation will yield success.
+    @retry_decorator(max_retry_count=5, max_sleep_time=1,
+                     exceptions=(HyperVException, ))
     def _add_virt_resource(self, res_setting_data, vm_path):
         """Adds a new resource to the VM."""
         res_xml = [res_setting_data.GetText_(1)]
@@ -670,8 +714,8 @@ class VMUtils(object):
 
     # _modify_virt_resource can fail, especially while setting up the VM's
     # serial port connection. Retrying the operation will yield success.
-    @loopingcall.RetryDecorator(max_retry_count=5, max_sleep_time=1,
-                                exceptions=(HyperVException, ))
+    @retry_decorator(max_retry_count=5, max_sleep_time=1,
+                     exceptions=(HyperVException, ))
     def _modify_virt_resource(self, res_setting_data, vm_path):
         """Updates a VM resource."""
         (job_path, ret_val) = self._vs_man_svc.ModifyVirtualSystemResources(
@@ -679,6 +723,10 @@ class VMUtils(object):
             ComputerSystem=vm_path)
         self.check_ret_val(ret_val, job_path)
 
+    # _remove_virt_resource can fail, especially while setting up the VM's
+    # serial port connection. Retrying the operation will yield success.
+    @retry_decorator(max_retry_count=5, max_sleep_time=1,
+                     exceptions=(HyperVException, ))
     def _remove_virt_resource(self, res_setting_data, vm_path):
         """Removes a VM resource."""
         res_path = [res_setting_data.path_()]

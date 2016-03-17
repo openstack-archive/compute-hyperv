@@ -228,11 +228,11 @@ class VolumeOps(object):
         unsupported_specs = [spec for spec in qos_specs if
                              spec not in self._SUPPORTED_QOS_SPECS]
         if unsupported_specs:
-            LOG.warn(_LW('Ignoring unsupported qos specs: '
-                         '%(unsupported_specs)s. '
-                         'Supported qos specs: %(supported_qos_speces)s'),
-                     {'unsupported_specs': unsupported_specs,
-                      'supported_qos_speces': self._SUPPORTED_QOS_SPECS})
+            LOG.warning(_LW('Ignoring unsupported qos specs: '
+                            '%(unsupported_specs)s. '
+                            'Supported qos specs: %(supported_qos_speces)s'),
+                        {'unsupported_specs': unsupported_specs,
+                         'supported_qos_speces': self._SUPPORTED_QOS_SPECS})
 
         return min_iops, total_iops
 
@@ -343,8 +343,8 @@ class BaseVolumeDriver(object):
 
     def set_disk_qos_specs(self, connection_info, min_iops, max_iops):
         volume_type = connection_info.get('driver_volume_type', '')
-        LOG.warn(_LW("The %s Hyper-V volume driver does not support QoS. "
-                     "Ignoring QoS specs."), volume_type)
+        LOG.warning(_LW("The %s Hyper-V volume driver does not support QoS. "
+                        "Ignoring QoS specs."), volume_type)
 
 
 class ISCSIVolumeDriver(BaseVolumeDriver):

@@ -129,11 +129,12 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         expected = [mock.call(mock.sentinel.dest_path),
                     mock.call(mock.sentinel.revert_path)]
         self._migrationops._pathutils.exists.assert_has_calls(expected)
-        self._migrationops._pathutils.rmtree.assert_called_once_with(
-            mock.sentinel.dest_path)
-        mock_move_files = self._migrationops._pathutils.move_folder_files
-        mock_move_files.assert_called_once_with(
+        move_folder_files = self._migrationops._pathutils.move_folder_files
+        move_folder_files.assert_called_once_with(
             mock.sentinel.revert_path, mock.sentinel.instance_path)
+        self._migrationops._pathutils.rmtree.assert_has_calls([
+            mock.call(mock.sentinel.dest_path),
+            mock.call(mock.sentinel.revert_path)])
 
     def _test_check_target_flavor(self, root_gb, bdi):
         mock_instance = fake_instance.fake_instance_obj(self.context)

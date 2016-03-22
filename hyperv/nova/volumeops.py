@@ -23,12 +23,12 @@ import os
 import platform
 import re
 import sys
-import time
 
 from nova import block_device
 from nova import exception
 from nova import utils
 from nova.virt import driver
+from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -36,9 +36,8 @@ from oslo_service import loopingcall
 from oslo_utils import excutils
 from oslo_utils import units
 import six
-from six.moves import range
 
-from hyperv.i18n import _, _LE, _LW
+from hyperv.i18n import _, _LI, _LE, _LW
 from hyperv.nova import constants
 
 LOG = logging.getLogger(__name__)
@@ -64,6 +63,12 @@ hyper_volumeops_opts = [
                      'FC disks. This requires the Multipath IO Windows '
                      'feature to be enabled. MPIO must be configured to '
                      'claim such devices.'),
+    cfg.ListOpt('iscsi_initiator_list',
+                default=[],
+                help='List of iSCSI initiators that will be used for '
+                     'estabilishing iSCSI sessions. If none is specified, '
+                     'the Microsoft iSCSI initiator service will choose '
+                     'the initiator.'),
 ]
 
 CONF = cfg.CONF
@@ -102,9 +107,8 @@ class VolumeOps(object):
                     "enabled. MPIO must be configured to claim such devices.")
                 raise exception.ServiceUnavailable(err_msg)
 
-    def _get_volume_driver(self, driver_type=None, connection_info=None):
-        if connection_info:
-            driver_type = connection_info.get('driver_volume_type')
+    def _get_volume_driver(self, connection_info):
+        driver_type = connection_info.get('driver_volume_type')
         if driver_type not in self.volume_drivers:
             raise exception.VolumeDriverNotFound(driver_type=driver_type)
         return self.volume_drivers[driver_type]
@@ -115,8 +119,7 @@ class VolumeOps(object):
 
     def attach_volume(self, connection_info, instance_name,
                       disk_bus=constants.CTRL_TYPE_SCSI):
-        volume_driver = self._get_volume_driver(
-            connection_info=connection_info)
+        volume_driver = self._get_volume_driver(connection_info)
 
         volume_connected = False
         try:
@@ -144,15 +147,13 @@ class VolumeOps(object):
 
     def disconnect_volumes(self, block_device_info):
         mapping = driver.block_device_info_get_mapping(block_device_info)
-        block_devices = self._group_block_devices_by_type(
-            mapping)
-        for driver_type, block_device_mapping in six.iteritems(block_devices):
-            volume_driver = self._get_volume_driver(driver_type)
-            volume_driver.disconnect_volumes(block_device_mapping)
+        for volume in mapping:
+            connection_info = volume['connection_info']
+            volume_driver = self._get_volume_driver(connection_info)
+            volume_driver.disconnect_volume(connection_info)
 
     def detach_volume(self, connection_info, instance_name):
-        volume_driver = self._get_volume_driver(
-            connection_info=connection_info)
+        volume_driver = self._get_volume_driver(connection_info)
         volume_driver.detach_volume(connection_info, instance_name)
         volume_driver.disconnect_volume(connection_info)
 
@@ -201,8 +202,7 @@ class VolumeOps(object):
         mapping = driver.block_device_info_get_mapping(block_device_info)
         for vol in mapping:
             connection_info = vol['connection_info']
-            volume_driver = self._get_volume_driver(
-                connection_info=connection_info)
+            volume_driver = self._get_volume_driver(connection_info)
             volume_driver.connect_volume(connection_info)
 
     def parse_disk_qos_specs(self, qos_specs):
@@ -252,17 +252,8 @@ class VolumeOps(object):
             disk_path_mapping[disk_serial] = disk_path
         return disk_path_mapping
 
-    def _group_block_devices_by_type(self, block_device_mapping):
-        block_devices = collections.defaultdict(list)
-        for volume in block_device_mapping:
-            connection_info = volume['connection_info']
-            volume_type = connection_info.get('driver_volume_type')
-            block_devices[volume_type].append(volume)
-        return block_devices
-
     def get_disk_resource_path(self, connection_info):
-        volume_driver = self._get_volume_driver(
-            connection_info=connection_info)
+        volume_driver = self._get_volume_driver(connection_info)
         return volume_driver.get_disk_resource_path(connection_info)
 
 
@@ -270,12 +261,10 @@ class VolumeOps(object):
 class BaseVolumeDriver(object):
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
+        self._diskutils = utilsfactory.get_diskutils()
         self._is_block_dev = True
 
     def connect_volume(self, connection_info):
-        pass
-
-    def disconnect_volumes(self, block_device_info):
         pass
 
     def disconnect_volume(self, connection_info):
@@ -346,133 +335,160 @@ class BaseVolumeDriver(object):
         LOG.warning(_LW("The %s Hyper-V volume driver does not support QoS. "
                         "Ignoring QoS specs."), volume_type)
 
+    def _check_device_paths(self, device_paths):
+        if len(device_paths) > 1:
+            err_msg = _("Multiple disk paths were found: %s. This can "
+                        "occur if multipath is used and MPIO is not "
+                        "properly configured, thus not claiming the device "
+                        "paths. This issue must be addressed urgently as "
+                        "it can lead to data corruption.")
+            raise exception.InvalidDevicePath(err_msg % device_paths)
+        elif not device_paths:
+            err_msg = _("Could not find the physical disk "
+                        "path for the requested volume.")
+            raise exception.DiskNotFound(err_msg)
+
+    def _get_mounted_disk_path_by_dev_name(self, device_name):
+        device_number = self._diskutils.get_device_number_from_device_name(
+            device_name)
+        mounted_disk_path = self._vmutils.get_mounted_disk_by_drive_number(
+            device_number)
+        return mounted_disk_path
+
 
 class ISCSIVolumeDriver(BaseVolumeDriver):
     def __init__(self):
-        self._volutils = utilsfactory.get_iscsi_initiator_utils()
-        self._initiator = self._volutils.get_iscsi_initiator()
         super(ISCSIVolumeDriver, self).__init__()
+        self._iscsi_utils = utilsfactory.get_iscsi_initiator_utils()
+        self._initiator_node_name = self._iscsi_utils.get_iscsi_initiator()
+
+        self.validate_initiators()
 
     def get_volume_connector_props(self):
-        props = {'initiator': self._initiator}
+        props = {'initiator': self._initiator_node_name}
         return props
 
-    def login_storage_target(self, connection_info):
-        data = connection_info['data']
-        target_lun = data['target_lun']
-        target_iqn = data['target_iqn']
-        target_portal = data['target_portal']
-        auth_method = data.get('auth_method')
-        auth_username = data.get('auth_username')
-        auth_password = data.get('auth_password')
+    def validate_initiators(self):
+        # The MS iSCSI initiator service can manage the software iSCSI
+        # initiator as well as hardware initiators.
+        initiator_list = CONF.hyperv.iscsi_initiator_list
+        valid_initiators = True
+
+        if not initiator_list:
+            LOG.info(_LI("No iSCSI initiator was explicitly requested. "
+                         "The Microsoft iSCSI initiator will choose the "
+                         "initiator when estabilishing sessions."))
+        else:
+            available_initiators = self._iscsi_utils.get_iscsi_initiators()
+            for initiator in initiator_list:
+                if initiator not in available_initiators:
+                    valid_initiators = False
+                    msg = _LW("The requested initiator %(req_initiator)s "
+                              "is not in the list of available initiators: "
+                              "%(avail_initiators)s.")
+                    LOG.warning(msg,
+                                dict(req_initiator=initiator,
+                                     avail_initiators=available_initiators))
+
+        return valid_initiators
+
+    def _get_all_targets(self, connection_properties):
+        if all([key in connection_properties for key in ('target_portals',
+                                                         'target_iqns',
+                                                         'target_luns')]):
+            return zip(connection_properties['target_portals'],
+                       connection_properties['target_iqns'],
+                       connection_properties['target_luns'])
+
+        return [(connection_properties['target_portal'],
+                 connection_properties['target_iqn'],
+                 connection_properties.get('target_lun', 0))]
+
+    def _get_all_paths(self, connection_properties):
+        initiator_list = CONF.hyperv.iscsi_initiator_list or [None]
+        all_targets = self._get_all_targets(connection_properties)
+        paths = [(initiator_name, target_portal, target_iqn, target_lun)
+                 for target_portal, target_iqn, target_lun in all_targets
+                 for initiator_name in initiator_list]
+        return paths
+
+    def connect_volume(self, connection_info):
+        connection_properties = connection_info['data']
+        auth_method = connection_properties.get('auth_method')
 
         if auth_method and auth_method.upper() != 'CHAP':
-            LOG.error(_LE("Cannot log in target %(target_iqn)s. Unsupported "
-                          "iSCSI authentication method: %(auth_method)s."),
-                      {'target_iqn': target_iqn,
-                       'auth_method': auth_method})
+            LOG.error(_LE("Unsupported iSCSI authentication "
+                          "method: %(auth_method)s."),
+                      dict(auth_method=auth_method))
             raise exception.UnsupportedBDMVolumeAuthMethod(
                 auth_method=auth_method)
 
-        # Check if we already logged in
-        if self._volutils.get_device_number_for_target(target_iqn, target_lun):
-            LOG.debug("Already logged in on storage target. No need to "
-                      "login. Portal: %(target_portal)s, "
-                      "IQN: %(target_iqn)s, LUN: %(target_lun)s",
-                      {'target_portal': target_portal,
-                       'target_iqn': target_iqn, 'target_lun': target_lun})
-        else:
-            LOG.debug("Logging in on storage target. Portal: "
-                      "%(target_portal)s, IQN: %(target_iqn)s, "
-                      "LUN: %(target_lun)s",
-                      {'target_portal': target_portal,
-                       'target_iqn': target_iqn, 'target_lun': target_lun})
-            self._volutils.login_storage_target(target_lun, target_iqn,
-                                                target_portal, auth_username,
-                                                auth_password)
-            # Wait for the target to be mounted
-            self._get_mounted_disk_from_lun(target_iqn, target_lun, True)
+        volume_connected = False
+        for (initiator_name,
+             target_portal,
+             target_iqn,
+             target_lun) in self._get_all_paths(connection_properties):
+            try:
+                msg = _LI("Attempting to estabilish an iSCSI session to "
+                          "target %(target_iqn)s on portal %(target_portal)s "
+                          "acessing LUN %(target_lun)s using initiator "
+                          "%(initiator_name)s.")
+                LOG.info(msg, dict(target_portal=target_portal,
+                                   target_iqn=target_iqn,
+                                   target_lun=target_lun,
+                                   initiator_name=initiator_name))
+                self._iscsi_utils.login_storage_target(
+                    target_lun=target_lun,
+                    target_iqn=target_iqn,
+                    target_portal=target_portal,
+                    auth_username=connection_properties.get('auth_username'),
+                    auth_password=connection_properties.get('auth_password'),
+                    mpio_enabled=CONF.hyperv.use_multipath_io,
+                    initiator_name=initiator_name)
 
-    def disconnect_volumes(self, block_device_mapping):
-        iscsi_targets = collections.defaultdict(int)
-        for vol in block_device_mapping:
-            target_iqn = vol['connection_info']['data']['target_iqn']
-            iscsi_targets[target_iqn] += 1
+                volume_connected = True
+                if not CONF.hyperv.use_multipath_io:
+                    break
+            except os_win_exc.OSWinException:
+                LOG.exception(_LE("Could not connect iSCSI target %s."),
+                              target_iqn)
 
-        for target_iqn, disconnected_luns in six.iteritems(iscsi_targets):
-            self.logout_storage_target(target_iqn, disconnected_luns)
+        if not volume_connected:
+            raise exception.VolumeAttachFailed(
+                _("Could not connect volume %s.") %
+                connection_properties['volume_id'])
 
     def disconnect_volume(self, connection_info):
-        target_iqn = connection_info['data']['target_iqn']
-        self.logout_storage_target(target_iqn)
+        # We want to refresh the cached information first.
+        self._diskutils.rescan_disks()
 
-    def logout_storage_target(self, target_iqn, disconnected_luns_count=1):
-        total_available_luns = self._volutils.get_target_lun_count(
-            target_iqn)
+        for (target_portal,
+             target_iqn,
+             target_lun) in self._get_all_targets(connection_info['data']):
 
-        if total_available_luns == disconnected_luns_count:
-            LOG.debug("Logging off storage target %s", target_iqn)
-            self._volutils.logout_storage_target(target_iqn)
-        else:
-            LOG.debug("Skipping disconnecting target %s as there "
-                      "are LUNs still being used.", target_iqn)
+            luns = self._iscsi_utils.get_target_luns(target_iqn)
+            # We disconnect the target only if it does not expose other
+            # luns which may be in use.
+            if not luns or luns == [target_lun]:
+                self._iscsi_utils.logout_storage_target(target_iqn)
 
     def get_disk_resource_path(self, connection_info):
-        data = connection_info['data']
-        target_lun = data['target_lun']
-        target_iqn = data['target_iqn']
+        device_paths = set()
+        connection_properties = connection_info['data']
 
-        # Getting the mounted disk
-        return self._get_mounted_disk_from_lun(target_iqn, target_lun,
-                                               wait_for_device=True)
+        for (target_portal,
+             target_iqn,
+             target_lun) in self._get_all_targets(connection_properties):
 
-    def _get_mounted_disk_from_lun(self, target_iqn, target_lun,
-                                   wait_for_device=False):
-        # The WMI query in get_device_number_for_target can incorrectly
-        # return no data when the system is under load.  This issue can
-        # be avoided by adding a retry.
-        for i in range(CONF.hyperv.mounted_disk_query_retry_count):
-            device_number = self._volutils.get_device_number_for_target(
+            (device_number,
+             device_path) = self._iscsi_utils.get_device_number_and_path(
                 target_iqn, target_lun)
-            if device_number in (None, -1):
-                attempt = i + 1
-                LOG.debug('Attempt %d to get device_number '
-                          'from get_device_number_for_target failed. '
-                          'Retrying...', attempt)
-                time.sleep(CONF.hyperv.mounted_disk_query_retry_interval)
-            else:
-                break
+            if device_path:
+                device_paths.add(device_path)
 
-        if device_number in (None, -1):
-            raise exception.NotFound(_('Unable to find a mounted disk for '
-                                       'target_iqn: %s') % target_iqn)
-        LOG.debug('Device number: %(device_number)s, '
-                  'target lun: %(target_lun)s',
-                  {'device_number': device_number, 'target_lun': target_lun})
-        # Finding Mounted disk drive
-        for i in range(0, CONF.hyperv.volume_attach_retry_count):
-            mounted_disk_path = self._vmutils.get_mounted_disk_by_drive_number(
-                device_number)
-            if mounted_disk_path or not wait_for_device:
-                break
-            time.sleep(CONF.hyperv.volume_attach_retry_interval)
-
-        if not mounted_disk_path:
-            raise exception.NotFound(_('Unable to find a mounted disk for '
-                                       'target_iqn: %s. Please ensure that '
-                                       'the host\'s SAN policy is set to '
-                                       '"OfflineAll" or "OfflineShared"') %
-                                     target_iqn)
-        return mounted_disk_path
-
-    def get_target_from_disk_path(self, physical_drive_path):
-        return self._volutils.get_target_from_disk_path(physical_drive_path)
-
-    def get_target_lun_count(self, target_iqn):
-        return self._volutils.get_target_lun_count(target_iqn)
-
-    def connect_volume(self, connection_info):
-        self.login_storage_target(connection_info)
+        self._check_device_paths(device_paths)
+        disk_path = list(device_paths)[0]
+        return self._get_mounted_disk_path_by_dev_name(disk_path)
 
 
 def export_path_synchronized(f):
@@ -496,16 +512,6 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
 
     def get_disk_resource_path(self, connection_info):
         return self._get_disk_path(connection_info)
-
-    def disconnect_volumes(self, block_device_mapping):
-        export_paths = set()
-        for vol in block_device_mapping:
-            connection_info = vol['connection_info']
-            export_path = self._get_export_path(connection_info)
-            export_paths.add(export_path)
-
-        for export_path in export_paths:
-            self._unmount_smb_share(export_path)
 
     def disconnect_volume(self, connection_info):
         export_path = self._get_export_path(connection_info)
@@ -584,6 +590,7 @@ class FCVolumeDriver(BaseVolumeDriver):
     def get_disk_resource_path(self, connection_info):
         @loopingcall.RetryDecorator(max_retry_count=10, max_sleep_time=0)
         def get_disk_path():
+            disk_paths = set()
             volume_mappings = self._get_fc_volume_mappings(connection_info)
             if not volume_mappings:
                 LOG.debug("Could not find FC mappings for volume "
@@ -598,21 +605,19 @@ class FCVolumeDriver(BaseVolumeDriver):
                 for mapping in volume_mappings:
                     device_name = mapping['device_name']
                     if device_name:
-                        return self._get_mounted_disk_path_by_dev_name(
-                            device_name)
+                        disk_paths.add(device_name)
+
+                if disk_paths:
+                    self._check_device_paths(disk_paths)
+                    disk_path = list(disk_paths)[0]
+                    return self._get_mounted_disk_path_by_dev_name(
+                        disk_path)
 
             err_msg = _("Could not find the physical disk "
                         "path for the requested volume.")
             raise exception.DiskNotFound(err_msg)
 
         return get_disk_path()
-
-    def _get_mounted_disk_path_by_dev_name(self, device_name):
-        device_number = self._vmutils.get_device_number_from_device_name(
-            device_name)
-        mounted_disk_path = self._vmutils.get_mounted_disk_by_drive_number(
-            device_number)
-        return mounted_disk_path
 
     def _get_fc_volume_mappings(self, connection_info):
         # Note(lpetrut): All the WWNs returned by os-win are upper case.

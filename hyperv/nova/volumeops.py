@@ -491,17 +491,6 @@ class ISCSIVolumeDriver(BaseVolumeDriver):
         return self._get_mounted_disk_path_by_dev_name(disk_path)
 
 
-def export_path_synchronized(f):
-    def wrapper(inst, connection_info, *args, **kwargs):
-        export_path = inst._get_export_path(connection_info)
-
-        @utils.synchronized(export_path)
-        def inner():
-            return f(inst, connection_info, *args, **kwargs)
-        return inner()
-    return wrapper
-
-
 class SMBFSVolumeDriver(BaseVolumeDriver):
     def __init__(self):
         self._smbutils = utilsfactory.get_smbutils()
@@ -510,12 +499,33 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
         self._is_block_dev = False
         super(SMBFSVolumeDriver, self).__init__()
 
+    def export_path_synchronized(f):
+        def wrapper(inst, connection_info, *args, **kwargs):
+            export_path = inst._get_export_path(connection_info)
+
+            @utils.synchronized(export_path)
+            def inner():
+                return f(inst, connection_info, *args, **kwargs)
+            return inner()
+        return wrapper
+
     def get_disk_resource_path(self, connection_info):
         return self._get_disk_path(connection_info)
 
+    @export_path_synchronized
+    def attach_volume(self, connection_info, instance_name,
+                      disk_bus=constants.CTRL_TYPE_SCSI):
+        super(SMBFSVolumeDriver, self).attach_volume(
+            connection_info, instance_name, disk_bus)
+
+    @export_path_synchronized
     def disconnect_volume(self, connection_info):
+        # We synchronize share unmount and volume attach operations based on
+        # the share path in order to avoid the situation when a SMB share is
+        # unmounted while a volume exported by it is about to be attached to
+        # an instance.
         export_path = self._get_export_path(connection_info)
-        self._unmount_smb_share(export_path)
+        self._smbutils.unmount_smb_share(export_path)
 
     def _get_export_path(self, connection_info):
         return connection_info['data']['export'].replace('/', '\\')
@@ -547,16 +557,6 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
 
     def connect_volume(self, connection_info):
         self.ensure_share_mounted(connection_info)
-
-    def _unmount_smb_share(self, export_path):
-        # We synchronize share unmount and volume attach operations based on
-        # the share path in order to avoid the situation when a SMB share is
-        # unmounted while a volume exported by it is about to be attached to
-        # an instance.
-        @utils.synchronized(export_path)
-        def unmount_synchronized():
-            self._smbutils.unmount_smb_share(export_path)
-        unmount_synchronized()
 
     def set_disk_qos_specs(self, connection_info, min_iops, max_iops):
         disk_path = self._get_disk_path(connection_info)

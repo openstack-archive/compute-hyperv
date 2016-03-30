@@ -56,40 +56,6 @@ from hyperv.nova import volumeops
 LOG = logging.getLogger(__name__)
 
 hyperv_opts = [
-    cfg.BoolOpt('limit_cpu_features',
-                default=False,
-                help='Required for live migration among '
-                     'hosts with different CPU features'),
-    cfg.BoolOpt('config_drive_inject_password',
-                default=False,
-                help='Sets the admin password in the config drive image'),
-    cfg.StrOpt('qemu_img_cmd',
-               default="qemu-img.exe",
-               help='Path of qemu-img command which is used to convert '
-                    'between different image types'),
-    cfg.BoolOpt('config_drive_cdrom',
-                default=False,
-                help='Attaches the Config Drive image as a cdrom drive '
-                     'instead of a disk drive'),
-    cfg.BoolOpt('enable_instance_metrics_collection',
-                default=False,
-                help='Enables metrics collections for an instance by using '
-                     'Hyper-V\'s metric APIs. Collected data can by retrieved '
-                     'by other apps and services, e.g.: Ceilometer. '
-                     'Requires Hyper-V / Windows Server 2012 and above'),
-    cfg.FloatOpt('dynamic_memory_ratio',
-                 default=1.0,
-                 help='Enables dynamic memory allocation (ballooning) when '
-                      'set to a value greater than 1. The value expresses '
-                      'the ratio between the total RAM assigned to an '
-                      'instance and its startup RAM amount. For example a '
-                      'ratio of 2.0 for an instance with 1024MB of RAM '
-                      'implies 512MB of RAM allocated at startup'),
-    cfg.IntOpt('wait_soft_reboot_seconds',
-               default=60,
-               help='Number of seconds to wait for instance to shut down after'
-                    ' soft reboot request is made. We fall back to hard reboot'
-                    ' if instance does not shutdown within this window.'),
     cfg.BoolOpt('enable_remotefx',
                 default=False,
                 help='Enables RemoteFX. This requires at least one DirectX 11 '

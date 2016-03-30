@@ -25,6 +25,7 @@ import re
 import sys
 
 from nova import block_device
+import nova.conf
 from nova import exception
 from nova import utils
 from nova.virt import driver
@@ -43,20 +44,6 @@ from hyperv.nova import constants
 LOG = logging.getLogger(__name__)
 
 hyper_volumeops_opts = [
-    cfg.IntOpt('volume_attach_retry_count',
-               default=10,
-               help='The number of times to retry to attach a volume'),
-    cfg.IntOpt('volume_attach_retry_interval',
-               default=5,
-               help='Interval between volume attachment attempts, in seconds'),
-    cfg.IntOpt('mounted_disk_query_retry_count',
-               default=10,
-               help='The number of times to retry checking for a disk mounted '
-                    'via iSCSI.'),
-    cfg.IntOpt('mounted_disk_query_retry_interval',
-               default=5,
-               help='Interval between checks for a mounted iSCSI '
-                    'disk, in seconds.'),
     cfg.BoolOpt('use_multipath_io',
                 default=False,
                 help='Use multipath connections when attaching iSCSI or '
@@ -71,7 +58,7 @@ hyper_volumeops_opts = [
                      'the initiator.'),
 ]
 
-CONF = cfg.CONF
+CONF = nova.conf.CONF
 CONF.register_opts(hyper_volumeops_opts, 'hyperv')
 CONF.import_opt('host', 'nova.netconf')
 CONF.import_opt('my_ip', 'nova.netconf')

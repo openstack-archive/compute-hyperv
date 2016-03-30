@@ -16,25 +16,14 @@
 import os
 import time
 
+import nova.conf
 from nova import exception
 from os_win.utils import pathutils
-from oslo_config import cfg
 
 from hyperv.i18n import _
 from hyperv.nova import constants
 
-hyperv_opts = [
-    cfg.StrOpt('instances_path_share',
-               default="",
-               help='The name of a Windows share name mapped to the '
-                    '"instances_path" dir and used by the resize feature '
-                    'to copy files to the target host. If left blank, an '
-                    'administrative share will be used, looking for the same '
-                    '"instances_path" used locally'),
-]
-
-CONF = cfg.CONF
-CONF.register_opts(hyperv_opts, 'hyperv')
+CONF = nova.conf.CONF
 CONF.import_opt('instances_path', 'nova.compute.manager')
 
 ERROR_INVALID_NAME = 123

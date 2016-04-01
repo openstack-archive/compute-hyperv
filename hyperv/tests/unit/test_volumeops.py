@@ -14,6 +14,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import copy
 import os
 
 import mock
@@ -598,6 +599,8 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
             self.assertFalse(
                 mock_mount_smb_share.called)
         else:
+            mock_parse_credentials.assert_called_once_with(
+                self._FAKE_SMB_OPTIONS)
             mock_mount_smb_share.assert_called_once_with(
                 self._FAKE_SHARE_NORMALIZED,
                 username=self._FAKE_USERNAME,
@@ -617,6 +620,25 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         self._volume_driver.disconnect_volumes(block_device_mapping)
         mock_unmount_smb_share.assert_called_once_with(
             self._FAKE_SHARE_NORMALIZED)
+
+    @mock.patch.object(volumeops.SMBFSVolumeDriver, '_parse_credentials')
+    def test_ensure_mounted_missing_opts(self, mock_parse_credentials):
+        mock_mount_smb_share = self._volume_driver._pathutils.mount_smb_share
+        mock_check_smb_mapping = (
+            self._volume_driver._pathutils.check_smb_mapping)
+        mock_check_smb_mapping.return_value = False
+        mock_parse_credentials.return_value = (None, None)
+
+        fake_conn_info = copy.deepcopy(self._FAKE_CONNECTION_INFO)
+        fake_conn_info['data']['options'] = None
+
+        self._volume_driver.ensure_share_mounted(fake_conn_info)
+
+        mock_parse_credentials.assert_called_once_with('')
+        mock_mount_smb_share.assert_called_once_with(
+            self._FAKE_SHARE_NORMALIZED,
+            username=None,
+            password=None)
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_get_disk_path')
     def test_set_disk_qos_specs(self, mock_get_disk_path):

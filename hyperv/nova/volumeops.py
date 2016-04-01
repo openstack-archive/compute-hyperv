@@ -483,7 +483,7 @@ class SMBFSVolumeDriver(object):
         export_path = self._get_export_path(connection_info)
 
         if not self._pathutils.check_smb_mapping(export_path):
-            opts_str = connection_info['data'].get('options', '')
+            opts_str = connection_info['data'].get('options') or ''
             username, password = self._parse_credentials(opts_str)
             self._pathutils.mount_smb_share(export_path,
                                             username=username,

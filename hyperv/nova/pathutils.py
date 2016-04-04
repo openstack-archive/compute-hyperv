@@ -14,6 +14,7 @@
 #    under the License.
 
 import os
+import tempfile
 import time
 
 import nova.conf
@@ -167,3 +168,14 @@ class PathUtils(pathutils.PathUtils):
 
     def get_age_of_file(self, file_name):
         return time.time() - os.path.getmtime(file_name)
+
+    def check_dirs_shared_storage(self, src_dir, dest_dir):
+        # Check if shared storage is being used by creating a temporary
+        # file at the destination path and checking if it exists at the
+        # source path.
+        with tempfile.NamedTemporaryFile(dir=dest_dir) as tmp_file:
+            src_path = os.path.join(src_dir,
+                                    os.path.basename(tmp_file.name))
+
+            shared_storage = os.path.exists(src_path)
+        return shared_storage

@@ -827,15 +827,15 @@ class FCVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         mock_get_fc_mappings.assert_any_call(mock.sentinel.conn_info)
         self.assertEqual(
             expected_rescan_count,
-            self._fc_driver._fc_utils.rescan_disks.call_count)
+            self._fc_driver._diskutils.rescan_disks.call_count)
 
     def test_get_disk_resource_path_missing_dev_name(self):
         mock_mapping = dict(device_name='')
-        fc_mappings_side_effect = [None] + [[mock_mapping]] * 10
+        fc_mappings_side_effect = [None, None] + [[mock_mapping]] * 9
 
         self._test_get_disk_resource_path(
             fc_mappings_side_effect=fc_mappings_side_effect,
-            expected_rescan_count=1)
+            expected_rescan_count=2)
 
     def test_get_disk_resource_path_dev_name_found(self):
         dev_name = mock.sentinel.dev_name

@@ -588,7 +588,8 @@ class FCVolumeDriver(BaseVolumeDriver):
         self.get_disk_resource_path(connection_info)
 
     def get_disk_resource_path(self, connection_info):
-        @loopingcall.RetryDecorator(max_retry_count=10, max_sleep_time=0)
+        @loopingcall.RetryDecorator(max_retry_count=10, max_sleep_time=0,
+                                    exceptions=(exception.DiskNotFound, ))
         def get_disk_path():
             disk_paths = set()
             volume_mappings = self._get_fc_volume_mappings(connection_info)
@@ -596,7 +597,7 @@ class FCVolumeDriver(BaseVolumeDriver):
                 LOG.debug("Could not find FC mappings for volume "
                           "%(conn_info)s. Rescanning disks.",
                           dict(conn_info=connection_info))
-                self._fc_utils.rescan_disks()
+                self._diskutils.rescan_disks()
             else:
                 # Because of MPIO, we may not be able to get the device name
                 # from a specific mapping if the disk was accessed through

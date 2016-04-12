@@ -154,3 +154,22 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
 
         self.assertEqual(5, ret)
         mock_getmtime.assert_called_once_with(mock.sentinel.file_name)
+
+    @mock.patch('os.path.exists')
+    @mock.patch('tempfile.NamedTemporaryFile')
+    def test_check_dirs_shared_storage(self, mock_named_tempfile,
+                                       mock_exists):
+        fake_src_dir = 'fake_src_dir'
+        fake_dest_dir = 'fake_dest_dir'
+
+        mock_exists.return_value = True
+        mock_tmpfile = mock_named_tempfile.return_value.__enter__.return_value
+        mock_tmpfile.name = 'fake_tmp_fname'
+        expected_src_tmp_path = os.path.join(fake_src_dir,
+                                             mock_tmpfile.name)
+
+        self._pathutils.check_dirs_shared_storage(
+            fake_src_dir, fake_dest_dir)
+
+        mock_named_tempfile.assert_called_once_with(dir=fake_dest_dir)
+        mock_exists.assert_called_once_with(expected_src_tmp_path)

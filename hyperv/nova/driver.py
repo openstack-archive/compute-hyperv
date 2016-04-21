@@ -36,6 +36,7 @@ from hyperv.nova import hostops
 from hyperv.nova import imagecache
 from hyperv.nova import livemigrationops
 from hyperv.nova import migrationops
+from hyperv.nova import pathutils
 from hyperv.nova import rdpconsoleops
 from hyperv.nova import serialconsoleops
 from hyperv.nova import snapshotops
@@ -118,6 +119,7 @@ class HyperVDriver(driver.ComputeDriver):
         self._serialconsoleops = serialconsoleops.SerialConsoleOps()
         self._imagecache = imagecache.ImageCache()
         self._image_api = image.API()
+        self._pathutils = pathutils.PathUtils()
 
     def _check_minimum_windows_version(self):
         if not utilsfactory.get_hostutils().check_min_windows_version(6, 2):
@@ -139,6 +141,9 @@ class HyperVDriver(driver.ComputeDriver):
         event_handler = eventhandler.InstanceEventHandler(
             state_change_callback=self.emit_event)
         event_handler.start_listener()
+
+        instance_path = self._pathutils.get_instances_dir()
+        self._pathutils.check_create_dir(instance_path)
 
     def list_instance_uuids(self):
         return self._vmops.list_instance_uuids()

@@ -259,10 +259,12 @@ class VolumeOps(object):
 
 @six.add_metaclass(abc.ABCMeta)
 class BaseVolumeDriver(object):
+
+    _is_block_dev = True
+
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
         self._diskutils = utilsfactory.get_diskutils()
-        self._is_block_dev = True
 
     def connect_volume(self, connection_info):
         pass
@@ -492,11 +494,13 @@ class ISCSIVolumeDriver(BaseVolumeDriver):
 
 
 class SMBFSVolumeDriver(BaseVolumeDriver):
+
+    _is_block_dev = False
+
     def __init__(self):
         self._smbutils = utilsfactory.get_smbutils()
         self._username_regex = re.compile(r'user(?:name)?=([^, ]+)')
         self._password_regex = re.compile(r'pass(?:word)?=([^, ]+)')
-        self._is_block_dev = False
         super(SMBFSVolumeDriver, self).__init__()
 
     def export_path_synchronized(f):

@@ -60,8 +60,6 @@ hyper_volumeops_opts = [
 
 CONF = nova.conf.CONF
 CONF.register_opts(hyper_volumeops_opts, 'hyperv')
-CONF.import_opt('host', 'nova.netconf')
-CONF.import_opt('my_ip', 'nova.netconf')
 
 
 class VolumeOps(object):

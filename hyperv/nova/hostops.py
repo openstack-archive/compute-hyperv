@@ -50,7 +50,6 @@ hyper_host_opts = [
 
 CONF = cfg.CONF
 CONF.register_opts(hyper_host_opts, 'hyperv')
-CONF.import_opt('my_ip', 'nova.netconf')
 CONF.import_opt('enable_remotefx', 'hyperv.nova.vmops', 'hyperv')
 LOG = logging.getLogger(__name__)
 

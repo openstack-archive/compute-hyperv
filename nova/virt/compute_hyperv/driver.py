@@ -12,4 +12,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-__import__('pkg_resources').declare_namespace(__name__)
+"""
+A Hyper-V Nova Compute driver.
+"""
+
+from hyperv.nova import driver
+
+# NOTE: nova changed the way it imports drivers. All drivers must belong
+# in the nova.virt namespace.
+
+HyperVDriver = driver.HyperVDriver

@@ -603,6 +603,7 @@ class FCVolumeDriver(BaseVolumeDriver):
                           dict(conn_info=connection_info))
                 self._diskutils.rescan_disks()
             else:
+                LOG.debug("Found FC mappings: %s", volume_mappings)
                 # Because of MPIO, we may not be able to get the device name
                 # from a specific mapping if the disk was accessed through
                 # an other HBA at that moment. In that case, the device name

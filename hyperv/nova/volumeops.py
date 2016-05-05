@@ -33,7 +33,6 @@ from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
-from oslo_service import loopingcall
 from oslo_utils import excutils
 from oslo_utils import units
 import six
@@ -566,6 +565,8 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
 
 
 class FCVolumeDriver(BaseVolumeDriver):
+    _MAX_RESCAN_COUNT = 10
+
     def __init__(self):
         self._fc_utils = utilsfactory.get_fc_utils()
         super(FCVolumeDriver, self).__init__()
@@ -590,38 +591,35 @@ class FCVolumeDriver(BaseVolumeDriver):
         self.get_disk_resource_path(connection_info)
 
     def get_disk_resource_path(self, connection_info):
-        @loopingcall.RetryDecorator(max_retry_count=10, max_sleep_time=0,
-                                    exceptions=(exception.DiskNotFound, ))
-        def get_disk_path():
+        for attempt in range(self._MAX_RESCAN_COUNT):
             disk_paths = set()
+
+            self._diskutils.rescan_disks()
             volume_mappings = self._get_fc_volume_mappings(connection_info)
-            if not volume_mappings:
-                LOG.debug("Could not find FC mappings for volume "
-                          "%(conn_info)s. Rescanning disks.",
-                          dict(conn_info=connection_info))
-                self._diskutils.rescan_disks()
-            else:
-                LOG.debug("Found FC mappings: %s", volume_mappings)
-                # Because of MPIO, we may not be able to get the device name
-                # from a specific mapping if the disk was accessed through
-                # an other HBA at that moment. In that case, the device name
-                # will show up as an empty string.
-                for mapping in volume_mappings:
-                    device_name = mapping['device_name']
-                    if device_name:
-                        disk_paths.add(device_name)
 
-                if disk_paths:
-                    self._check_device_paths(disk_paths)
-                    disk_path = list(disk_paths)[0]
-                    return self._get_mounted_disk_path_by_dev_name(
-                        disk_path)
+            LOG.debug("Retrieved volume mappings %(vol_mappings)s "
+                      "for volume %(conn_info)s",
+                      dict(vol_mappings=volume_mappings,
+                           conn_info=connection_info))
 
-            err_msg = _("Could not find the physical disk "
-                        "path for the requested volume.")
-            raise exception.DiskNotFound(err_msg)
+            # Because of MPIO, we may not be able to get the device name
+            # from a specific mapping if the disk was accessed through
+            # an other HBA at that moment. In that case, the device name
+            # will show up as an empty string.
+            for mapping in volume_mappings:
+                device_name = mapping['device_name']
+                if device_name:
+                    disk_paths.add(device_name)
 
-        return get_disk_path()
+            if disk_paths:
+                self._check_device_paths(disk_paths)
+                disk_path = list(disk_paths)[0]
+                return self._get_mounted_disk_path_by_dev_name(
+                    disk_path)
+
+        err_msg = _("Could not find the physical disk "
+                    "path for the requested volume.")
+        raise exception.DiskNotFound(err_msg)
 
     def _get_fc_volume_mappings(self, connection_info):
         # Note(lpetrut): All the WWNs returned by os-win are upper case.

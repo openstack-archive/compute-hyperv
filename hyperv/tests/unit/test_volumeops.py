@@ -878,11 +878,11 @@ class FCVolumeDriverTestCase(test_base.HyperVBaseTestCase):
 
     def test_get_disk_resource_path_missing_dev_name(self):
         mock_mapping = dict(device_name='')
-        fc_mappings_side_effect = [None, None] + [[mock_mapping]] * 9
+        fc_mappings_side_effect = [[]] + [[mock_mapping]] * 9
 
         self._test_get_disk_resource_path(
             fc_mappings_side_effect=fc_mappings_side_effect,
-            expected_rescan_count=2)
+            expected_rescan_count=self._fc_driver._MAX_RESCAN_COUNT)
 
     def test_get_disk_resource_path_dev_name_found(self):
         dev_name = mock.sentinel.dev_name
@@ -890,7 +890,7 @@ class FCVolumeDriverTestCase(test_base.HyperVBaseTestCase):
 
         self._test_get_disk_resource_path(
             fc_mappings_side_effect=[[mock_mapping]],
-            expected_rescan_count=0,
+            expected_rescan_count=1,
             retrieved_dev_name=dev_name)
 
     @mock.patch.object(volumeops.FCVolumeDriver, '_get_fc_hba_mapping')

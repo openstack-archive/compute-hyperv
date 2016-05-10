@@ -651,6 +651,7 @@ class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         mock_get_mounted_disk.assert_called_once_with(mock.sentinel.dev_path)
 
 
+@ddt.ddt
 class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V SMBFSVolumeDriver class."""
 
@@ -671,6 +672,9 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         self._volume_driver = volumeops.SMBFSVolumeDriver()
         self._volume_driver._vmutils = mock.MagicMock()
         self._volume_driver._smbutils = mock.MagicMock()
+        self._volume_driver._pathutils = mock.MagicMock()
+        self._smbutils = self._volume_driver._smbutils
+        self._pathutils = self._volume_driver._pathutils
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_get_disk_path')
     def test_get_disk_resource_path(self, mock_get_disk_path):
@@ -693,13 +697,19 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         expected = self._FAKE_SHARE.replace('/', '\\')
         self.assertEqual(expected, result)
 
-    def test_get_disk_path(self):
-        expected = os.path.join(self._FAKE_SHARE_NORMALIZED,
-                                self._FAKE_DISK_NAME)
-
+    @ddt.data(True, False)
+    def test_get_disk_path(self, is_local):
+        fake_local_share_path = 'fake_local_share_path' if is_local else None
+        mock_get_loopback_share_path = self._pathutils.get_loopback_share_path
+        mock_get_loopback_share_path.return_value = fake_local_share_path
+        expected = os.path.join(
+            fake_local_share_path or self._FAKE_SHARE_NORMALIZED,
+            self._FAKE_DISK_NAME)
         disk_path = self._volume_driver._get_disk_path(
             self._FAKE_CONNECTION_INFO)
 
+        mock_get_loopback_share_path.assert_called_once_with(
+            self._FAKE_SHARE_NORMALIZED)
         self.assertEqual(expected, disk_path)
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_parse_credentials')

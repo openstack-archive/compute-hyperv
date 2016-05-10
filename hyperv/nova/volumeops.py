@@ -40,6 +40,7 @@ import six
 
 from hyperv.i18n import _, _LI, _LE, _LW
 from hyperv.nova import constants
+from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
 
@@ -483,6 +484,7 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
     _is_block_dev = False
 
     def __init__(self):
+        self._pathutils = pathutils.PathUtils()
         self._smbutils = utilsfactory.get_smbutils()
         self._username_regex = re.compile(r'user(?:name)?=([^, ]+)')
         self._password_regex = re.compile(r'pass(?:word)?=([^, ]+)')
@@ -517,10 +519,17 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
         self._smbutils.unmount_smb_share(export_path)
 
     def _get_export_path(self, connection_info):
-        return connection_info['data']['export'].replace('/', '\\')
+        return connection_info[
+            'data']['export'].replace('/', '\\').rstrip('\\')
 
     def _get_disk_path(self, connection_info):
         export = self._get_export_path(connection_info)
+
+        # In case of loopback shares, we use the local share path.
+        local_share_path = self._pathutils.get_loopback_share_path(export)
+        if local_share_path:
+            export = local_share_path
+
         disk_name = connection_info['data']['name']
         disk_path = os.path.join(export, disk_name)
         return disk_path

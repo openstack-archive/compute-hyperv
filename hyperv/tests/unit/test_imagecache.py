@@ -114,9 +114,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(expected_image_path, result)
 
         mock_fetch.assert_called_once_with(self.context, self.FAKE_IMAGE_REF,
-                                           expected_path,
-                                           self.instance['user_id'],
-                                           self.instance['project_id'])
+                                           expected_path)
         self.imagecache._vhdutils.get_vhd_format.assert_called_once_with(
             expected_path)
         self.imagecache._pathutils.rename.assert_called_once_with(
@@ -174,9 +172,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
 
         mock_fetch.assert_called_once_with(self.context,
                                            fake_rescue_image_id,
-                                           expected_path,
-                                           self.instance.user_id,
-                                           self.instance.project_id)
+                                           expected_path)
         self.imagecache._vhdutils.get_vhd_info.assert_called_once_with(
             expected_vhd_path)
 

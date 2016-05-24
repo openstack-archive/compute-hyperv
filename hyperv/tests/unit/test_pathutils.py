@@ -73,8 +73,7 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
             self.fake_instance_name)
         self.assertIsNone(configdrive_path)
 
-    @mock.patch('os.path.join')
-    def test_get_instances_sub_dir(self, fake_path_join):
+    def test_get_instances_sub_dir(self):
 
         class WindowsError(Exception):
             def __init__(self, winerror=None):

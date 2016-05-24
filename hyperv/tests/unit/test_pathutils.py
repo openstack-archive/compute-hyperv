@@ -187,8 +187,7 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         mock_rmtree.assert_has_calls([mock.call(mock.sentinel.FAKE_PATH),
                                       mock.call(mock.sentinel.FAKE_PATH)])
 
-    @mock.patch('os.path.join')
-    def test_get_instances_sub_dir(self, fake_path_join):
+    def test_get_instances_sub_dir(self):
 
         class WindowsError(Exception):
             def __init__(self, winerror=None):

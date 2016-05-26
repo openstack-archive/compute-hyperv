@@ -15,6 +15,7 @@
 import os
 import time
 
+import ddt
 import mock
 from nova import exception
 from six.moves import builtins
@@ -24,6 +25,7 @@ from hyperv.nova import pathutils
 from hyperv.tests.unit import test_base
 
 
+@ddt.ddt
 class PathUtilsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V PathUtils class."""
 
@@ -34,6 +36,8 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
 
         self._pathutils = pathutils.PathUtils()
         self._pathutils._smb_conn_attr = mock.MagicMock()
+        self._pathutils._smbutils = mock.MagicMock()
+        self._smbutils = self._pathutils._smbutils
 
     def _mock_lookup_configdrive_path(self, ext, rescue=False):
         self._pathutils.get_instance_dir = mock.MagicMock(
@@ -172,3 +176,34 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
 
         mock_named_tempfile.assert_called_once_with(dir=fake_dest_dir)
         mock_exists.assert_called_once_with(expected_src_tmp_path)
+
+    @ddt.data({},
+              {'local_share_path': None},
+              {'is_same_dir': True},
+              {'raised_exc': Exception})
+    @ddt.unpack
+    @mock.patch.object(pathutils.PathUtils, 'check_dirs_shared_storage')
+    def test_get_loopback_share_path(
+            self, mock_check_dirs_shared_storage,
+            local_share_path=mock.sentinel.local_share_path,
+            is_same_dir=False, raised_exc=None):
+        self._smbutils.get_smb_share_path.return_value = local_share_path
+        mock_check_dirs_shared_storage.side_effect = (
+            raised_exc or [is_same_dir])
+
+        share_address = r'\\1.2.3.4\fake_share'
+        expected_path = (
+            local_share_path
+            if local_share_path and is_same_dir and not raised_exc
+            else None)
+        share_path = self._pathutils.get_loopback_share_path(share_address)
+
+        self.assertEqual(expected_path, share_path)
+        self._smbutils.get_smb_share_path.assert_called_once_with(
+            'fake_share')
+
+        if local_share_path:
+            mock_check_dirs_shared_storage.assert_called_once_with(
+                local_share_path, share_address)
+        else:
+            self.assertFalse(mock_check_dirs_shared_storage.called)

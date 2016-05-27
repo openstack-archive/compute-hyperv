@@ -242,14 +242,18 @@ class VolumeOps(object):
         # as IOPS allocation units.
         return (no_bytes + self._IOPS_BASE_SIZE - 1) // self._IOPS_BASE_SIZE
 
-    def get_disk_path_mapping(self, block_device_info):
+    def get_disk_path_mapping(self, block_device_info, block_dev_only=False):
         block_mapping = driver.block_device_info_get_mapping(block_device_info)
         disk_path_mapping = {}
         for vol in block_mapping:
             connection_info = vol['connection_info']
             disk_serial = connection_info['serial']
 
-            disk_path = self.get_disk_resource_path(connection_info)
+            volume_driver = self._get_volume_driver(connection_info)
+            if block_dev_only and not volume_driver._is_block_dev:
+                continue
+
+            disk_path = volume_driver.get_disk_resource_path(connection_info)
             disk_path_mapping[disk_serial] = disk_path
         return disk_path_mapping
 

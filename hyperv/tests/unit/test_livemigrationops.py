@@ -107,6 +107,8 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
                                                       mock_instance)
         mock_connect_volumes.assert_called_once_with(
             mock.sentinel.BLOCK_INFO)
+        mock_get_disk_path_mapping.assert_called_once_with(
+            mock.sentinel.BLOCK_INFO, block_dev_only=True)
         if phys_disks_attached:
             livemigrutils = self._livemigrops._livemigrutils
             livemigrutils.create_planned_vm.assert_called_once_with(

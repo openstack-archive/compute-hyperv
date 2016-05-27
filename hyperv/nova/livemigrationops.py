@@ -51,13 +51,16 @@ class LiveMigrationOps(object):
         instance_name = instance_ref["name"]
 
         try:
-            self._vmops.copy_vm_dvd_disks(instance_name, dest)
-
             # We must make sure that the console log workers are stopped,
             # otherwise we won't be able to delete / move VM log files.
             self._serial_console_ops.stop_console_handler(instance_name)
 
-            self._pathutils.copy_vm_console_logs(instance_name, dest)
+            shared_storage = (
+                self._pathutils.check_remote_instances_dir_shared(dest))
+            if not shared_storage:
+                self._vmops.copy_vm_dvd_disks(instance_name, dest)
+                self._pathutils.copy_vm_console_logs(instance_name, dest)
+
             self._livemigrutils.live_migrate_vm(instance_name,
                                                 dest)
         except Exception:

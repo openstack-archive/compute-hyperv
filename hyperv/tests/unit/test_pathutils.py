@@ -207,3 +207,20 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
                 local_share_path, share_address)
         else:
             self.assertFalse(mock_check_dirs_shared_storage.called)
+
+    @mock.patch.object(pathutils.PathUtils, 'check_dirs_shared_storage')
+    @mock.patch.object(pathutils.PathUtils, 'get_instances_dir')
+    def test_check_remote_instances_shared(self, mock_get_instances_dir,
+                                           mock_check_dirs_shared_storage):
+        mock_get_instances_dir.side_effect = [mock.sentinel.local_inst_dir,
+                                              mock.sentinel.remote_inst_dir]
+
+        shared_storage = self._pathutils.check_remote_instances_dir_shared(
+            mock.sentinel.dest)
+
+        self.assertEqual(mock_check_dirs_shared_storage.return_value,
+                         shared_storage)
+        mock_get_instances_dir.assert_has_calls(
+            [mock.call(), mock.call(mock.sentinel.dest)])
+        mock_check_dirs_shared_storage.assert_called_once_with(
+            mock.sentinel.local_inst_dir, mock.sentinel.remote_inst_dir)

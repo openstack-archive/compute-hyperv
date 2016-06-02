@@ -51,6 +51,7 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver._serialconsoleops = mock.MagicMock()
         self.driver._imagecache = mock.MagicMock()
         self.driver._image_api = mock.MagicMock()
+        self.driver._pathutils = mock.MagicMock()
 
     @mock.patch.object(driver.utilsfactory, 'get_hostutils')
     def test_check_minimum_windows_version(self, mock_get_hostutils):
@@ -116,6 +117,10 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(driver.eventhandler, 'InstanceEventHandler')
     def test_init_host(self, mock_InstanceEventHandler):
+
+        mock_get_inst_dir = self.driver._pathutils.get_instances_dir
+        mock_get_inst_dir.return_value = mock.sentinel.FAKE_DIR
+
         self.driver.init_host(mock.sentinel.host)
 
         mock_start_console_handlers = (
@@ -125,6 +130,10 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             state_change_callback=self.driver.emit_event)
         fake_event_handler = mock_InstanceEventHandler.return_value
         fake_event_handler.start_listener.assert_called_once_with()
+
+        mock_get_inst_dir.assert_called_once_with()
+        self.driver._pathutils.check_create_dir.assert_called_once_with(
+            mock.sentinel.FAKE_DIR)
 
     def test_list_instance_uuids(self):
         self.driver.list_instance_uuids()

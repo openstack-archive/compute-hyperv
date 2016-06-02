@@ -714,21 +714,42 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
 
     @ddt.data(True, False)
     def test_get_disk_path(self, is_local):
-        fake_local_share_path = 'fake_local_share_path' if is_local else None
-        mock_get_loopback_share_path = self._pathutils.get_loopback_share_path
-        mock_get_loopback_share_path.return_value = fake_local_share_path
-        expected = os.path.join(
-            fake_local_share_path or self._FAKE_SHARE_NORMALIZED,
-            self._FAKE_DISK_NAME)
+        fake_local_share_path = 'fake_local_share_path'
+        self._smbutils.is_local_share.return_value = is_local
+        self._smbutils.get_smb_share_path.return_value = (
+            fake_local_share_path)
+
+        expected_dir = (fake_local_share_path if is_local
+                        else self._FAKE_SHARE_NORMALIZED)
+        expected_path = os.path.join(expected_dir,
+                                     self._FAKE_DISK_NAME)
+
         disk_path = self._volume_driver._get_disk_path(
             self._FAKE_CONNECTION_INFO)
 
-        mock_get_loopback_share_path.assert_called_once_with(
+        self._smbutils.is_local_share.assert_called_once_with(
             self._FAKE_SHARE_NORMALIZED)
-        self.assertEqual(expected, disk_path)
+        if is_local:
+            self._smbutils.get_smb_share_path.assert_called_once_with(
+                'fake_share')
+        self.assertEqual(expected_path, disk_path)
+
+    def test_get_disk_path_not_found(self):
+        self._smbutils.is_local_share.return_value = True
+        self._smbutils.get_smb_share_path.return_value = False
+
+        self.assertRaises(exception.DiskNotFound,
+                          self._volume_driver._get_disk_path,
+                          self._FAKE_CONNECTION_INFO)
 
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_parse_credentials')
-    def _test_ensure_mounted(self, mock_parse_credentials, is_mounted=False):
+    @ddt.data({},
+              {'is_mounted': True},
+              {'is_local': True})
+    @ddt.unpack
+    def test_ensure_mounted(self, mock_parse_credentials,
+                            is_mounted=False, is_local=False):
+        self._smbutils.is_local_share.return_value = is_local
         mock_mount_smb_share = self._volume_driver._smbutils.mount_smb_share
         mock_check_smb_mapping = (
             self._volume_driver._smbutils.check_smb_mapping)
@@ -739,7 +760,10 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         self._volume_driver.ensure_share_mounted(
             self._FAKE_CONNECTION_INFO)
 
-        if is_mounted:
+        self._smbutils.is_local_share.assert_called_once_with(
+            self._FAKE_SHARE_NORMALIZED)
+
+        if is_local or is_mounted:
             self.assertFalse(
                 mock_mount_smb_share.called)
         else:
@@ -750,14 +774,9 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
                 username=self._FAKE_USERNAME,
                 password=self._FAKE_PASSWORD)
 
-    def test_ensure_mounted_new_share(self):
-        self._test_ensure_mounted()
-
-    def test_ensure_already_mounted(self):
-        self._test_ensure_mounted(is_mounted=True)
-
     @mock.patch.object(volumeops.SMBFSVolumeDriver, '_parse_credentials')
     def test_ensure_mounted_missing_opts(self, mock_parse_credentials):
+        self._smbutils.is_local_share.return_value = False
         mock_mount_smb_share = self._volume_driver._smbutils.mount_smb_share
         mock_check_smb_mapping = (
             self._volume_driver._smbutils.check_smb_mapping)

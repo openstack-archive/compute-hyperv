@@ -541,21 +541,28 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
             'data']['export'].replace('/', '\\').rstrip('\\')
 
     def _get_disk_path(self, connection_info):
-        export = self._get_export_path(connection_info)
+        share_addr = self._get_export_path(connection_info)
+        disk_dir = share_addr
 
-        # In case of loopback shares, we use the local share path.
-        local_share_path = self._pathutils.get_loopback_share_path(export)
-        if local_share_path:
-            export = local_share_path
+        if self._smbutils.is_local_share(share_addr):
+            share_name = share_addr.lstrip('\\').split('\\')[1]
+            disk_dir = self._smbutils.get_smb_share_path(share_name)
+            if not disk_dir:
+                err_msg = _("Could not find the local share path for %s.")
+                raise exception.DiskNotFound(err_msg % share_addr)
 
         disk_name = connection_info['data']['name']
-        disk_path = os.path.join(export, disk_name)
+        disk_path = os.path.join(disk_dir, disk_name)
         return disk_path
 
     def ensure_share_mounted(self, connection_info):
         export_path = self._get_export_path(connection_info)
 
-        if not self._smbutils.check_smb_mapping(export_path):
+        if self._smbutils.is_local_share(export_path):
+            LOG.info(_LI("Skipping mounting share %s, "
+                         "using local path instead."),
+                     export_path)
+        elif not self._smbutils.check_smb_mapping(export_path):
             opts_str = connection_info['data'].get('options') or ''
             username, password = self._parse_credentials(opts_str)
             self._smbutils.mount_smb_share(export_path,

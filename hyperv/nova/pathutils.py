@@ -23,7 +23,7 @@ from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 
-from hyperv.i18n import _, _LE
+from hyperv.i18n import _
 from hyperv.nova import constants
 
 LOG = logging.getLogger(__name__)
@@ -201,21 +201,6 @@ class PathUtils(pathutils.PathUtils):
 
             shared_storage = os.path.exists(src_path)
         return shared_storage
-
-    def get_loopback_share_path(self, share_address):
-        # In case of loopback shares, we use the local share path.
-        share_name = share_address.strip('\\').split('\\')[1]
-        local_share_path = self._smbutils.get_smb_share_path(
-            share_name)
-        try:
-            if local_share_path and self.check_dirs_shared_storage(
-                    local_share_path, share_address):
-                return local_share_path
-        except Exception:
-            err_msg = _LE("Got exception while verifying if share %s "
-                          "is local, thus it will not be handled as a "
-                          "loopback share.")
-            LOG.exception(err_msg)
 
     def check_remote_instances_dir_shared(self, dest):
         # Checks if the instances dir from a remote host points

@@ -213,3 +213,11 @@ class PathUtils(pathutils.PathUtils):
                           "is local, thus it will not be handled as a "
                           "loopback share.")
             LOG.exception(err_msg)
+
+    def check_remote_instances_dir_shared(self, dest):
+        # Checks if the instances dir from a remote host points
+        # to the same storage location as the local instances dir.
+        local_inst_dir = self.get_instances_dir()
+        remote_inst_dir = self.get_instances_dir(dest)
+        return self.check_dirs_shared_storage(local_inst_dir,
+                                              remote_inst_dir)

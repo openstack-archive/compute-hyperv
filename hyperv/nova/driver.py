@@ -30,6 +30,7 @@ from hyperv.nova import hostutils
 from hyperv.nova import imagecache
 from hyperv.nova import livemigrationops
 from hyperv.nova import migrationops
+from hyperv.nova import pathutils
 from hyperv.nova import rdpconsoleops
 from hyperv.nova import serialconsoleops
 from hyperv.nova import snapshotops
@@ -58,6 +59,7 @@ class HyperVDriver(driver.ComputeDriver):
         self._rdpconsoleops = rdpconsoleops.RDPConsoleOps()
         self._serialconsoleops = serialconsoleops.SerialConsoleOps()
         self._imagecache = imagecache.ImageCache()
+        self._pathutils = pathutils.PathUtils()
 
         # check if the current version is older than kernel version 6.2
         # (Windows Server 2012)
@@ -79,6 +81,9 @@ class HyperVDriver(driver.ComputeDriver):
         event_handler = eventhandler.InstanceEventHandler(
             state_change_callback=self.emit_event)
         event_handler.start_listener()
+
+        instance_path = self._pathutils.get_instances_dir()
+        self._pathutils.check_create_dir(instance_path)
 
     def list_instance_uuids(self):
         return self._vmops.list_instance_uuids()

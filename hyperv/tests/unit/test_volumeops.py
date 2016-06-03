@@ -43,9 +43,10 @@ connection_data = {'volume_id': 'fake_vol_id',
                    'auth_password': mock.sentinel.auth_password}
 
 
-def get_fake_block_dev_info():
+def get_fake_block_dev_info(dev_count=1):
     return {'block_device_mapping': [
-        fake_block_device.AnonFakeDbBlockDeviceDict({'source_type': 'volume'})]
+        fake_block_device.AnonFakeDbBlockDeviceDict({'source_type': 'volume'})
+        for dev in range(dev_count)]
     }
 
 
@@ -260,22 +261,36 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
         connect_volume.assert_called_once_with(
             conn_info)
 
-    @mock.patch.object(volumeops.VolumeOps,
-                       'get_disk_resource_path')
-    def test_get_disk_path_mapping(self, mock_get_disk_path):
-        block_device_info = get_fake_block_dev_info()
+    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
+    def test_get_disk_path_mapping(self, mock_get_vol_drv):
+        block_device_info = get_fake_block_dev_info(dev_count=2)
         block_device_mapping = block_device_info['block_device_mapping']
-        fake_conn_info = get_fake_connection_info()
-        block_device_mapping[0]['connection_info'] = fake_conn_info
 
-        mock_get_disk_path.return_value = mock.sentinel.disk_path
+        block_dev_conn_info = get_fake_connection_info()
+        block_dev_conn_info['serial'] = mock.sentinel.block_dev_serial
+
+        # We expect this to be filtered out if only block devices are
+        # requested.
+        disk_file_conn_info = get_fake_connection_info()
+        disk_file_conn_info['serial'] = mock.sentinel.disk_file_serial
+
+        block_device_mapping[0]['connection_info'] = block_dev_conn_info
+        block_device_mapping[1]['connection_info'] = disk_file_conn_info
+
+        block_dev_drv = mock.Mock(_is_block_dev=True)
+        mock_get_vol_drv.side_effect = [block_dev_drv,
+                                        mock.Mock(_is_block_dev=False)]
+
+        block_dev_drv.get_disk_resource_path.return_value = (
+            mock.sentinel.disk_path)
 
         resulted_disk_path_mapping = self._volumeops.get_disk_path_mapping(
-            block_device_info)
+            block_device_info, block_dev_only=True)
 
-        mock_get_disk_path.assert_called_once_with(fake_conn_info)
+        block_dev_drv.get_disk_resource_path.assert_called_once_with(
+            block_dev_conn_info)
         expected_disk_path_mapping = {
-            mock.sentinel.serial: mock.sentinel.disk_path
+            mock.sentinel.block_dev_serial: mock.sentinel.disk_path
         }
         self.assertEqual(expected_disk_path_mapping,
                          resulted_disk_path_mapping)

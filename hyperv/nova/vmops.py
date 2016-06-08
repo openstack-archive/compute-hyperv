@@ -35,7 +35,6 @@ from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_concurrency import processutils
-from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_service import loopingcall
 from oslo_utils import excutils
@@ -55,16 +54,7 @@ from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 
-hyperv_opts = [
-    cfg.BoolOpt('enable_remotefx',
-                default=False,
-                help='Enables RemoteFX. This requires at least one DirectX 11 '
-                     'capable graphic adapter for Windows Server 2012 R2 and '
-                     'RDS-Virtualization feature has to be enabled')
-]
-
 CONF = nova.conf.CONF
-CONF.register_opts(hyperv_opts, 'hyperv')
 CONF.import_opt('use_cow_images', 'nova.virt.driver')
 
 SHUTDOWN_TIME_INCREMENT = 5

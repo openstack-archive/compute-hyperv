@@ -32,6 +32,7 @@ import six
 
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
+from hyperv.nova import pdk
 from hyperv.nova import vmops
 from hyperv.nova import volumeops
 from hyperv.tests import fake_instance
@@ -53,6 +54,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     FAKE_LOG = 'fake_log'
     _WIN_VERSION_6_3 = '6.3.0'
     _WIN_VERSION_6_4 = '6.4.0'
+    _FAKE_PDK_FILE_PATH = 'C:\\path\\to\\fakepdk.pdk'
+    _FAKE_FSK_FILE_PATH = 'C:\\path\\to\\fakefsk.fsk'
 
     ISO9660 = 'iso9660'
     _FAKE_CONFIGDRIVE_PATH = 'C:/fake_instance_dir/configdrive.vhd'
@@ -67,6 +70,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vhdutils = mock.MagicMock()
         self._vmops._pathutils = mock.MagicMock()
         self._vmops._hostutils = mock.MagicMock()
+        self._vmops._pdk = mock.MagicMock()
         self._vmops._serial_console_ops = mock.MagicMock()
 
     def test_get_vif_driver_cached(self):
@@ -432,7 +436,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 block_device_info['ephemerals'])
             mock_get_image_vm_gen.assert_called_once_with(
                 mock_instance.uuid, mock_image_meta)
-            mock_create_instance.assert_called_once_with(
+            mock_create_instance.assert_called_once_with(self.context,
                 mock_instance, [fake_network_info], root_device_info,
                 block_device_info, fake_vm_gen, mock_image_meta)
             mock_configdrive_required.assert_called_once_with(mock_instance)
@@ -522,6 +526,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual([('network-vif-plugged', mock.sentinel.vif_id2)],
                          events)
 
+    @mock.patch.object(vmops.VMOps, '_configure_secure_vm')
     @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
     @mock.patch.object(vmops.VMOps, '_requires_certificate')
     @mock.patch('hyperv.nova.vif.get_vif_driver')
@@ -540,6 +545,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               mock_set_qos_specs, mock_get_vif_driver,
                               mock_requires_certificate,
                               mock_requires_secure_boot,
+                              mock_configure_secure_vm,
                               enable_instance_metrics,
                               vm_gen=constants.VM_GEN_1, vnuma_enabled=False,
                               requires_sec_boot=True, remotefx=False):
@@ -574,6 +580,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         if remotefx is True and vm_gen == constants.VM_GEN_2:
             self.assertRaises(os_win_exc.HyperVException,
                               self._vmops.create_instance,
+                              context=self.context,
                               instance=mock_instance,
                               network_info=[fake_network_info],
                               block_device_info=block_device_info,
@@ -582,6 +589,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               image_meta=mock.sentinel.image_meta)
         else:
             self._vmops.create_instance(
+                    context=self.context,
                     instance=mock_instance,
                     network_info=[fake_network_info],
                     block_device_info=block_device_info,
@@ -634,6 +642,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 enable_secure_boot = self._vmops._vmutils.enable_secure_boot
                 enable_secure_boot.assert_called_once_with(
                     mock_instance.name, mock_requires_certificate.return_value)
+                mock_configure_secure_vm.assert_called_once_with(self.context,
+                    mock_instance, mock.sentinel.image_meta, requires_sec_boot)
 
     def test_create_instance(self):
         self._test_create_instance(enable_instance_metrics=True)
@@ -1826,3 +1836,159 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     def test_requires_certificate_os_type_none(self):
         self._test_requires_certificate(os_type=None)
+
+    @mock.patch.object(vmops.VMOps, '_check_vtpm_requirements')
+    @mock.patch.object(vmops.VMOps, '_feature_requested')
+    @mock.patch.object(vmops.VMOps, '_create_fsk')
+    @mock.patch.object(pdk.PDK, 'create_pdk')
+    def _test_configure_secure_vm(self, mock_create_pdk, mock_create_fsk,
+                                  mock_feature_requested,
+                                  mock_check_vtpm_requirements,
+                                  requires_shielded, requires_encryption):
+        instance = mock.MagicMock()
+        mock_tmp_file = self._vmops._pathutils.temporary_file
+        mock_tmp_file.return_value.__enter__.side_effect = [
+            self._FAKE_FSK_FILE_PATH, self._FAKE_PDK_FILE_PATH]
+        mock_feature_requested.side_effect = [requires_shielded,
+                                              requires_encryption]
+
+        self._vmops._configure_secure_vm(mock.sentinel.context, instance,
+                                         mock.sentinel.image_meta,
+                                         mock.sentinel.secure_boot_enabled)
+
+        expected_calls = [mock.call(instance,
+                                    mock.sentinel.image_meta,
+                                    constants.IMAGE_PROP_VTPM_SHIELDED)]
+        if not requires_shielded:
+            expected_calls.append(mock.call(instance,
+                                            mock.sentinel.image_meta,
+                                            constants.IMAGE_PROP_VTPM))
+        mock_feature_requested.has_calls(expected_calls)
+
+        mock_check_vtpm_requirements.assert_called_with(instance,
+            mock.sentinel.image_meta, mock.sentinel.secure_boot_enabled)
+        self._vmops._vmutils.add_vtpm.assert_called_once_with(
+            instance.name, self._FAKE_PDK_FILE_PATH,
+            shielded=requires_shielded)
+        self._vmops._vmutils.provision_vm.assert_called_once_with(
+            instance.name, self._FAKE_FSK_FILE_PATH, self._FAKE_PDK_FILE_PATH)
+
+    def test_configure_secure_vm_shielded(self):
+        self._test_configure_secure_vm(requires_shielded=True,
+                                       requires_encryption=True)
+
+    def test_configure_secure_vm_encryption(self):
+        self._test_configure_secure_vm(requires_shielded=False,
+                                       requires_encryption=True)
+
+    @mock.patch.object(vmops.VMOps, '_check_vtpm_requirements')
+    @mock.patch.object(vmops.VMOps, '_feature_requested')
+    def test_configure_regular_vm(self, mock_feature_requested,
+                                  mock_check_vtpm_requirements):
+        mock_feature_requested.side_effect = [False, False]
+
+        self._vmops._configure_secure_vm(mock.sentinel.context,
+                                         mock.MagicMock(),
+                                         mock.sentinel.image_meta,
+                                         mock.sentinel.secure_boot_enabled)
+
+        self.assertFalse(mock_check_vtpm_requirements.called)
+
+    def _test_feature_requested(self, image_prop, image_prop_required):
+        mock_instance = mock.MagicMock()
+        mock_image_meta = {'properties': {image_prop: image_prop_required}}
+
+        feature_requested = image_prop_required == constants.REQUIRED
+
+        result = self._vmops._feature_requested(mock_instance,
+                                                mock_image_meta,
+                                                image_prop)
+        self.assertEqual(feature_requested, result)
+
+    def test_vtpm_image_required(self):
+        self._test_feature_requested(
+            image_prop=constants.IMAGE_PROP_VTPM_SHIELDED,
+            image_prop_required=constants.REQUIRED)
+
+    def test_vtpm_image_disabled(self):
+        self._test_feature_requested(
+            image_prop=constants.IMAGE_PROP_VTPM_SHIELDED,
+            image_prop_required=constants.DISABLED)
+
+    def _test_check_vtpm_requirements(self, os_type='windows',
+                                      secure_boot_enabled=True,
+                                      guarded_host=True):
+        mock_instance = mock.MagicMock()
+        mock_image_meta = {'properties': {'os_type': os_type}}
+        guarded_host = self._vmops._hostutils.is_host_guarded.return_value
+
+        if (not secure_boot_enabled or not guarded_host or
+                os_type not in os_win_const.VTPM_SUPPORTED_OS):
+            self.assertRaises(exception.InstanceUnacceptable,
+                              self._vmops._check_vtpm_requirements,
+                              mock_instance,
+                              mock_image_meta,
+                              secure_boot_enabled)
+        else:
+            self._vmops._check_vtpm_requirements(mock_instance,
+                                                 mock_image_meta,
+                                                 secure_boot_enabled)
+
+    def test_vtpm_requirements_all_satisfied(self):
+        self._test_check_vtpm_requirements()
+
+    def test_vtpm_requirement_no_secureboot(self):
+        self._test_check_vtpm_requirements(secure_boot_enabled=False)
+
+    def test_vtpm_requirement_not_supported_os(self):
+        self._test_check_vtpm_requirements(
+            os_type=mock.sentinel.unsupported_os)
+
+    def test_vtpm_requirement_host_not_guarded(self):
+        self._test_check_vtpm_requirements(guarded_host=False)
+
+    @mock.patch.object(vmops.VMOps, '_get_fsk_data')
+    def test_create_fsk(self, mock_get_fsk_data):
+        mock_instance = mock.MagicMock()
+        fsk_pairs = mock_get_fsk_data.return_value
+
+        self._vmops._create_fsk(mock_instance, mock.sentinel.fsk_filename)
+        mock_get_fsk_data.assert_called_once_with(mock_instance)
+        self._vmops._vmutils.populate_fsk.assert_called_once_with(
+            mock.sentinel.fsk_filename, fsk_pairs)
+
+    def _test_get_fsk_data(self, metadata, instance_name,
+                           expected_fsk_pairs=None):
+        mock_instance = mock.MagicMock()
+        mock_instance.metadata = metadata
+        mock_instance.hostname = instance_name
+
+        result = self._vmops._get_fsk_data(mock_instance)
+        self.assertEqual(expected_fsk_pairs, result)
+
+    def test_get_fsk_data_no_computername(self):
+        metadata = {'TimeZone': mock.sentinel.timezone}
+        expected_fsk_pairs = {'@@ComputerName@@': mock.sentinel.instance_name}
+        self._test_get_fsk_data(metadata,
+                                mock.sentinel.instance_name,
+                                expected_fsk_pairs)
+
+    def test_get_fsk_data_with_computername(self):
+        metadata = {'fsk:ComputerName': mock.sentinel.instance_name,
+                    'fsk:TimeZone': mock.sentinel.timezone}
+        expected_fsk_pairs = {'@@ComputerName@@': mock.sentinel.instance_name,
+                              '@@TimeZone@@': mock.sentinel.timezone}
+        self._test_get_fsk_data(metadata,
+                                mock.sentinel.instance_name,
+                                expected_fsk_pairs)
+
+    def test_get_fsk_data_computername_exception(self):
+        mock_instance = mock.MagicMock()
+        mock_instance.metadata = {
+            'fsk:ComputerName': mock.sentinel.computer_name,
+            'fsk:TimeZone': mock.sentinel.timezone}
+        mock_instance.hostname = mock.sentinel.instance_name
+
+        self.assertRaises(exception.InstanceUnacceptable,
+                          self._vmops._get_fsk_data,
+                          mock_instance)

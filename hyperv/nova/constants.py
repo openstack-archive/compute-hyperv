@@ -103,6 +103,9 @@ REQUIRED = "required"
 DISABLED = "disabled"
 OPTIONAL = "optional"
 
+IMAGE_PROP_VTPM = "os_vtpm"
+IMAGE_PROP_VTPM_SHIELDED = "os_shielded_vm"
+
 BOOT_DEVICE_FLOPPY = 0
 BOOT_DEVICE_CDROM = 1
 BOOT_DEVICE_HARDDISK = 2

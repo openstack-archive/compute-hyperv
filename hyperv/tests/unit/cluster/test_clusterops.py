@@ -74,6 +74,8 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self.clusterops.remove_from_cluster(mock_instance)
 
+        self.clusterops._clustutils.vm_exists.assert_called_once_with(
+            mock_instance.name)
         self.clusterops._clustutils.delete.assert_called_once_with(
             mock_instance.name)
         self.assertIsNone(self.clusterops._instance_map.get(

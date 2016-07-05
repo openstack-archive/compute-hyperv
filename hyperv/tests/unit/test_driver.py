@@ -23,6 +23,7 @@ import sys
 import mock
 from nova import exception
 from nova import safe_utils
+from nova.tests.unit import fake_instance
 from nova.virt import driver as base_driver
 from os_win import exceptions as os_win_exc
 
@@ -460,10 +461,22 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.instance)
 
     def test_get_console_output(self):
-        mock_instance = mock.MagicMock()
-        self.driver.get_console_output(mock.sentinel.context, mock_instance)
-        get_console_output = self.driver._serialconsoleops.get_console_output
-        get_console_output.assert_called_once_with(mock_instance.name)
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        self.driver.get_console_output(self.context, mock_instance)
+
+        mock_get_console_output = (
+            self.driver._serialconsoleops.get_console_output)
+        mock_get_console_output.assert_called_once_with(
+            mock_instance.name)
+
+    def test_get_serial_console(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        self.driver.get_console_output(self.context, mock_instance)
+
+        mock_get_serial_console = (
+            self.driver._serialconsoleops.get_console_output)
+        mock_get_serial_console.assert_called_once_with(
+            mock_instance.name)
 
     def test_manage_image_cache(self):
         self.driver.manage_image_cache(mock.sentinel.context,

@@ -13,10 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import eventlet
-
 import nova.conf
 from nova.i18n import _LW
+from nova import utils
 from nova.virt import event as virtevent
 from os_win import constants
 from os_win import exceptions as os_win_exc
@@ -51,7 +50,7 @@ class InstanceEventHandler(object):
         self._state_change_callback = state_change_callback
 
     def start_listener(self):
-        eventlet.spawn_n(self._listener, self._event_callback)
+        utils.spawn_n(self._listener, self._event_callback)
 
     def _event_callback(self, instance_name, instance_power_state):
         # Instance uuid set by Nova. If this is missing, we assume that
@@ -65,10 +64,10 @@ class InstanceEventHandler(object):
     def _emit_event(self, instance_name, instance_uuid, instance_state):
         virt_event = self._get_virt_event(instance_uuid,
                                           instance_state)
-        eventlet.spawn_n(self._state_change_callback, virt_event)
+        utils.spawn_n(self._state_change_callback, virt_event)
 
-        eventlet.spawn_n(self._handle_serial_console_workers,
-                         instance_name, instance_state)
+        utils.spawn_n(self._handle_serial_console_workers,
+                      instance_name, instance_state)
 
     def _handle_serial_console_workers(self, instance_name, instance_state):
         if instance_state == constants.HYPERV_VM_STATE_ENABLED:

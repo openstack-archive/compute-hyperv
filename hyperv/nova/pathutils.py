@@ -175,7 +175,7 @@ class PathUtils(pathutils.PathUtils):
             if self.exists(local_log_path):
                 self.copy(local_log_path, remote_log_path)
 
-    def lookup_image_basepath(self, image_name):
+    def get_image_path(self, image_name):
         # Note: it is possible that the path doesn't exist
         base_dir = self.get_base_vhd_dir()
         for ext in ['vhd', 'vhdx', 'iso']:

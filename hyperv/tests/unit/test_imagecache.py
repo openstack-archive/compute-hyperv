@@ -14,6 +14,7 @@
 #    under the License.
 
 import os
+import uuid
 
 import mock
 from nova import exception
@@ -180,127 +181,104 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.imagecache._vhdutils.get_vhd_info.assert_called_once_with(
             expected_vhd_path)
 
-    @mock.patch.object(imagecache.ImageCache, '_update_image_timestamp')
-    @mock.patch.object(imagecache.ImageCache, '_remove_if_old_image')
-    def test_age_and_verify_cached_images(self, mock_rem_if_old_img,
-                                          mock_update_img_timestamp):
+    def test_age_and_verify_cached_images(self):
         fake_images = [mock.sentinel.FAKE_IMG1, mock.sentinel.FAKE_IMG2]
         fake_used_images = [mock.sentinel.FAKE_IMG1]
+
         self.imagecache.originals = fake_images
         self.imagecache.used_images = fake_used_images
+
+        self.imagecache._update_image_timestamp = mock.Mock()
+        self.imagecache._remove_if_old_image = mock.Mock()
 
         self.imagecache._age_and_verify_cached_images(
             mock.sentinel.FAKE_CONTEXT,
             mock.sentinel.all_instances,
             mock.sentinel.FAKE_BASE_DIR)
 
-        mock_update_img_timestamp.assert_called_once_with(
+        self.imagecache._update_image_timestamp.assert_called_once_with(
             mock.sentinel.FAKE_IMG1)
-        mock_rem_if_old_img.assert_called_once_with(
+        self.imagecache._remove_if_old_image.assert_called_once_with(
             mock.sentinel.FAKE_IMG2)
 
+    @mock.patch.object(imagecache.os, 'utime')
     @mock.patch.object(imagecache.ImageCache, '_get_image_backing_files')
-    @mock.patch.object(os, 'utime')
-    def test_update_image_timestamp(self, mock_utime,
-                                    mock_get_img_backing_file):
-        fake_backing_files = [mock.sentinel.IMG_PATH1, mock.sentinel.IMG_PATH2,
-                              mock.sentinel.IMG_PATH3]
-        mock_get_img_backing_file.return_value = fake_backing_files
+    def test_update_image_timestamp(self, mock_get_backing_files, mock_utime):
+        mock_get_backing_files.return_value = [mock.sentinel.backing_file,
+                                               mock.sentinel.resized_file]
 
-        self.imagecache._update_image_timestamp(mock.sentinel.IMG)
+        self.imagecache._update_image_timestamp(mock.sentinel.image)
 
-        mock_get_img_backing_file.assert_called_once_with(mock.sentinel.IMG)
-        mock_utime.assert_has_calls([mock.call(mock.sentinel.IMG_PATH1, None),
-                                     mock.call(mock.sentinel.IMG_PATH2, None),
-                                     mock.call(mock.sentinel.IMG_PATH3, None)])
+        mock_get_backing_files.assert_called_once_with(mock.sentinel.image)
+        mock_utime.assert_has_calls([
+            mock.call(mock.sentinel.backing_file, None),
+            mock.call(mock.sentinel.resized_file, None)])
 
     def test_get_image_backing_files(self):
-        mock_lookup_img_basepath = (
-            self.imagecache._pathutils.lookup_image_basepath)
-        fake_image_name = 'fake_image_name'
-        resized_image1 = '%s_1' % fake_image_name
-        resized_image5 = '%s_5' % fake_image_name
-        self.imagecache.unexplained_images = [resized_image1,
-                                              resized_image5]
-        fake_backing_files = [mock.sentinel.BACKING_FILE,
-                              mock.sentinel.RESIZED_FILE1,
-                              mock.sentinel.RESIZED_FILE2]
-        mock_lookup_img_basepath.side_effect = fake_backing_files
+        image = 'fake-img'
+        self.imagecache.unexplained_images = ['%s_42' % image,
+                                              'unexplained-img']
+        self.imagecache._pathutils.get_image_path.side_effect = [
+            mock.sentinel.base_file, mock.sentinel.resized_file]
 
-        ret = self.imagecache._get_image_backing_files(fake_image_name)
+        backing_files = self.imagecache._get_image_backing_files(image)
 
-        self.assertEqual(ret, fake_backing_files)
+        self.assertEqual([mock.sentinel.base_file, mock.sentinel.resized_file],
+                         backing_files)
+        self.imagecache._pathutils.get_image_path.assert_has_calls(
+            [mock.call(image), mock.call('%s_42' % image)])
 
     @mock.patch.object(imagecache.ImageCache, '_get_image_backing_files')
-    @mock.patch.object(imagecache.ImageCache, 'remove_old_image')
-    def test_remove_if_old_image(self, mock_remove_old_image,
-                                  mock_get_img_backing_file):
-        self.flags(remove_unused_original_minimum_age_seconds=3000)
-        fake_backing_files = [mock.sentinel.BACKING_FILE,
-                              mock.sentinel.RESIZED_FILE1,
-                              mock.sentinel.RESIZED_FILE2]
-        mock_get_img_backing_file.return_value = fake_backing_files
-        self.imagecache._pathutils.get_age_of_file.side_effect = [3600, 2400,
-                                                                  3600]
+    def test_remove_if_old_image(self, mock_get_backing_files):
+        mock_get_backing_files.return_value = [mock.sentinel.backing_file,
+                                               mock.sentinel.resized_file]
+        self.imagecache._pathutils.get_age_of_file.return_value = 3600
 
-        self.imagecache._remove_if_old_image(mock.sentinel.FAKE_IMAGE_FILE)
+        self.imagecache._remove_if_old_image(mock.sentinel.image)
 
-        calls = [mock.call(mock.sentinel.BACKING_FILE),
-                 mock.call(mock.sentinel.RESIZED_FILE1),
-                 mock.call(mock.sentinel.RESIZED_FILE2)]
+        calls = [mock.call(mock.sentinel.backing_file),
+                 mock.call(mock.sentinel.resized_file)]
         self.imagecache._pathutils.get_age_of_file.assert_has_calls(calls)
-        mock_remove_old_image.assert_has_calls([
-            mock.call(mock.sentinel.BACKING_FILE),
-            mock.call(mock.sentinel.RESIZED_FILE2)])
+        mock_get_backing_files.assert_called_once_with(mock.sentinel.image)
 
-    def test_remove_old_images(self):
-        self.imagecache.remove_old_image(mock.sentinel.img_file)
-
-        self.imagecache._pathutils.remove.assert_called_once_with(
-            mock.sentinel.img_file)
-
-    @mock.patch.object(imagecache.ImageCache, '_list_running_instances')
-    @mock.patch.object(imagecache.ImageCache, 'list_base_images')
     @mock.patch.object(imagecache.ImageCache, '_age_and_verify_cached_images')
-    def test_update(self, mock_age_and_verify_cached_images,
-                    mock_list_base_images, mock_list_running_instances):
-        mock_get_base_vhd_dir = self.imagecache._pathutils.get_base_vhd_dir
-        mock_get_base_vhd_dir.return_value = mock.sentinel.base_vhd_dir
+    @mock.patch.object(imagecache.ImageCache, '_list_base_images')
+    @mock.patch.object(imagecache.ImageCache, '_list_running_instances')
+    def test_update(self, mock_list_instances, mock_list_images,
+                    mock_age_cached_images):
+        base_vhd_dir = self.imagecache._pathutils.get_base_vhd_dir.return_value
+        mock_list_instances.return_value = {
+            'used_images': {mock.sentinel.image: mock.sentinel.instances}}
+        mock_list_images.return_value = {
+            'originals': [mock.sentinel.original_image],
+            'unexplained_images': [mock.sentinel.unexplained_image]}
 
-        fake_used_images = mock.MagicMock()
-        fake_used_images.keys.return_value = mock.sentinel.used_images
-        fake_running = {'used_images': fake_used_images}
-        fake_all_files = {'originals': mock.sentinel.originals,
-                          'unexplained_images': mock.sentinel.unexplained
-                         }
-        mock_list_running_instances.return_value = fake_running
-        mock_list_base_images.return_value = fake_all_files
-
-        self.imagecache.update(mock.sentinel.FAKE_CONTEXT,
+        self.imagecache.update(mock.sentinel.context,
                                mock.sentinel.all_instances)
 
-        mock_get_base_vhd_dir.assert_called_once_with()
-        mock_list_running_instances.assert_called_once_with(
-            mock.sentinel.FAKE_CONTEXT, mock.sentinel.all_instances)
-        mock_list_base_images.assert_called_once_with(
-            mock.sentinel.base_vhd_dir)
-        mock_age_and_verify_cached_images.assert_called_once_with(
-            mock.sentinel.FAKE_CONTEXT, mock.sentinel.all_instances,
-            mock.sentinel.base_vhd_dir)
-        self.assertEqual(mock.sentinel.used_images,
-                         self.imagecache.used_images)
-        self.assertEqual(mock.sentinel.originals, self.imagecache.originals)
-        self.assertEqual(mock.sentinel.unexplained,
+        self.assertEqual([mock.sentinel.image],
+                         list(self.imagecache.used_images))
+        self.assertEqual([mock.sentinel.original_image],
+                         self.imagecache.originals)
+        self.assertEqual([mock.sentinel.unexplained_image],
                          self.imagecache.unexplained_images)
+        mock_list_instances.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.all_instances)
+        mock_list_images.assert_called_once_with(base_vhd_dir)
+        mock_age_cached_images.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.all_instances, base_vhd_dir)
 
-    @mock.patch.object(os, 'listdir')
-    def test_list_base_images(self, mock_list_dir):
-        fake_file1 = 'fake_file'
-        fake_file2 = '5a51f1c5-fbc2-4e26-906c-759d45168ecb'
-        fake_file3 = '5a51f1c5-fbc2-4e26-906c-759d45168ecb_5'
-        mock_list_dir.return_value = [fake_file1, fake_file2, fake_file3]
+    @mock.patch.object(imagecache.os, 'listdir')
+    def test_list_base_images(self, mock_listdir):
+        original_image = str(uuid.uuid4())
+        unexplained_image = 'just-an-image'
+        ignored_file = 'foo.bar'
+        mock_listdir.return_value = ['%s.VHD' % original_image,
+                                     '%s.vhdx' % unexplained_image,
+                                     ignored_file]
 
-        ret = self.imagecache.list_base_images(mock.sentinel.base_vhd_dir)
+        images = self.imagecache._list_base_images(mock.sentinel.base_dir)
 
-        self.assertEqual([fake_file1, fake_file3], ret['unexplained_images'])
-        self.assertEqual([fake_file2], ret['originals'])
+        self.assertEqual([original_image], images['originals'])
+        self.assertEqual([unexplained_image], images['unexplained_images'])
+        mock_listdir.assert_called_once_with(mock.sentinel.base_dir)

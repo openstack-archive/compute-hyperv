@@ -164,9 +164,9 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
             'VirtualSize': self.instance.root_gb + 1}
         (expected_path,
          expected_vhd_path) = self._prepare_get_cached_image(
-            rescue_image_id=fake_rescue_image_id,
-            image_format=constants.DISK_FORMAT_VHD)
-        self.assertRaises(exception.FlavorDiskSmallerThanImage,
+            rescue_image_id=fake_rescue_image_id)
+
+        self.assertRaises(exception.ImageUnacceptable,
                           self.imagecache.get_cached_image,
                           self.context, self.instance,
                           fake_rescue_image_id)

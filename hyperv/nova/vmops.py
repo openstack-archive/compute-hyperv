@@ -857,11 +857,24 @@ class VMOps(object):
 
     def rescue_instance(self, context, instance, network_info, image_meta,
                         rescue_password):
+        try:
+            self._rescue_instance(context, instance, network_info,
+                                  image_meta, rescue_password)
+        except Exception as exc:
+            with excutils.save_and_reraise_exception():
+                err_msg = _LE("Instance rescue failed. Exception: %(exc)s. "
+                              "Attempting to unrescue the instance.")
+                LOG.error(err_msg, {'exc': exc}, instance=instance)
+                self.unrescue_instance(instance)
+
+    def _rescue_instance(self, context, instance, network_info, image_meta,
+                         rescue_password):
         rescue_image_id = image_meta.get('id') or instance.image_ref
         rescue_vhd_path = self._create_root_vhd(
             context, instance, rescue_image_id=rescue_image_id)
 
-        rescue_vm_gen = self.get_image_vm_generation(instance.uuid, image_meta)
+        rescue_vm_gen = self.get_image_vm_generation(instance.uuid,
+                                                     image_meta)
         vm_gen = self._vmutils.get_vm_generation(instance.name)
         if rescue_vm_gen != vm_gen:
             err_msg = _('The requested rescue image requires a different VM '
@@ -914,7 +927,8 @@ class VMOps(object):
 
         if (instance.vm_state == vm_states.RESCUED and
                 not (rescue_vhd_path and root_vhd_path)):
-            err_msg = _('Missing instance root and/or rescue image.')
+            err_msg = _('Missing instance root and/or rescue image. '
+                        'The instance cannot be unrescued.')
             raise exception.InstanceNotRescuable(reason=err_msg,
                                                  instance_id=instance.uuid)
 
@@ -929,6 +943,7 @@ class VMOps(object):
             fileutils.delete_if_exists(rescue_vhd_path)
         self._attach_drive(instance.name, root_vhd_path, 0,
                            self._ROOT_DISK_CTRL_ADDR, controller_type)
+
         self._detach_config_drive(instance.name, rescue=True, delete=True)
 
         # Reattach the configdrive, if exists and not already attached.

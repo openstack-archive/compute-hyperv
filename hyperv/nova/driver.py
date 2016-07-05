@@ -27,7 +27,6 @@ from nova.virt import driver
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_log import log as logging
-from oslo_utils import excutils
 import six
 
 from hyperv.i18n import _, _LE
@@ -353,12 +352,8 @@ class HyperVDriver(driver.ComputeDriver):
     def rescue(self, context, instance, network_info, image_meta,
                rescue_password):
         image_meta = self._recreate_image_meta(context, instance, image_meta)
-        try:
-            self._vmops.rescue_instance(context, instance, network_info,
-                                        image_meta, rescue_password)
-        except Exception:
-            with excutils.save_and_reraise_exception():
-                self._vmops.unrescue_instance(instance)
+        self._vmops.rescue_instance(context, instance, network_info,
+                                    image_meta, rescue_password)
 
     def unrescue(self, instance, network_info):
         self._vmops.unrescue_instance(instance)

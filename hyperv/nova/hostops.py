@@ -26,6 +26,7 @@ from nova.compute import arch
 from nova.compute import hv_type
 from nova.compute import vm_mode
 from nova.compute import vm_states
+import nova.conf
 from nova import context
 from nova import exception
 from nova import objects
@@ -48,9 +49,8 @@ hyper_host_opts = [
                     'evacuated during host maintenance.'),
 ]
 
-CONF = cfg.CONF
+CONF = nova.conf.CONF
 CONF.register_opts(hyper_host_opts, 'hyperv')
-CONF.import_opt('enable_remotefx', 'hyperv.nova.vmops', 'hyperv')
 LOG = logging.getLogger(__name__)
 
 

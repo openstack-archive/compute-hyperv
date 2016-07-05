@@ -55,8 +55,8 @@ from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 
+
 CONF = nova.conf.CONF
-CONF.import_opt('use_cow_images', 'nova.virt.driver')
 
 SHUTDOWN_TIME_INCREMENT = 5
 REBOOT_TYPE_SOFT = 'SOFT'

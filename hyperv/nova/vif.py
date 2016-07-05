@@ -24,7 +24,6 @@ from os_win import utilsfactory
 from hyperv.nova import ovsutils
 
 CONF = nova.conf.CONF
-CONF.import_opt('network_api_class', 'nova.network')
 
 
 class HyperVBaseVIFDriver(object):

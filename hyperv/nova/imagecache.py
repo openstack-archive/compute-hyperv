@@ -35,10 +35,6 @@ from hyperv.nova import pathutils
 LOG = logging.getLogger(__name__)
 
 CONF = nova.conf.CONF
-CONF.import_opt('use_cow_images', 'nova.virt.driver')
-CONF.import_opt('instances_path', 'nova.compute.manager')
-CONF.import_opt('remove_unused_original_minimum_age_seconds',
-                'nova.virt.imagecache')
 
 
 def synchronize_with_path(f):

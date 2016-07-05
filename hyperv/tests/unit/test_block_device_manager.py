@@ -30,43 +30,34 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
         self._bdman = block_device_manager.BlockDeviceInfoManager()
 
     @mock.patch('nova.virt.configdrive.required_by')
-    def _test_init_controller_slot_counter(self, mock_cfg_drive_req,
-                                           vm_gen, configdrive=True):
-        mock_cfg_drive_req.return_value = configdrive
+    def test_init_controller_slot_counter_gen1_no_configdrive(
+            self, mock_cfg_drive_req):
+        mock_cfg_drive_req.return_value = False
         slot_map = self._bdman._initialize_controller_slot_counter(
-            mock.sentinel.FAKE_INSTANCE, vm_gen)
-        if vm_gen == constants.VM_GEN_1:
-            self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][0],
+            mock.sentinel.FAKE_INSTANCE, constants.VM_GEN_1)
+
+        self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][0],
                              os_win_const.IDE_CONTROLLER_SLOTS_NUMBER)
-            self.assertEqual(slot_map[constants.CTRL_TYPE_SCSI][0],
-                             os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER)
-            if configdrive:
-                self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][1],
-                                 os_win_const.IDE_CONTROLLER_SLOTS_NUMBER - 1)
-            else:
-                self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][1],
-                                 os_win_const.IDE_CONTROLLER_SLOTS_NUMBER)
-        else:
-            if configdrive:
-                self.assertEqual(slot_map[constants.CTRL_TYPE_SCSI][0],
-                                 os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER - 1)
-            else:
-                self.assertEqual(slot_map[constants.CTRL_TYPE_SCSI][0],
-                                 os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER)
+        self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][1],
+                         os_win_const.IDE_CONTROLLER_SLOTS_NUMBER)
+        self.assertEqual(slot_map[constants.CTRL_TYPE_SCSI][0],
+                         os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER)
 
-    def test_init_controller_slot_counter_gen1(self):
-        self._test_init_controller_slot_counter(vm_gen=constants.VM_GEN_1)
+    @mock.patch('nova.virt.configdrive.required_by')
+    def test_init_controller_slot_counter_gen1(self, mock_cfg_drive_req):
+        slot_map = self._bdman._initialize_controller_slot_counter(
+            mock.sentinel.FAKE_INSTANCE, constants.VM_GEN_1)
 
-    def test_init_controller_slot_counter_gen1_no_configdrive(self):
-        self._test_init_controller_slot_counter(vm_gen=constants.VM_GEN_1,
-                                                configdrive=False)
+        self.assertEqual(slot_map[constants.CTRL_TYPE_IDE][1],
+                         os_win_const.IDE_CONTROLLER_SLOTS_NUMBER - 1)
 
-    def test_init_controller_slot_counter_gen2(self):
-        self._test_init_controller_slot_counter(vm_gen=constants.VM_GEN_2)
+    @mock.patch('nova.virt.configdrive.required_by')
+    def test_init_controller_slot_counter_gen2(self, mock_cfg_drive_req):
+        slot_map = self._bdman._initialize_controller_slot_counter(
+            mock.sentinel.FAKE_INSTANCE, constants.VM_GEN_2)
 
-    def test_init_controller_slot_counter_gen2_no_configdrive(self):
-        self._test_init_controller_slot_counter(vm_gen=constants.VM_GEN_2,
-                                                configdrive=False)
+        self.assertEqual(slot_map[constants.CTRL_TYPE_SCSI][0],
+                         os_win_const.SCSI_CONTROLLER_SLOTS_NUMBER - 1)
 
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        '_initialize_controller_slot_counter')
@@ -107,7 +98,6 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
                                            mock_get_avail_ctrl_slot,
                                            disk_format,
                                            vm_gen=constants.VM_GEN_1,
-                                           fail=False,
                                            boot_from_volume=False):
         image_meta = {'disk_format': disk_format}
         bdi = {'root_device': '/dev/sda',
@@ -117,39 +107,43 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
 
         mock_is_boot_from_vol.return_value = boot_from_volume
         mock_get_avail_ctrl_slot.return_value = (0, 0)
-        if fail:
-            self.assertRaises(exception.InvalidDiskFormat,
-                              self._bdman._check_and_update_root_device,
-                              vm_gen, image_meta, bdi,
-                              mock.sentinel.SLOT_MAP)
-        else:
-            self._bdman._check_and_update_root_device(vm_gen, image_meta, bdi,
-                                                      mock.sentinel.SLOT_MAP)
-            root_disk = bdi['root_disk']
-            if boot_from_volume:
-                self.assertEqual(root_disk['type'], constants.VOLUME)
-                self.assertIsNone(root_disk['path'])
-                self.assertEqual(root_disk['connection_info'],
-                                 mock.sentinel.FAKE_CONN_INFO)
-            else:
-                image_type = self._bdman._TYPE_FOR_DISK_FORMAT.get(
-                    image_meta['disk_format'])
-                self.assertEqual(root_disk['type'], image_type)
-                self.assertIsNone(root_disk['path'])
-                self.assertIsNone(root_disk['connection_info'])
-            disk_bus = (constants.CTRL_TYPE_IDE if
-                vm_gen == constants.VM_GEN_1 else constants.CTRL_TYPE_SCSI)
-            self.assertEqual(root_disk['disk_bus'], disk_bus)
-            self.assertEqual(root_disk['drive_addr'], 0)
-            self.assertEqual(root_disk['ctrl_disk_addr'], 0)
-            self.assertEqual(root_disk['boot_index'], 0)
-            self.assertEqual(root_disk['mount_device'], bdi['root_device'])
-            mock_get_avail_ctrl_slot.assert_called_once_with(
-                root_disk['disk_bus'], mock.sentinel.SLOT_MAP)
 
-    def test_check_and_update_root_device_exception(self):
-        self._test_check_and_update_root_device(disk_format='fake_format',
-                                                fail=True)
+        self._bdman._check_and_update_root_device(vm_gen, image_meta, bdi,
+                                                  mock.sentinel.SLOT_MAP)
+
+        root_disk = bdi['root_disk']
+        if boot_from_volume:
+            self.assertEqual(root_disk['type'], constants.VOLUME)
+            self.assertIsNone(root_disk['path'])
+            self.assertEqual(root_disk['connection_info'],
+                             mock.sentinel.FAKE_CONN_INFO)
+        else:
+            image_type = self._bdman._TYPE_FOR_DISK_FORMAT.get(
+                image_meta['disk_format'])
+            self.assertEqual(root_disk['type'], image_type)
+            self.assertIsNone(root_disk['path'])
+            self.assertIsNone(root_disk['connection_info'])
+
+        disk_bus = (constants.CTRL_TYPE_IDE if
+            vm_gen == constants.VM_GEN_1 else constants.CTRL_TYPE_SCSI)
+        self.assertEqual(root_disk['disk_bus'], disk_bus)
+        self.assertEqual(root_disk['drive_addr'], 0)
+        self.assertEqual(root_disk['ctrl_disk_addr'], 0)
+        self.assertEqual(root_disk['boot_index'], 0)
+        self.assertEqual(root_disk['mount_device'], bdi['root_device'])
+        mock_get_avail_ctrl_slot.assert_called_once_with(
+            root_disk['disk_bus'], mock.sentinel.SLOT_MAP)
+
+    @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
+                       'is_boot_from_volume', return_value=False)
+    def test_check_and_update_root_device_exception(self, mock_is_boot_vol):
+        bdi = {}
+        image_meta = mock.MagicMock(disk_format=mock.sentinel.fake_format)
+
+        self.assertRaises(exception.InvalidImageFormat,
+                          self._bdman._check_and_update_root_device,
+                          constants.VM_GEN_1, image_meta, bdi,
+                          mock.sentinel.SLOT_MAP)
 
     def test_check_and_update_root_device_gen1(self):
         self._test_check_and_update_root_device(disk_format='vhd')
@@ -181,7 +175,7 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
         if fail:
             slot_map[constants.CTRL_TYPE_IDE][0] = 0
             slot_map[constants.CTRL_TYPE_IDE][1] = 0
-            self.assertRaises(exception.Invalid,
+            self.assertRaises(exception.InvalidBDMFormat,
                               self._bdman._get_available_controller_slot,
                               constants.CTRL_TYPE_IDE,
                               slot_map)
@@ -196,11 +190,11 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
     def test_get_available_controller_slot(self):
         self._test_get_available_controller_slot()
 
-    def test_get_available_controller_slot_exception(self):
-        self._test_get_available_controller_slot(fail=True)
-
     def test_get_available_controller_slot_scsi_ctrl(self):
         self._test_get_available_controller_slot(bus=constants.CTRL_TYPE_SCSI)
+
+    def test_get_available_controller_slot_exception(self):
+        self._test_get_available_controller_slot(fail=True)
 
     def test_is_boot_from_volume_true(self):
         vol = {'mount_device': self._bdman._DEFAULT_ROOT_DEVICE}
@@ -223,7 +217,7 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
 
         ret = self._bdman._get_root_device_bdm(bdi, mount_device)
 
-        self.assertEqual(ret, bdm2)
+        self.assertEqual(bdm2, ret)
 
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        '_check_and_update_bdm')
@@ -265,31 +259,20 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        '_get_available_controller_slot')
-    def _test_check_and_update_bdm(self, mock_get_ctrl_slot,
-                                   bdm, fail=False,
-                                   vm_gen=constants.VM_GEN_1,
-                                   slot_map=None):
+    def test_check_and_update_bdm_with_defaults(self, mock_get_ctrl_slot):
         mock_get_ctrl_slot.return_value = ((mock.sentinel.DRIVE_ADDR,
                                             mock.sentinel.CTRL_DISK_ADDR))
-        if fail:
-            self.assertRaises(exception.InvalidDiskInfo,
-                              self._bdman._check_and_update_bdm,
-                              slot_map, vm_gen, bdm)
-        else:
-            self._bdman._check_and_update_bdm(slot_map, vm_gen, bdm)
-            mock_get_ctrl_slot.assert_called_once_with(bdm['disk_bus'],
-                                                       slot_map)
-            self.assertEqual(bdm['drive_addr'], mock.sentinel.DRIVE_ADDR)
-            self.assertEqual(bdm['ctrl_disk_addr'],
-                             mock.sentinel.CTRL_DISK_ADDR)
-
-    def test_check_and_update_bdm_with_defaults(self):
         bdm = {'device_type': None,
                'disk_bus': None,
                'boot_index': None}
 
-        self._test_check_and_update_bdm(bdm=bdm,
-                                        slot_map=mock.sentinel.FAKE_SLOT_MAP)
+        self._bdman._check_and_update_bdm(mock.sentinel.FAKE_SLOT_MAP,
+                                          constants.VM_GEN_1, bdm)
+
+        mock_get_ctrl_slot.assert_called_once_with(
+          bdm['disk_bus'], mock.sentinel.FAKE_SLOT_MAP)
+        self.assertEqual(mock.sentinel.DRIVE_ADDR, bdm['drive_addr'])
+        self.assertEqual(mock.sentinel.CTRL_DISK_ADDR, bdm['ctrl_disk_addr'])
         self.assertEqual('disk', bdm['device_type'])
         self.assertEqual(self._bdman._DEFAULT_BUS, bdm['disk_bus'])
         self.assertIsNone(bdm['boot_index'])
@@ -298,15 +281,17 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
         bdm = {'device_type': 'cdrom',
                'disk_bus': 'IDE'}
 
-        self._test_check_and_update_bdm(bdm=bdm, fail=True,
-                                        slot_map=mock.sentinel.FAKE_SLOT_MAP)
+        self.assertRaises(exception.InvalidDiskInfo,
+                          self._bdman._check_and_update_bdm,
+                          mock.sentinel.FAKE_SLOT_MAP, constants.VM_GEN_1, bdm)
 
     def test_check_and_update_bdm_exception_disk_bus(self):
         bdm = {'device_type': 'disk',
                'disk_bus': 'fake_bus'}
 
-        self._test_check_and_update_bdm(bdm=bdm, fail=True,
-                                        slot_map=mock.sentinel.FAKE_SLOT_MAP)
+        self.assertRaises(exception.InvalidDiskInfo,
+                          self._bdman._check_and_update_bdm,
+                          mock.sentinel.FAKE_SLOT_MAP, constants.VM_GEN_1, bdm)
 
     def test_sort_by_boot_order(self):
         original = [{'boot_index': 2}, {'boot_index': None}, {'boot_index': 1}]

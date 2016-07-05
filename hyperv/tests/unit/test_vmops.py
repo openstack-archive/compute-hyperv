@@ -1289,7 +1289,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                              mock_get_image_vm_gen,
                              mock_create_root_vhd,
                              mock_configdrive_required):
-        mock_image_meta = {'id': mock.sentinel.rescue_image_id}
+        mock_image_meta = mock.MagicMock()
         mock_vm_gen = constants.VM_GEN_2
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
@@ -1308,6 +1308,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                     mock_image_meta,
                                     mock.sentinel.rescue_password)
 
+        mock_get_image_vm_gen.assert_called_once_with(
+            mock_instance.uuid, mock_image_meta)
         self._vmops._vmutils.detach_vm_disk.assert_called_once_with(
             mock_instance.name, mock.sentinel.root_vhd_path,
             is_physical=False)
@@ -1331,41 +1333,44 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(vmops.VMOps, '_create_root_vhd')
     @mock.patch.object(vmops.VMOps, 'get_image_vm_generation')
-    def test_rescue_instance_boot_from_volume(self, mock_get_image_vm_gen,
-                                              mock_create_root_vhd):
-        mock_image_meta = {'id': mock.sentinel.rescue_image_id}
+    @mock.patch.object(vmops.VMOps, 'unrescue_instance')
+    def _test_rescue_instance_exception(self, mock_unrescue,
+                                        mock_get_image_vm_gen,
+                                        mock_create_root_vhd,
+                                        wrong_vm_gen=False,
+                                        boot_from_volume=False,
+                                        expected_exc=None):
+        mock_vm_gen = constants.VM_GEN_1
+        image_vm_gen = (mock_vm_gen
+                        if not wrong_vm_gen else constants.VM_GEN_2)
+        mock_image_meta = mock.MagicMock()
 
         mock_instance = fake_instance.fake_instance_obj(self.context)
-        mock_get_image_vm_gen.return_value = constants.VM_GEN_1
-        self._vmops._vmutils.get_vm_generation.return_value = (
-            constants.VM_GEN_1)
-        self._vmops._pathutils.lookup_root_vhd_path.return_value = None
+        mock_get_image_vm_gen.return_value = image_vm_gen
+        self._vmops._vmutils.get_vm_generation.return_value = mock_vm_gen
+        self._vmops._pathutils.lookup_root_vhd_path.return_value = (
+            mock.sentinel.root_vhd_path if not boot_from_volume else None)
 
-        self.assertRaises(exception.InstanceNotRescuable,
+        self.assertRaises(expected_exc,
                           self._vmops.rescue_instance,
                           self.context, mock_instance,
                           mock.sentinel.network_info,
                           mock_image_meta,
                           mock.sentinel.rescue_password)
+        mock_unrescue.assert_called_once_with(mock_instance)
 
-    @mock.patch.object(vmops.VMOps, '_create_root_vhd')
-    @mock.patch.object(vmops.VMOps, 'get_image_vm_generation')
-    def test_rescue_instance_wrong_vm_gen(self, mock_get_image_vm_gen,
-                                          mock_create_root_vhd):
+    def test_rescue_instance_wrong_vm_gen(self):
         # Test the case when the rescue image requires a different
         # vm generation than the actual rescued instance.
-        mock_image_meta = {'id': mock.sentinel.rescue_image_id}
-        mock_instance = fake_instance.fake_instance_obj(self.context)
-        mock_get_image_vm_gen.return_value = constants.VM_GEN_1
-        self._vmops._vmutils.get_vm_generation.return_value = (
-            constants.VM_GEN_2)
+        self._test_rescue_instance_exception(
+            wrong_vm_gen=True,
+            expected_exc=exception.ImageUnacceptable)
 
-        self.assertRaises(exception.ImageUnacceptable,
-                          self._vmops.rescue_instance,
-                          self.context, mock_instance,
-                          mock.sentinel.network_info,
-                          mock_image_meta,
-                          mock.sentinel.rescue_password)
+    def test_rescue_instance_boot_from_volume(self):
+        # Rescuing instances booted from volume is not supported.
+        self._test_rescue_instance_exception(
+            boot_from_volume=True,
+            expected_exc=exception.InstanceNotRescuable)
 
     @mock.patch.object(fileutils, 'delete_if_exists')
     @mock.patch.object(vmops.VMOps, '_attach_drive')
@@ -1404,12 +1409,14 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance.name, mock.sentinel.root_vhd_path, 0,
             self._vmops._ROOT_DISK_CTRL_ADDR,
             vmops.VM_GENERATIONS_CONTROLLER_TYPES[mock_vm_gen])
-        mock_detach_config_drive.assert_called_once_with(
-            mock_instance.name, rescue=True, delete=True)
+        mock_detach_config_drive.assert_called_once_with(mock_instance.name,
+                                                         rescue=True,
+                                                         delete=True)
         mock_delete_if_exists.assert_called_once_with(
             mock.sentinel.rescue_vhd_path)
         self._vmops._vmutils.is_disk_attached.assert_called_once_with(
-            mock.sentinel.configdrive_path, is_physical=False)
+            mock.sentinel.configdrive_path,
+            is_physical=False)
         mock_attach_configdrive.assert_called_once_with(
             mock_instance, mock.sentinel.configdrive_path, mock_vm_gen)
         mock_power_on.assert_called_once_with(mock_instance)

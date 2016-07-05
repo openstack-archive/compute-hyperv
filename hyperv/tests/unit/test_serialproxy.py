@@ -70,6 +70,17 @@ class SerialProxyTestCase(test_base.HyperVBaseTestCase):
         self._proxy._conn.close.assert_called_once_with()
         self._proxy._sock.close.assert_called_once_with()
 
+    @mock.patch.object(serialproxy.SerialProxy, '_accept_conn')
+    @mock.patch.object(serialproxy.SerialProxy, '_setup_socket')
+    def test_run(self, mock_setup_socket, mock_accept_con):
+        self._proxy._stopped = mock.MagicMock()
+        self._proxy._stopped.isSet.side_effect = [False, True]
+
+        self._proxy.run()
+
+        mock_setup_socket.assert_called_once_with()
+        mock_accept_con.assert_called_once_with()
+
     def test_accept_connection(self):
         mock_conn = mock.Mock()
         self._proxy._sock = mock.Mock()

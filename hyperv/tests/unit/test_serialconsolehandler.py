@@ -18,19 +18,21 @@ import mock
 from nova import exception
 
 from hyperv.nova import constants
+from hyperv.nova import pathutils
 from hyperv.nova import serialconsolehandler
 from hyperv.nova import serialproxy
 from hyperv.tests.unit import test_base
 
 
 class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
-
-    _FAKE_INSTANCE_NAME = 'fake_instance_name'
-
-    def setUp(self):
+    @mock.patch.object(pathutils.PathUtils, 'get_vm_console_log_paths')
+    def setUp(self, mock_get_log_paths):
         super(SerialConsoleHandlerTestCase, self).setUp()
+
+        mock_get_log_paths.return_value = [mock.sentinel.log_path]
+
         self._consolehandler = serialconsolehandler.SerialConsoleHandler(
-            self._FAKE_INSTANCE_NAME)
+            mock.sentinel.instance_name)
 
         self._consolehandler._log_path = mock.sentinel.log_path
         self._consolehandler._pathutils = mock.Mock()
@@ -38,7 +40,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(serialconsolehandler.SerialConsoleHandler,
                        '_setup_handlers')
-    def test_start_handler(self, mock_setup_handlers):
+    def test_start(self, mock_setup_handlers):
         mock_workers = [mock.Mock(), mock.Mock()]
         self._consolehandler._workers = mock_workers
 
@@ -49,7 +51,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
             worker.start.assert_called_once_with()
 
     @mock.patch('nova.console.serial.release_port')
-    def test_stop_handler(self, mock_release_port):
+    def test_stop(self, mock_release_port):
         mock_serial_proxy = mock.Mock()
         mock_workers = [mock_serial_proxy, mock.Mock()]
 
@@ -104,7 +106,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
         self._consolehandler._setup_serial_proxy_handler()
 
         mock_serial_proxy_class.assert_called_once_with(
-            self._FAKE_INSTANCE_NAME,
+            mock.sentinel.instance_name,
             mock.sentinel.host, mock.sentinel.port,
             mock_input_queue,
             mock_output_queue,
@@ -231,25 +233,18 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
                           self._consolehandler._get_vm_serial_port_mapping)
 
     @mock.patch('nova.console.type.ConsoleSerial')
-    def _test_get_serial_console(self, mock_serial_console,
-                                 console_enabled=True):
-        self.flags(enabled=console_enabled, group='serial_console')
+    def test_get_serial_console(self, mock_serial_console):
+        self.flags(enabled=True, group='serial_console')
+        self._consolehandler._listen_host = mock.sentinel.host
+        self._consolehandler._listen_port = mock.sentinel.port
 
-        if console_enabled:
-            self._consolehandler._listen_host = mock.sentinel.host
-            self._consolehandler._listen_port = mock.sentinel.port
-
-            ret_val = self._consolehandler.get_serial_console()
-            self.assertEqual(mock_serial_console.return_value, ret_val)
-            mock_serial_console.assert_called_once_with(
-                host=mock.sentinel.host,
-                port=mock.sentinel.port)
-        else:
-            self.assertRaises(exception.ConsoleTypeUnavailable,
-                              self._consolehandler.get_serial_console)
-
-    def test_get_serial_console(self):
-        self._test_get_serial_console()
+        ret_val = self._consolehandler.get_serial_console()
+        self.assertEqual(mock_serial_console.return_value, ret_val)
+        mock_serial_console.assert_called_once_with(
+            host=mock.sentinel.host,
+            port=mock.sentinel.port)
 
     def test_get_serial_console_disabled(self):
-        self._test_get_serial_console(console_enabled=False)
+        self.flags(enabled=False, group='serial_console')
+        self.assertRaises(exception.ConsoleTypeUnavailable,
+                          self._consolehandler.get_serial_console)

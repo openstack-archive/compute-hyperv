@@ -92,6 +92,8 @@ class LiveMigrationOps(object):
         disk_path_mapping = self._volumeops.get_disk_path_mapping(
             block_device_info, block_dev_only=True)
         if disk_path_mapping:
+            # We create a planned VM, ensuring that volumes will remain
+            # attached after the VM is migrated.
             self._livemigrutils.create_planned_vm(instance.name,
                                                   instance.host,
                                                   disk_path_mapping)

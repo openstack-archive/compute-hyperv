@@ -23,6 +23,13 @@ from nova.i18n import _
 
 from hyperv.nova import constants
 
+# Note(lpetrut): Eventlet greenpipes are not supported on Windows. The named
+# pipe handlers implemented in os-win use Windows API calls which can block
+# the whole thread. In order to avoid this, those workers run in separate
+# 'native' threads.
+#
+# As this proxy communicates with those workers via queues, the serial console
+# proxy workers have to run in 'native' threads as well.
 threading = patcher.original('threading')
 
 
@@ -66,7 +73,8 @@ class SerialProxy(threading.Thread):
             msg = (_('Failed to initialize serial proxy on'
                      '%(addr)s:%(port)s, handling connections '
                      'to instance %(instance_name)s. Error: %(error)s') %
-                   {'addr': self._addr, 'port': self._port,
+                   {'addr': self._addr,
+                    'port': self._port,
                     'instance_name': self._instance_name,
                     'error': err})
             raise exception.NovaException(msg)

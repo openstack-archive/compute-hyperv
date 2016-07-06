@@ -88,8 +88,8 @@ class BlockDeviceInfoManager(object):
             root_disk['type'] = self._TYPE_FOR_DISK_FORMAT.get(
                 image_meta['disk_format'])
             if root_disk['type'] is None:
-                raise exception.InvalidDiskFormat(
-                    disk_format=image_meta['disk_format'])
+                raise exception.InvalidImageFormat(
+                    format=image_meta['disk_format'])
             root_disk['path'] = None
             root_disk['connection_info'] = None
 
@@ -116,7 +116,7 @@ class BlockDeviceInfoManager(object):
 
         msg = _("There are no more free slots on controller %s"
                 ) % controller_type
-        raise exception.Invalid(msg)
+        raise exception.InvalidBDMFormat(details=msg)
 
     def is_boot_from_volume(self, block_device_info):
         if block_device_info:

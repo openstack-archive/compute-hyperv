@@ -43,6 +43,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_post = mock.MagicMock()
         mock_recover = mock.MagicMock()
+        mock_copy_logs = self._livemigrops._pathutils.copy_vm_console_logs
         fake_dest = mock.sentinel.DESTINATION
         self._livemigrops._livemigrutils.live_migrate_vm.side_effect = [
             side_effect]
@@ -68,7 +69,6 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
                 mock_instance.name)
             mock_check_shared_storage.assert_called_once_with(fake_dest)
 
-            mock_copy_logs = self._livemigrops._pathutils.copy_vm_console_logs
             if not shared_storage:
                 mock_copy_logs.assert_called_once_with(mock_instance.name,
                                                        fake_dest)

@@ -821,7 +821,7 @@ class VMOps(object):
         self.power_on(instance, block_device_info, network_info)
 
     def _create_vm_com_port_pipes(self, instance, serial_ports):
-        for port_number, port_type in six.iteritems(serial_ports):
+        for port_number, port_type in serial_ports.items():
             pipe_path = r'\\.\pipe\%s_%s' % (instance.uuid, port_type)
             self._vmutils.set_vm_serial_port_connection(
                 instance.name, port_number, pipe_path)

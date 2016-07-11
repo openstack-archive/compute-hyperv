@@ -13,9 +13,8 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import eventlet
 import mock
-
+from nova import utils
 from os_win import constants
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
@@ -33,7 +32,6 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
         super(EventHandlerTestCase, self).setUp()
 
         self._state_change_callback = mock.Mock()
-        self._running_state_callback = mock.Mock()
         self.flags(
             power_state_check_timeframe=self._FAKE_EVENT_CHECK_TIMEFRAME,
             group='hyperv')
@@ -73,7 +71,7 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
         self._test_event_callback(missing_uuid=True)
 
     @mock.patch.object(eventhandler.InstanceEventHandler, '_get_virt_event')
-    @mock.patch.object(eventlet, 'spawn_n')
+    @mock.patch.object(utils, 'spawn_n')
     def test_emit_event(self, mock_spawn, mock_get_event):
         self._event_handler._emit_event(mock.sentinel.instance_name,
                                         mock.sentinel.instance_uuid,

@@ -28,7 +28,6 @@ from oslo_concurrency import processutils
 from oslo_config import cfg
 from oslo_utils import fileutils
 from oslo_utils import units
-import six
 
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
@@ -1241,7 +1240,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._create_vm_com_port_pipes(mock_instance,
                                               mock_serial_ports)
         expected_calls = []
-        for port_number, port_type in six.iteritems(mock_serial_ports):
+        for port_number, port_type in mock_serial_ports.items():
             expected_pipe = r'\\.\pipe\%s_%s' % (mock_instance.uuid,
                                                  port_type)
             expected_calls.append(mock.call(mock_instance.name,

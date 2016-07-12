@@ -32,11 +32,12 @@ CONF = nova.conf.CONF
 
 ERROR_INVALID_NAME = 123
 
-
 # NOTE(claudiub): part of the pre-existing PathUtils is nova-specific and
 # it does not belong in the os-win library. In order to ensure the same
 # functionality with the least amount of changes necessary, adding as a mixin
 # the os_win.pathutils.PathUtils class into this PathUtils.
+
+
 class PathUtils(pathutils.PathUtils):
 
     def __init__(self):

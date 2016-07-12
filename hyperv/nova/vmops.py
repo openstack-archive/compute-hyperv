@@ -164,7 +164,6 @@ class VMOps(object):
         base_vhd_info = self._vhdutils.get_vhd_info(base_vhd_path)
         base_vhd_size = base_vhd_info['VirtualSize']
         format_ext = base_vhd_path.split('.')[-1]
-
         root_vhd_path = self._pathutils.get_root_vhd_path(instance.name,
                                                           format_ext,
                                                           is_rescue_vhd)
@@ -511,8 +510,8 @@ class VMOps(object):
         if (vm_gen != constants.VM_GEN_1 and root_vhd_path and
                 self._vhdutils.get_vhd_format(
                     root_vhd_path) == constants.DISK_FORMAT_VHD):
-            reason = _LE('Requested VM Generation %s is not supported on '
-                         'this OS.') % vm_gen
+            reason = _LE('Requested VM Generation %s, but provided VHD '
+                         'instead of VHDX.') % vm_gen
             raise exception.InstanceUnacceptable(instance_id=instance_id,
                                                  reason=reason)
 
@@ -744,7 +743,7 @@ class VMOps(object):
         LOG.debug("Power off instance", instance=instance)
 
         # We must make sure that the console log workers are stopped,
-        # otherwise we won't be able to delete / move VM log files.
+        # otherwise we won't be able to delete or move the VM log files.
         self._serial_console_ops.stop_console_handler(instance.name)
 
         if retry_interval <= 0:

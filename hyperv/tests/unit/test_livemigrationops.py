@@ -18,6 +18,7 @@ from os_win import exceptions as os_win_exc
 from oslo_config import cfg
 
 from hyperv.nova import livemigrationops
+from hyperv.nova import serialconsoleops
 from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
@@ -34,8 +35,8 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._livemigrops._block_dev_man = mock.MagicMock()
         self._livemigrops._pathutils = mock.MagicMock()
 
-    @mock.patch('hyperv.nova.serialconsoleops.SerialConsoleOps.'
-                'stop_console_handler')
+    @mock.patch.object(serialconsoleops.SerialConsoleOps,
+                       'stop_console_handler')
     @mock.patch('hyperv.nova.vmops.VMOps.copy_vm_dvd_disks')
     def _test_live_migration(self, mock_copy_dvd_disks,
                              mock_stop_console_handler, side_effect=None,
@@ -103,12 +104,12 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
                                  phys_disks_attached=True):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_instance.image_ref = "fake_image_ref"
-        bdman = self._livemigrops._block_dev_man
-        mock_is_boot_from_vol = bdman.is_boot_from_volume
-        mock_is_boot_from_vol.return_value = None
         mock_get_disk_path_mapping.return_value = (
             mock.sentinel.disk_path_mapping if phys_disks_attached
             else None)
+        bdman = self._livemigrops._block_dev_man
+        mock_is_boot_from_vol = bdman.is_boot_from_volume
+        mock_is_boot_from_vol.return_value = None
         CONF.set_override('use_cow_images', True)
         self._livemigrops.pre_live_migration(
             self.context, mock_instance,

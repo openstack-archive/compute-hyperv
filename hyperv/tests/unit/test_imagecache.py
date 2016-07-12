@@ -49,6 +49,22 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.imagecache._pathutils = mock.MagicMock()
         self.imagecache._vhdutils = mock.MagicMock()
 
+    def _test_get_root_vhd_size_gb(self, old_flavor=True):
+        if old_flavor:
+            mock_flavor = objects.Flavor(**test_flavor.fake_flavor)
+            self.instance.old_flavor = mock_flavor
+        else:
+            self.instance.old_flavor = None
+        return self.imagecache._get_root_vhd_size_gb(self.instance)
+
+    def test_get_root_vhd_size_gb_old_flavor(self):
+        ret_val = self._test_get_root_vhd_size_gb()
+        self.assertEqual(test_flavor.fake_flavor['root_gb'], ret_val)
+
+    def test_get_root_vhd_size_gb(self):
+        ret_val = self._test_get_root_vhd_size_gb(old_flavor=False)
+        self.assertEqual(self.instance.root_gb, ret_val)
+
     @mock.patch.object(imagecache.ImageCache, '_get_root_vhd_size_gb')
     def test_resize_and_cache_vhd_smaller(self, mock_get_vhd_size_gb):
         self.imagecache._vhdutils.get_vhd_size.return_value = {
@@ -69,22 +85,6 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         mock_get_vhd_size_gb.assert_called_once_with(mock.sentinel.instance)
         mock_internal_vhd_size.assert_called_once_with(
             mock.sentinel.vhd_path, self.FAKE_VHD_SIZE_GB * units.Gi)
-
-    def _test_get_root_vhd_size_gb(self, old_flavor=True):
-        if old_flavor:
-            mock_flavor = objects.Flavor(**test_flavor.fake_flavor)
-            self.instance.old_flavor = mock_flavor
-        else:
-            self.instance.old_flavor = None
-        return self.imagecache._get_root_vhd_size_gb(self.instance)
-
-    def test_get_root_vhd_size_gb_old_flavor(self):
-        ret_val = self._test_get_root_vhd_size_gb()
-        self.assertEqual(test_flavor.fake_flavor['root_gb'], ret_val)
-
-    def test_get_root_vhd_size_gb(self):
-        ret_val = self._test_get_root_vhd_size_gb(old_flavor=False)
-        self.assertEqual(self.instance.root_gb, ret_val)
 
     def _prepare_get_cached_image(self, path_exists=False, use_cow=False,
                                   rescue_image_id=None,

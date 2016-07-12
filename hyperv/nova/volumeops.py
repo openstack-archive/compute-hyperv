@@ -24,7 +24,6 @@ import platform
 import re
 import sys
 
-from nova import block_device
 import nova.conf
 from nova import exception
 from nova import utils
@@ -105,15 +104,15 @@ class VolumeOps(object):
 
     def attach_volume(self, connection_info, instance_name,
                       disk_bus=constants.CTRL_TYPE_SCSI):
-        volume_driver = self._get_volume_driver(connection_info)
+        volume_driver = self._get_volume_driver(
+            connection_info=connection_info)
 
         volume_connected = False
         try:
             volume_driver.connect_volume(connection_info)
             volume_connected = True
 
-            volume_driver.attach_volume(connection_info,
-                                        instance_name,
+            volume_driver.attach_volume(connection_info, instance_name,
                                         disk_bus=disk_bus)
 
             qos_specs = connection_info['data'].get('qos_specs') or {}
@@ -142,14 +141,6 @@ class VolumeOps(object):
         volume_driver = self._get_volume_driver(connection_info)
         volume_driver.detach_volume(connection_info, instance_name)
         volume_driver.disconnect_volume(connection_info)
-
-    def ebs_root_in_block_devices(self, block_device_info):
-        if block_device_info:
-            root_device = block_device_info.get('root_device_name')
-            if not root_device:
-                root_device = self._default_root_device
-            return block_device.volume_in_mapping(root_device,
-                                                  block_device_info)
 
     def fix_instance_volume_disk_paths(self, instance_name,
                                        block_device_info):

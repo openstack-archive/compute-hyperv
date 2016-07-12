@@ -20,13 +20,12 @@ import os
 
 from nova import exception
 from nova.virt import configdrive
-from nova.virt import driver
 from os_win import utilsfactory
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
 
-from hyperv.i18n import _, _LE
+from hyperv.i18n import _, _LW, _LE
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
 from hyperv.nova import imagecache
@@ -45,7 +44,7 @@ class MigrationOps(object):
         self._volumeops = volumeops.VolumeOps()
         self._vmops = vmops.VMOps()
         self._imagecache = imagecache.ImageCache()
-        self._block_dev_manager = block_device_manager.BlockDeviceInfoManager()
+        self._block_dev_man = block_device_manager.BlockDeviceInfoManager()
 
     def _migrate_disk_files(self, instance_name, disk_files, dest):
         # TODO(mikal): it would be nice if this method took a full instance,
@@ -99,13 +98,9 @@ class MigrationOps(object):
             LOG.exception(ex)
             LOG.error(_LE("Cannot cleanup migration files"))
 
-    def _check_target_flavor(self, instance, flavor, block_device_info):
+    def _check_target_flavor(self, instance, flavor):
         new_root_gb = flavor.root_gb
         curr_root_gb = instance.root_gb
-
-        ephemerals = driver.block_device_info_get_ephemerals(block_device_info)
-        curr_eph_gb = sum(eph.get('size', 0) for eph in ephemerals)
-        new_eph_gb = instance.ephemeral_gb
 
         if new_root_gb < curr_root_gb:
             raise exception.InstanceFaultRollback(
@@ -116,23 +111,13 @@ class MigrationOps(object):
                                  'curr_root_gb': curr_root_gb,
                                  'new_root_gb': new_root_gb}))
 
-        if new_eph_gb < curr_eph_gb:
-            raise exception.InstanceFaultRollback(
-                exception.CannotResizeDisk(
-                    reason=_("Cannot resize the ephemeral disk(s) to a smaller"
-                             " size. Current total ephemeral size: "
-                             "%(curr_eph_gb)s GB. Requested total size: "
-                             "%(new_eph_gb)s GB") % {
-                                 'curr_eph_gb': curr_eph_gb,
-                                 'new_eph_gb': new_eph_gb}))
-
     def migrate_disk_and_power_off(self, context, instance, dest,
                                    flavor, network_info,
                                    block_device_info=None, timeout=0,
                                    retry_interval=0):
         LOG.debug("migrate_disk_and_power_off called", instance=instance)
 
-        self._check_target_flavor(instance, flavor, block_device_info)
+        self._check_target_flavor(instance, flavor)
 
         self._vmops.power_off(instance, timeout, retry_interval)
 
@@ -182,17 +167,16 @@ class MigrationOps(object):
         image_meta = self._imagecache.get_image_details(context, instance)
         vm_gen = self._vmops.get_image_vm_generation(instance.uuid, image_meta)
 
-        self._block_dev_manager.validate_and_update_bdi(
-            instance, image_meta, vm_gen, block_device_info)
+        self._block_dev_man.validate_and_update_bdi(instance, image_meta,
+                                                    vm_gen, block_device_info)
         root_device = block_device_info['root_disk']
 
         if root_device['type'] == constants.DISK:
-            root_device['path'] = self._pathutils.lookup_root_vhd_path(
-                instance_name)
-            if not root_device['path']:
-                raise exception.DiskNotFound(
-                    _("Cannot find boot VHD file for instance: %s")
-                    % instance_name)
+            root_vhd_path = self._pathutils.lookup_root_vhd_path(instance_name)
+            root_device['path'] = root_vhd_path
+            if not root_vhd_path:
+                base_vhd_path = self._pathutils.get_instance_dir(instance_name)
+                raise exception.DiskNotFound(location=base_vhd_path)
 
         ephemerals = block_device_info['ephemerals']
         self._check_ephemeral_disks(instance, ephemerals)
@@ -242,8 +226,8 @@ class MigrationOps(object):
                 reason=_("Cannot resize the root disk to a smaller size. "
                          "Current size: %(curr_root_gb)s GB. Requested "
                          "size: %(new_root_gb)s GB.") % {
-                             'curr_root_gb': curr_size,
-                             'new_root_gb': new_size})
+                             'curr_root_gb': curr_size / units.Gi,
+                             'new_root_gb': new_size / units.Gi})
         elif new_size > curr_size:
             self._resize_vhd(vhd_path, new_size)
 
@@ -281,31 +265,28 @@ class MigrationOps(object):
         LOG.debug("finish_migration called", instance=instance)
 
         instance_name = instance.name
-
         vm_gen = self._vmops.get_image_vm_generation(instance.uuid, image_meta)
 
-        self._block_dev_manager.validate_and_update_bdi(
-            instance, image_meta, vm_gen, block_device_info)
+        self._block_dev_man.validate_and_update_bdi(instance, image_meta,
+                                                    vm_gen, block_device_info)
         root_device = block_device_info['root_disk']
 
         if root_device['type'] == constants.DISK:
-            root_device['path'] = self._pathutils.lookup_root_vhd_path(
-                instance_name)
-            if not root_device['path']:
-                raise exception.DiskNotFound(_("Cannot find boot VHD "
-                                               "file for instance: %s") %
-                                             instance_name)
+            root_vhd_path = self._pathutils.lookup_root_vhd_path(instance_name)
+            root_device['path'] = root_vhd_path
+            if not root_vhd_path:
+                base_vhd_path = self._pathutils.get_instance_dir(instance_name)
+                raise exception.DiskNotFound(location=base_vhd_path)
 
-            root_vhd_info = self._vhdutils.get_vhd_info(root_device['path'])
+            root_vhd_info = self._vhdutils.get_vhd_info(root_vhd_path)
             src_base_disk_path = root_vhd_info.get("ParentPath")
             if src_base_disk_path:
-                self._check_base_disk(context, instance, root_device['path'],
+                self._check_base_disk(context, instance, root_vhd_path,
                                       src_base_disk_path)
 
             if resize_instance:
                 new_size = instance.root_gb * units.Gi
-                self._check_resize_vhd(root_device['path'], root_vhd_info,
-                                       new_size)
+                self._check_resize_vhd(root_vhd_path, root_vhd_info, new_size)
 
         ephemerals = block_device_info['ephemerals']
         self._check_ephemeral_disks(instance, ephemerals, resize_instance)
@@ -322,20 +303,43 @@ class MigrationOps(object):
     def _check_ephemeral_disks(self, instance, ephemerals,
                                resize_instance=False):
         instance_name = instance.name
-        new_eph_gb = instance.get('ephemeral_gb', 0) * units.Gi
+        new_eph_gb = instance.get('ephemeral_gb', 0)
+
+        if len(ephemerals) == 1:
+            # NOTE(claudiub): Resize only if there is one ephemeral. If there
+            # are more than 1, resizing them can be problematic. This behaviour
+            # also exists in the libvirt driver and it has to be addressed in
+            # the future.
+            ephemerals[0]['size'] = new_eph_gb
+        elif sum(eph['size'] for eph in ephemerals) != new_eph_gb:
+            # New ephemeral size is different from the original ephemeral size
+            # and there are multiple ephemerals.
+            LOG.warn(_LW("Cannot resize multiple ephemeral disks for "
+                         "instance."), instance=instance)
+
         for index, eph in enumerate(ephemerals):
             eph_name = "eph%s" % index
-            eph['path'] = self._pathutils.lookup_ephemeral_vhd_path(
+            existing_eph_path = self._pathutils.lookup_ephemeral_vhd_path(
                 instance_name, eph_name)
 
-            if not eph['path'] and not resize_instance:
-                raise exception.DiskNotFound(_("Cannot find ephemeral VHD "
-                                               "file for instance: %s") %
-                                             instance_name)
-            if resize_instance and not eph['path'] and new_eph_gb:
-                eph['format'] = (
-                    self._vhdutils.get_best_supported_vhd_format())
+            if not existing_eph_path:
+                eph['format'] = self._vhdutils.get_best_supported_vhd_format()
                 eph['path'] = self._pathutils.get_ephemeral_vhd_path(
                     instance_name, eph['format'], eph_name)
-                eph['size'] = new_eph_gb
-                self._vmops._create_ephemeral_disk(instance.name, eph)
+                if not resize_instance:
+                    # ephemerals should have existed.
+                    raise exception.DiskNotFound(location=eph['path'])
+
+                if eph['size']:
+                    # create ephemerals
+                    self._vmops.create_ephemeral_disk(instance.name, eph)
+            elif eph['size'] > 0:
+                # ephemerals exist. resize them.
+                eph['path'] = existing_eph_path
+                eph_vhd_info = self._vhdutils.get_vhd_info(eph['path'])
+                self._check_resize_vhd(
+                    eph['path'], eph_vhd_info, eph['size'] * units.Gi)
+            else:
+                # ephemeral new size is 0, remove it.
+                self._pathutils.remove(existing_eph_path)
+                eph['path'] = None

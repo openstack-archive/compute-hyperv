@@ -171,7 +171,8 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
                           mock.sentinel.instance_name,
                           mock.sentinel.fake_disk_bus)
 
-        mock_get_volume_driver.assert_called_once_with(fake_conn_info)
+        mock_get_volume_driver.assert_called_once_with(
+            connection_info=fake_conn_info)
         mock_volume_driver.attach_volume.assert_called_once_with(
             fake_conn_info,
             mock.sentinel.instance_name,
@@ -213,16 +214,6 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
             mock_get_volume_driver.return_value.disconnect_volume)
         disconnect_volume.assert_called_once_with(
             conn_info)
-
-    @mock.patch('nova.block_device.volume_in_mapping')
-    def test_ebs_root_in_block_devices(self, mock_vol_in_mapping):
-        block_device_info = get_fake_block_dev_info()
-
-        response = self._volumeops.ebs_root_in_block_devices(block_device_info)
-
-        mock_vol_in_mapping.assert_called_once_with(
-            self._volumeops._default_root_device, block_device_info)
-        self.assertEqual(mock_vol_in_mapping.return_value, response)
 
     def test_get_volume_connector(self):
         fake_connector_props = {

@@ -55,6 +55,9 @@ DISK_FORMAT_MAP = {
     DVD_FORMAT.lower(): DVD
 }
 
+BDI_DEVICE_TYPE_TO_DRIVE_TYPE = {'disk': DISK,
+                                 'cdrom': DVD}
+
 DISK_FORMAT_VHD = "VHD"
 DISK_FORMAT_VHDX = "VHDX"
 
@@ -105,6 +108,3 @@ BOOT_DEVICE_FLOPPY = 0
 BOOT_DEVICE_CDROM = 1
 BOOT_DEVICE_HARDDISK = 2
 BOOT_DEVICE_NETWORK = 3
-
-_BDI_DEVICE_TYPE_TO_DRIVE_TYPE = {'disk': DISK,
-                                  'cdrom': DVD}

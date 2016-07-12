@@ -97,7 +97,7 @@ class VMOps(object):
         self._volumeops = volumeops.VolumeOps()
         self._imagecache = imagecache.ImageCache()
         self._vif_driver_cache = {}
-        self._block_device_manager = (
+        self._block_dev_man = (
             block_device_manager.BlockDeviceInfoManager())
         self._pdk = pdk.PDK()
 
@@ -139,8 +139,7 @@ class VMOps(object):
                                      num_cpu=info['NumberOfProcessors'],
                                      cpu_time_ns=info['UpTime'])
 
-    def _create_root_device(self, context, instance, root_disk_info,
-                            vm_gen):
+    def _create_root_device(self, context, instance, root_disk_info, vm_gen):
         path = None
         if root_disk_info['type'] == constants.DISK:
             path = self._create_root_vhd(context, instance)
@@ -238,14 +237,14 @@ class VMOps(object):
             eph_name = "eph%s" % index
             eph['path'] = self._pathutils.get_ephemeral_vhd_path(
                 instance.name, eph['format'], eph_name)
-            self._create_ephemeral_disk(instance.name, eph)
+            self.create_ephemeral_disk(instance.name, eph)
 
-    def _create_ephemeral_disk(self, instance_name, eph_info):
+    def create_ephemeral_disk(self, instance_name, eph_info):
         self._vhdutils.create_dynamic_vhd(eph_info['path'],
                                           eph_info['size'] * units.Gi)
 
     def set_boot_order(self, vm_gen, block_device_info, instance_name):
-        boot_order = self._block_device_manager.get_boot_order(
+        boot_order = self._block_dev_man.get_boot_order(
             vm_gen, block_device_info)
 
         self._vmutils.set_boot_order(instance_name, boot_order)
@@ -265,7 +264,7 @@ class VMOps(object):
 
         vm_gen = self.get_image_vm_generation(instance.uuid, image_meta)
 
-        self._block_device_manager.validate_and_update_bdi(
+        self._block_dev_man.validate_and_update_bdi(
             instance, image_meta, vm_gen, block_device_info)
         root_device = block_device_info['root_disk']
         self._create_root_device(context, instance, root_device, vm_gen)
@@ -396,7 +395,6 @@ class VMOps(object):
         self._configure_remotefx(instance, vm_gen)
 
         self._vmutils.create_scsi_controller(instance_name)
-
         self._attach_root_device(instance_name, root_device)
         self._attach_ephemerals(instance_name, block_device_info['ephemerals'])
         self._volumeops.attach_volumes(
@@ -479,10 +477,14 @@ class VMOps(object):
 
     def _attach_ephemerals(self, instance_name, ephemerals):
         for eph in ephemerals:
-            self._attach_drive(
-                instance_name, eph['path'], eph['drive_addr'],
-                eph['ctrl_disk_addr'], eph['disk_bus'],
-                constants._BDI_DEVICE_TYPE_TO_DRIVE_TYPE[eph['device_type']])
+            # if an ephemeral doesn't have a path, it might have been removed
+            # during resize.
+            if eph.get('path'):
+                self._attach_drive(
+                    instance_name, eph['path'], eph['drive_addr'],
+                    eph['ctrl_disk_addr'], eph['disk_bus'],
+                    constants.BDI_DEVICE_TYPE_TO_DRIVE_TYPE[
+                        eph['device_type']])
 
     def _attach_drive(self, instance_name, path, drive_addr, ctrl_disk_addr,
                       controller_type, drive_type=constants.DISK):

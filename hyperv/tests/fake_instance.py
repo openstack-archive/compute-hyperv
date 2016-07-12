@@ -64,6 +64,20 @@ def fake_db_instance(**updates):
 
 def fake_instance_obj(context, **updates):
     expected_attrs = updates.pop('expected_attrs', None)
-    return objects.Instance._from_db_object(context,
+    flavor = objects.Flavor(id=1, name='flavor1',
+                            memory_mb=256, vcpus=1,
+                            root_gb=1, ephemeral_gb=1,
+                            flavorid='1',
+                            swap=0, rxtx_factor=1.0,
+                            vcpu_weight=1,
+                            disabled=False,
+                            is_public=True,
+                            extra_specs={},
+                            projects=[])
+    flavor.obj_reset_changes()
+    inst = objects.Instance._from_db_object(context,
                objects.Instance(), fake_db_instance(**updates),
                expected_attrs=expected_attrs)
+    inst.flavor = flavor
+    inst.obj_reset_changes()
+    return inst

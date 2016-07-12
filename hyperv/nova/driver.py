@@ -350,6 +350,12 @@ class HyperVDriver(driver.ComputeDriver):
     def manage_image_cache(self, context, all_instances):
         self._imagecache.update(context, all_instances)
 
+    def attach_interface(self, instance, image_meta, vif):
+        return self._vmops.attach_interface(instance, vif)
+
+    def detach_interface(self, instance, vif):
+        return self._vmops.detach_interface(instance, vif)
+
     def rescue(self, context, instance, network_info, image_meta,
                rescue_password):
         image_meta = self._recreate_image_meta(context, instance, image_meta)
@@ -358,12 +364,6 @@ class HyperVDriver(driver.ComputeDriver):
 
     def unrescue(self, instance, network_info):
         self._vmops.unrescue_instance(instance)
-
-    def attach_interface(self, instance, image_meta, vif):
-        return self._vmops.attach_interface(instance, vif)
-
-    def detach_interface(self, instance, vif):
-        return self._vmops.detach_interface(instance, vif)
 
     def host_maintenance_mode(self, host, mode):
         return self._hostops.host_maintenance_mode(host, mode)

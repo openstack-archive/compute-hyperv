@@ -23,7 +23,6 @@ from os_win import constants as os_win_const
 from oslo_config import cfg
 from oslo_serialization import jsonutils
 from oslo_utils import units
-import six
 
 from hyperv.nova import constants
 from hyperv.nova import hostops
@@ -70,7 +69,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
         self._hostops._hostutils.get_cpus_info.assert_called_once_with()
 
         expected = [mock.call(fkey)
-                    for fkey in six.iterkeys(os_win_const.PROCESSOR_FEATURE)]
+                    for fkey in os_win_const.PROCESSOR_FEATURE.keys()]
         self._hostops._hostutils.is_cpu_feature_present.has_calls(expected)
         expected_response = self._get_mock_cpu_info()
         self.assertEqual(expected_response, response)

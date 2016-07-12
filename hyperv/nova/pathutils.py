@@ -121,7 +121,9 @@ class PathUtils(pathutils.PathUtils):
 
     def get_root_vhd_path(self, instance_name, format_ext, rescue=False):
         instance_path = self.get_instance_dir(instance_name)
-        image_name = 'rescue' if rescue else 'root'
+        image_name = 'root'
+        if rescue:
+            image_name += '-rescue'
         return os.path.join(instance_path,
                             image_name + '.' + format_ext.lower())
 

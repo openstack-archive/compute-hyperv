@@ -17,7 +17,6 @@
 import abc
 
 import nova.conf
-from nova.i18n import _
 from nova.network import model as network_model
 from os_win import utilsfactory
 
@@ -84,24 +83,14 @@ class HyperVOVSVIFDriver(HyperVNovaNetworkVIFDriver):
             vif['id'])
 
 
-_vif_driver_class_map = {
-    'nova.network.neutronv2.api.API': HyperVNeutronVIFDriver,
-    'nova.network.api.API': HyperVNovaNetworkVIFDriver,
-}
-_ovs_vif_driver = HyperVOVSVIFDriver
-
-
 def get_vif_driver(vif_type):
     # results should be cached. Creating a global driver map
     # with instantiated classes will cause tests to fail on
     # non windows platforms
     if vif_type == network_model.VIF_TYPE_OVS:
-        return _ovs_vif_driver()
+        return HyperVOVSVIFDriver()
 
-    try:
-        return _vif_driver_class_map[CONF.network_api_class]()
-    except KeyError:
-        raise TypeError(_("VIF driver not found for "
-                          "network_api_class: %(api_class)s, %(vif_type)s") %
-                        {"api_class": CONF.network_api_class,
-                         "vif_type": vif_type})
+    if nova.network.is_neutron():
+        return HyperVNeutronVIFDriver()
+    else:
+        return HyperVNovaNetworkVIFDriver()

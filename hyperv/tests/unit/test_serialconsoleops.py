@@ -29,6 +29,7 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
         serialconsoleops._console_handlers = {}
         self._serialops = serialconsoleops.SerialConsoleOps()
         self._serialops._pathutils = mock.MagicMock()
+        self._serialops._vmutils = mock.MagicMock()
 
     def _setup_console_handler_mock(self):
         mock_console_handler = mock.Mock()
@@ -43,6 +44,7 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
                                     mock_console_handler,
                                     raise_exception=False):
         mock_handler = mock_console_handler.return_value
+        self._serialops._vmutils.is_secure_vm.return_value = False
 
         if raise_exception:
             mock_handler.start.side_effect = Exception
@@ -65,6 +67,14 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
 
     def test_start_console_handler_exception(self):
         self._test_start_console_handler(raise_exception=True)
+
+    @mock.patch.object(serialconsoleops.SerialConsoleOps,
+                       'stop_console_handler_unsync')
+    def test_start_console_handler_secure_vm(self, mock_stop_handler):
+        self._serialops._vmutils.is_secure_vm.return_value = True
+
+        self._serialops.start_console_handler(mock.sentinel.instance_name)
+        self.assertFalse(mock_stop_handler.called)
 
     def test_stop_console_handler(self):
         mock_console_handler = self._setup_console_handler_mock()
@@ -93,6 +103,7 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(builtins, 'open')
     @mock.patch("os.path.exists")
     def test_get_console_output_exception(self, fake_path_exists, fake_open):
+        self._serialops._vmutils.is_secure_vm.return_value = False
         self._serialops._pathutils.get_vm_console_log_paths.return_value = [
             mock.sentinel.log_path_1, mock.sentinel.log_path_2]
         fake_open.side_effect = IOError
@@ -102,6 +113,12 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
                           self._serialops.get_console_output,
                           mock.sentinel.instance_name)
         fake_open.assert_called_once_with(mock.sentinel.log_path_2, 'rb')
+
+    def test_get_console_output_secure_vm(self):
+        self._serialops._vmutils.is_secure_vm.return_value = True
+        self.assertRaises(exception.ConsoleNotAvailable,
+                          self._serialops.get_console_output,
+                          mock.sentinel.instance_name)
 
     @mock.patch('os.path.exists')
     @mock.patch.object(serialconsoleops.SerialConsoleOps,

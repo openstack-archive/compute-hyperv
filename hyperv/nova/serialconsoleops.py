@@ -17,7 +17,7 @@ import functools
 import os
 
 from nova import exception
-from nova.i18n import _LI, _LE  # noqa
+from nova.i18n import _, _LI, _LE, _LW  # noqa
 from nova import utils
 from os_win import utilsfactory
 from oslo_config import cfg
@@ -51,6 +51,13 @@ class SerialConsoleOps(object):
 
     @instance_synchronized
     def start_console_handler(self, instance_name):
+        if self._vmutils.is_secure_vm(instance_name):
+            LOG.warning(_LW("Skipping starting serial console handler. "
+                            "Shielded/Encrypted VM %(instance_name)s "
+                            "doesn't support serial console."),
+                        {'instance_name': instance_name})
+            return
+
         # Cleanup existing workers.
         self.stop_console_handler_unsync(instance_name)
         handler = None
@@ -90,6 +97,10 @@ class SerialConsoleOps(object):
 
     @instance_synchronized
     def get_console_output(self, instance_name):
+        if self._vmutils.is_secure_vm(instance_name):
+            err = _("Shielded/Encrypted VMs don't support serial console.")
+            raise exception.ConsoleNotAvailable(err)
+
         console_log_paths = self._pathutils.get_vm_console_log_paths(
             instance_name)
 

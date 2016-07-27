@@ -113,9 +113,6 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             # original frame will contain the 'foo' variable.
             self.assertEqual('foofoo', trace.tb_frame.f_locals['foo'])
 
-    def test_need_legacy_block_device_info(self):
-        self.assertFalse(self.driver.need_legacy_block_device_info)
-
     @mock.patch.object(driver.eventhandler, 'InstanceEventHandler')
     def test_init_host(self, mock_InstanceEventHandler):
 

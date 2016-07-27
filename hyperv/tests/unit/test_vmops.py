@@ -557,7 +557,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               mock_configure_secure_vm,
                               enable_instance_metrics,
                               vm_gen=constants.VM_GEN_1, vnuma_enabled=False,
-                              requires_sec_boot=True, remotefx=False):
+                              requires_sec_boot=True):
         mock_vif_driver = mock_get_vif_driver()
         self.flags(dynamic_memory_ratio=2.0, group='hyperv')
         self.flags(enable_instance_metrics_collection=enable_instance_metrics,
@@ -582,77 +582,61 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             dynamic_memory_ratio = CONF.hyperv.dynamic_memory_ratio
 
         flavor = flavor_obj.Flavor(**test_flavor.fake_flavor)
-        if remotefx is True:
-            flavor.extra_specs['hyperv:remotefx'] = "1920x1200,2"
         mock_instance.flavor = flavor
 
-        if remotefx is True and vm_gen == constants.VM_GEN_2:
-            self.assertRaises(os_win_exc.HyperVException,
-                              self._vmops.create_instance,
-                              context=self.context,
-                              instance=mock_instance,
-                              network_info=[fake_network_info],
-                              block_device_info=block_device_info,
-                              root_device=root_device_info,
-                              vm_gen=vm_gen,
-                              image_meta=mock.sentinel.image_meta)
-        else:
-            self._vmops.create_instance(
-                    context=self.context,
-                    instance=mock_instance,
-                    network_info=[fake_network_info],
-                    block_device_info=block_device_info,
-                    root_device=root_device_info,
-                    vm_gen=vm_gen,
-                    image_meta=mock.sentinel.image_meta)
-            if remotefx is True:
-                mock_configure_remotefx.assert_called_once_with(
-                    mock_instance,
-                    vm_gen,
-                    flavor.extra_specs['hyperv:remotefx'])
+        self._vmops.create_instance(
+                context=self.context,
+                instance=mock_instance,
+                network_info=[fake_network_info],
+                block_device_info=block_device_info,
+                root_device=root_device_info,
+                vm_gen=vm_gen,
+                image_meta=mock.sentinel.image_meta)
 
-            self._vmops._vmutils.create_vm.assert_called_once_with(
-                mock_instance.name, vnuma_enabled, vm_gen,
-                instance_path, [mock_instance.uuid])
-            self._vmops._vmutils.update_vm.assert_called_once_with(
-                mock_instance.name, mock_instance.memory_mb, mem_per_numa,
-                mock_instance.vcpus, cpus_per_numa,
-                CONF.hyperv.limit_cpu_features, dynamic_memory_ratio)
+        mock_configure_remotefx.assert_called_once_with(mock_instance, vm_gen)
 
-            mock_create_scsi_ctrl = self._vmops._vmutils.create_scsi_controller
-            mock_create_scsi_ctrl.assert_called_once_with(mock_instance.name)
+        self._vmops._vmutils.create_vm.assert_called_once_with(
+            mock_instance.name, vnuma_enabled, vm_gen,
+            instance_path, [mock_instance.uuid])
+        self._vmops._vmutils.update_vm.assert_called_once_with(
+            mock_instance.name, mock_instance.memory_mb, mem_per_numa,
+            mock_instance.vcpus, cpus_per_numa,
+            CONF.hyperv.limit_cpu_features, dynamic_memory_ratio)
 
-            mock_attach_root_device.assert_called_once_with(mock_instance.name,
-                root_device_info)
-            mock_attach_ephemerals.assert_called_once_with(mock_instance.name,
-                block_device_info['ephemerals'])
-            mock_attach_volumes.assert_called_once_with(
-                block_device_info['block_device_mapping'], mock_instance.name)
+        mock_create_scsi_ctrl = self._vmops._vmutils.create_scsi_controller
+        mock_create_scsi_ctrl.assert_called_once_with(mock_instance.name)
 
-            mock_get_port_settings.assert_called_with(mock.sentinel.image_meta)
-            mock_create_pipes.assert_called_once_with(
-                mock_instance, mock_get_port_settings.return_value)
+        mock_attach_root_device.assert_called_once_with(mock_instance.name,
+            root_device_info)
+        mock_attach_ephemerals.assert_called_once_with(mock_instance.name,
+            block_device_info['ephemerals'])
+        mock_attach_volumes.assert_called_once_with(
+            block_device_info['block_device_mapping'], mock_instance.name)
 
-            self._vmops._vmutils.create_nic.assert_called_once_with(
-                mock_instance.name, mock.sentinel.ID, mock.sentinel.ADDRESS)
-            mock_vif_driver.plug.assert_called_once_with(mock_instance,
-                                                         fake_network_info)
-            mock_enable = (
-                self._vmops._metricsutils.enable_vm_metrics_collection)
-            if enable_instance_metrics:
-                mock_enable.assert_called_once_with(mock_instance.name)
-            mock_set_qos_specs.assert_called_once_with(mock_instance)
-            if requires_sec_boot:
-                mock_requires_secure_boot.assert_called_once_with(
-                    mock_instance, mock.sentinel.image_meta, vm_gen)
-                mock_requires_certificate.assert_called_once_with(
-                    mock_instance.uuid,
-                    mock.sentinel.image_meta)
-                enable_secure_boot = self._vmops._vmutils.enable_secure_boot
-                enable_secure_boot.assert_called_once_with(
-                    mock_instance.name, mock_requires_certificate.return_value)
-                mock_configure_secure_vm.assert_called_once_with(self.context,
-                    mock_instance, mock.sentinel.image_meta, requires_sec_boot)
+        mock_get_port_settings.assert_called_with(mock.sentinel.image_meta)
+        mock_create_pipes.assert_called_once_with(
+            mock_instance, mock_get_port_settings.return_value)
+
+        self._vmops._vmutils.create_nic.assert_called_once_with(
+            mock_instance.name, mock.sentinel.ID, mock.sentinel.ADDRESS)
+        mock_vif_driver.plug.assert_called_once_with(mock_instance,
+                                                     fake_network_info)
+        mock_enable = (
+            self._vmops._metricsutils.enable_vm_metrics_collection)
+        if enable_instance_metrics:
+            mock_enable.assert_called_once_with(mock_instance.name)
+        mock_set_qos_specs.assert_called_once_with(mock_instance)
+        if requires_sec_boot:
+            mock_requires_secure_boot.assert_called_once_with(
+                mock_instance, mock.sentinel.image_meta, vm_gen)
+            mock_requires_certificate.assert_called_once_with(
+                mock_instance.uuid,
+                mock.sentinel.image_meta)
+            enable_secure_boot = self._vmops._vmutils.enable_secure_boot
+            enable_secure_boot.assert_called_once_with(
+                mock_instance.name, mock_requires_certificate.return_value)
+            mock_configure_secure_vm.assert_called_once_with(self.context,
+                mock_instance, mock.sentinel.image_meta, requires_sec_boot)
 
     def test_create_instance(self):
         self._test_create_instance(enable_instance_metrics=True)
@@ -669,14 +653,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_create_instance_gen2(self):
         self._test_create_instance(enable_instance_metrics=False,
                                    vm_gen=constants.VM_GEN_2)
-
-    def test_create_instance_with_remote_fx(self):
-        self._test_create_instance(enable_instance_metrics=False,
-                                   remotefx=True)
-
-    def test_create_instance_with_remote_fx_gen2(self):
-        self._test_create_instance(enable_instance_metrics=False,
-                                   remotefx=True)
 
     @mock.patch.object(vmops.volumeops.VolumeOps, 'attach_volume')
     def test_attach_root_device_volume(self, mock_attach_volume):
@@ -1292,6 +1268,64 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                             mock.call(mock.sentinel.FAKE_DVD_PATH2,
                                       mock.sentinel.FAKE_DEST_PATH))
 
+    def _setup_remotefx_mocks(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_instance.flavor.extra_specs = {
+            'os:resolution': os_win_const.REMOTEFX_MAX_RES_1920x1200,
+            'os:monitors': '2',
+            'os:vram': '256'}
+
+        return mock_instance
+
+    def test_configure_remotefx_not_required(self):
+        self.flags(enable_remotefx=False, group='hyperv')
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+
+        self._vmops._configure_remotefx(mock_instance, mock.sentinel.VM_GEN)
+
+    def test_configure_remotefx_exception_enable_config(self):
+        self.flags(enable_remotefx=False, group='hyperv')
+        mock_instance = self._setup_remotefx_mocks()
+
+        self.assertRaises(exception.InstanceUnacceptable,
+                          self._vmops._configure_remotefx,
+                          mock_instance, mock.sentinel.VM_GEN)
+
+    def test_configure_remotefx_exception_server_feature(self):
+        self.flags(enable_remotefx=True, group='hyperv')
+        mock_instance = self._setup_remotefx_mocks()
+        self._vmops._hostutils.check_server_feature.return_value = False
+
+        self.assertRaises(exception.InstanceUnacceptable,
+                          self._vmops._configure_remotefx,
+                          mock_instance, mock.sentinel.VM_GEN)
+
+    def test_configure_remotefx_exception_vm_gen(self):
+        self.flags(enable_remotefx=True, group='hyperv')
+        mock_instance = self._setup_remotefx_mocks()
+        self._vmops._hostutils.check_server_feature.return_value = True
+        self._vmops._vmutils.vm_gen_supports_remotefx.return_value = False
+
+        self.assertRaises(exception.InstanceUnacceptable,
+                          self._vmops._configure_remotefx,
+                          mock_instance, mock.sentinel.VM_GEN)
+
+    def test_configure_remotefx(self):
+        self.flags(enable_remotefx=True, group='hyperv')
+        mock_instance = self._setup_remotefx_mocks()
+        self._vmops._hostutils.check_server_feature.return_value = True
+        self._vmops._vmutils.vm_gen_supports_remotefx.return_value = True
+        extra_specs = mock_instance.flavor.extra_specs
+
+        self._vmops._configure_remotefx(mock_instance,
+                                        constants.VM_GEN_1)
+        mock_enable_remotefx = (
+            self._vmops._vmutils.enable_remotefx_video_adapter)
+        mock_enable_remotefx.assert_called_once_with(
+            mock_instance.name, int(extra_specs['os:monitors']),
+            extra_specs['os:resolution'],
+            int(extra_specs['os:vram']) * units.Mi)
+
     @mock.patch('nova.virt.configdrive.required_by')
     @mock.patch.object(vmops.VMOps, '_create_root_vhd')
     @mock.patch.object(vmops.VMOps, 'get_image_vm_generation')
@@ -1505,46 +1539,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     def test_get_instance_vnuma_config_no_topology(self):
         self._check_get_instance_vnuma_config()
-
-    def _test_configure_remotefx(self, fail=True, enable_remotefx=True):
-        self.flags(enable_remotefx=enable_remotefx, group='hyperv')
-        mock_instance = fake_instance.fake_instance_obj(self.context)
-
-        fake_resolution = "1920x1200"
-        fake_monitor_count = 3
-        fake_vram_mb = 64
-        fake_config = "%s,%s,%s" % (
-            fake_resolution, fake_monitor_count, fake_vram_mb)
-
-        enable_remotefx = self._vmops._vmutils.enable_remotefx_video_adapter
-
-        if fail:
-            self.assertRaises(exception.InstanceUnacceptable,
-                              self._vmops._configure_remotefx,
-                              mock_instance, mock.sentinel.vm_gen, fake_config)
-        else:
-            self._vmops._configure_remotefx(
-                mock_instance, mock.sentinel.vm_gen, fake_config)
-            enable_remotefx.assert_called_once_with(mock_instance.name,
-                                                    fake_monitor_count,
-                                                    fake_resolution,
-                                                    fake_vram_mb * units.Mi)
-
-    def test_configure_remotefx_disabled(self):
-        self._test_configure_remotefx(enable_remotefx=False)
-
-    def test_configure_remotefx_no_server_feature(self):
-        self._vmops._hostutils.check_server_feature.return_value = False
-        self._test_configure_remotefx()
-        self._vmops._hostutils.check_server_feature.assert_called_once_with(
-            self._vmops._hostutils.FEATURE_RDS_VIRTUALIZATION)
-
-    def test_configure_remotefx_unsupported_vm_gen(self):
-        self._vmops._vmutils.vm_gen_supports_remotefx.return_value = False
-        self._test_configure_remotefx()
-
-    def test_configure_remotefx(self):
-        self._test_configure_remotefx(fail=False)
 
     @mock.patch.object(vmops.VMOps, '_get_vif_driver')
     def test_unplug_vifs(self, mock_get_vif_driver):

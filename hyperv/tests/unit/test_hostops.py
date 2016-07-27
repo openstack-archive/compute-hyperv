@@ -135,6 +135,28 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
         mock_NUMATopology.assert_called_once_with(
             cells=[mock_NUMACell.return_value])
 
+    def test_get_remotefx_gpu_info(self):
+        self.flags(enable_remotefx=True, group='hyperv')
+        fake_gpus = [{'total_video_ram': '2048',
+                      'available_video_ram': '1024'},
+                     {'total_video_ram': '1024',
+                      'available_video_ram': '1024'}]
+        self._hostops._hostutils.get_remotefx_gpu_info.return_value = fake_gpus
+
+        ret_val = self._hostops._get_remotefx_gpu_info()
+
+        self.assertEqual(3072, ret_val['total_video_ram'])
+        self.assertEqual(1024, ret_val['used_video_ram'])
+
+    def test_get_remotefx_gpu_info_disabled(self):
+        self.flags(enable_remotefx=False, group='hyperv')
+
+        ret_val = self._hostops._get_remotefx_gpu_info()
+
+        self.assertEqual(0, ret_val['total_video_ram'])
+        self.assertEqual(0, ret_val['used_video_ram'])
+        self._hostops._hostutils.get_remotefx_gpu_info.assert_not_called()
+
     @mock.patch.object(hostops.HostOps, '_get_host_numa_topology')
     @mock.patch.object(hostops.HostOps, '_get_remotefx_gpu_info')
     @mock.patch.object(hostops.HostOps, '_get_cpu_info')
@@ -185,7 +207,7 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
                     'numa_topology': mock.sentinel.numa_topology_json,
                     'remotefx_available_video_ram': 2048,
                     'remotefx_gpu_info': mock.sentinel.FAKE_GPU_INFO,
-                    'remotefx_total_video_ram': 4096
+                    'remotefx_total_video_ram': 4096,
                     }
         self.assertEqual(expected, response)
 
@@ -226,18 +248,6 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
                    str(mock_time()), str(tdelta))
 
         self.assertEqual(expected, response)
-
-    def test_get_remotefx_gpu_info(self):
-        self.flags(enable_remotefx=True, group='hyperv')
-        fake_gpus = [{'total_video_ram': '2048',
-                      'available_video_ram': '1024'},
-                      {'total_video_ram': '1024',
-                      'available_video_ram': '1024'}]
-        self._hostops._hostutils.get_remotefx_gpu_info.return_value = fake_gpus
-
-        ret_val = self._hostops._get_remotefx_gpu_info()
-        self.assertEqual(3072, ret_val['remotefx_total_video_ram'])
-        self.assertEqual(2048, ret_val['remotefx_available_video_ram'])
 
     @mock.patch.object(hostops.HostOps, '_wait_for_instance_pending_task')
     @mock.patch.object(hostops.HostOps, '_set_service_state')

@@ -866,6 +866,60 @@ class VMOps(object):
 
         return serial_ports
 
+    def _check_hotplug_available(self, instance):
+        """Check whether attaching an interface is possible for the given
+        instance.
+
+        :returns: True if attaching / detaching interfaces is possible for the
+                  given instance.
+        """
+        vm_state = self._get_vm_state(instance.name)
+        if vm_state == os_win_const.HYPERV_VM_STATE_DISABLED:
+            # can attach / detach interface to stopped VMs.
+            return True
+
+        if not self._hostutils.check_min_windows_version(10, 0):
+            # TODO(claudiub): add set log level to error after string freeze.
+            LOG.debug("vNIC hot plugging is supported only in newer "
+                      "versions than Windows Hyper-V / Server 2012 R2.")
+            return False
+
+        if (self._vmutils.get_vm_generation(instance.name) ==
+                constants.VM_GEN_1):
+            # TODO(claudiub): add set log level to error after string freeze.
+            LOG.debug("Cannot hot plug vNIC to a first generation VM.",
+                      instance=instance)
+            return False
+
+        return True
+
+    def attach_interface(self, instance, vif):
+        if not self._check_hotplug_available(instance):
+            raise exception.InterfaceAttachFailed(instance_uuid=instance.uuid)
+
+        LOG.debug('Attaching vif: %s', vif['id'], instance=instance)
+        self._vmutils.create_nic(instance.name, vif['id'], vif['address'])
+        vif_driver = self._get_vif_driver(vif.get('type'))
+        vif_driver.plug(instance, vif)
+        vif_driver.post_start(instance, vif)
+
+    def detach_interface(self, instance, vif):
+        try:
+            if not self._check_hotplug_available(instance):
+                raise exception.InterfaceDetachFailed(
+                    instance_uuid=instance.uuid)
+
+            LOG.debug('Detaching vif: %s', vif['id'], instance=instance)
+            vif_driver = self._get_vif_driver(vif.get('type'))
+            vif_driver.unplug(instance, vif)
+            self._vmutils.destroy_nic(instance.name, vif['id'])
+        except os_win_exc.HyperVVMNotFoundException:
+            # TODO(claudiub): add set log level to error after string freeze.
+            LOG.debug("Instance not found during detach interface. It "
+                      "might have been destroyed beforehand.",
+                      instance=instance)
+            raise exception.InterfaceDetachFailed(instance_uuid=instance.uuid)
+
     def rescue_instance(self, context, instance, network_info, image_meta,
                         rescue_password):
         try:
@@ -977,48 +1031,6 @@ class VMOps(object):
             for vif in network_info:
                 vif_driver = self._get_vif_driver(vif.get('type'))
                 vif_driver.post_start(instance, vif)
-
-    def _check_hotplug_is_available(self, instance):
-        if (self._get_vm_state(instance.name) ==
-                os_win_const.HYPERV_VM_STATE_DISABLED):
-            return False
-
-        if not self._hostutils.check_min_windows_version(6, 4):
-            LOG.error(_LE("This version of Windows does not support vNIC "
-                          "hot plugging."))
-            raise exception.InterfaceAttachFailed(
-                instance_uuid=instance.uuid)
-
-        if (self._vmutils.get_vm_generation(instance.name) ==
-                constants.VM_GEN_1):
-            LOG.error(_LE("Cannot hot plug vNIC to a first generation "
-                          "VM."))
-            raise exception.InterfaceAttachFailed(
-                instance_uuid=instance.uuid)
-
-        return True
-
-    def attach_interface(self, instance, vif):
-        hot_plug = self._check_hotplug_is_available(instance)
-        self._create_and_attach_interface(instance, vif, hot_plug)
-
-    def _create_and_attach_interface(self, instance, vif, hot_plug):
-        self._vmutils.create_nic(instance.name,
-                                 vif['id'],
-                                 vif['address'])
-        vif_driver = self._get_vif_driver(vif.get('type'))
-        vif_driver.plug(instance, vif)
-        if hot_plug:
-            vif_driver.post_start(instance, vif)
-
-    def detach_interface(self, instance, vif):
-        self._check_hotplug_is_available(instance)
-        self._detach_and_destroy_interface(instance, vif)
-
-    def _detach_and_destroy_interface(self, instance, vif):
-        vif_driver = self._get_vif_driver(vif.get('type'))
-        vif_driver.unplug(instance, vif)
-        self._vmutils.destroy_nic(instance.name, vif['id'])
 
     def _set_instance_disk_qos_specs(self, instance):
         min_iops, max_iops = self._get_storage_qos_specs(instance)

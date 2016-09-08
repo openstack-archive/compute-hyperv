@@ -19,11 +19,12 @@ import time
 
 import nova.conf
 from nova import exception
+from os_win import exceptions as os_win_exc
 from os_win.utils import pathutils
 from os_win import utilsfactory
 from oslo_log import log as logging
 
-from hyperv.i18n import _
+from hyperv.i18n import _, _LI
 from hyperv.nova import constants
 
 LOG = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class PathUtils(pathutils.PathUtils):
     def __init__(self):
         super(PathUtils, self).__init__()
         self._smbutils = utilsfactory.get_smbutils()
+        self._vmutils = utilsfactory.get_vmutils()
 
     def get_instances_dir(self, remote_server=None):
         local_instance_path = os.path.normpath(CONF.instances_path)
@@ -51,32 +53,45 @@ class PathUtils(pathutils.PathUtils):
             if CONF.hyperv.instances_path_share:
                 path = CONF.hyperv.instances_path_share
             else:
-                # Use an administrative share
-                path = local_instance_path.replace(':', '$')
-            return ('\\\\%(remote_server)s\\%(path)s' %
-                {'remote_server': remote_server, 'path': path})
+                # In this case, we expect the instance dir to have the same
+                # location on the remote server.
+                path = local_instance_path
+            return self._get_remote_unc_path(remote_server, path)
         else:
             return local_instance_path
+
+    def _get_remote_unc_path(self, remote_server, remote_path):
+        if remote_path.startswith('\\\\'):
+            remote_unc_path = remote_path
+        else:
+            # Use an administrative share
+            remote_unc_path = ('\\\\%(remote_server)s\\%(path)s' %
+                               dict(remote_server=remote_server,
+                                    path=remote_path.replace(':', '$')))
+        return remote_unc_path
 
     def _get_instances_sub_dir(self, dir_name, remote_server=None,
                                create_dir=True, remove_dir=False):
         instances_path = self.get_instances_dir(remote_server)
         path = os.path.join(instances_path, dir_name)
+        self._check_dir(path, create_dir=create_dir, remove_dir=remove_dir)
+
+        return path
+
+    def _check_dir(self, path, create_dir=False, remove_dir=False):
         try:
             if remove_dir:
                 self.check_remove_dir(path)
             if create_dir:
                 self.check_create_dir(path)
-            return path
         except WindowsError as ex:
             if ex.winerror == ERROR_INVALID_NAME:
                 raise exception.AdminRequired(_(
-                    "Cannot access \"%(instances_path)s\", make sure the "
+                    "Cannot access \"%(path)s\", make sure the "
                     "path exists and that you have the proper permissions. "
                     "In particular Nova-Compute must not be executed with the "
                     "builtin SYSTEM account or other accounts unable to "
-                    "authenticate on a remote host.") %
-                    {'instances_path': instances_path})
+                    "authenticate on a remote host.") % {'path': path})
             raise
 
     def get_instance_migr_revert_dir(self, instance_name, create_dir=False,
@@ -87,8 +102,30 @@ class PathUtils(pathutils.PathUtils):
 
     def get_instance_dir(self, instance_name, remote_server=None,
                          create_dir=True, remove_dir=False):
-        return self._get_instances_sub_dir(instance_name, remote_server,
-                                           create_dir, remove_dir)
+        instance_dir = self._get_instances_sub_dir(
+            instance_name, remote_server,
+            create_dir=False, remove_dir=False)
+
+        # In some situations, the instance files may reside at a different
+        # location than the configured one.
+        if not os.path.exists(instance_dir):
+            vmutils = (self._vmutils if not remote_server
+                       else utilsfactory.get_vmutils(remote_server))
+            try:
+                instance_dir = vmutils.get_vm_config_root_dir(
+                    instance_name)
+                if remote_server:
+                    instance_dir = self._get_remote_unc_path(remote_server,
+                                                             instance_dir)
+                LOG.info(_LI("Found instance dir at non-default location: %s"),
+                         instance_dir)
+            except os_win_exc.HyperVVMNotFoundException:
+                pass
+
+        self._check_dir(instance_dir,
+                        create_dir=create_dir,
+                        remove_dir=remove_dir)
+        return instance_dir
 
     def _lookup_vhd_path(self, instance_name, vhd_path_func,
                          *args, **kwargs):

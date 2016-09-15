@@ -18,6 +18,7 @@ import time
 import ddt
 import mock
 from nova import exception
+from os_win import exceptions as os_win_exc
 from six.moves import builtins
 
 from hyperv.nova import constants
@@ -38,6 +39,155 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         self._pathutils._smb_conn_attr = mock.MagicMock()
         self._pathutils._smbutils = mock.MagicMock()
         self._smbutils = self._pathutils._smbutils
+
+    @ddt.data({'conf_instances_path': r'c:\inst_dir',
+               'expected_dir': r'c:\inst_dir'},
+              {'conf_instances_path': r'c:\inst_dir',
+               'remote_server': 'fake_remote',
+               'expected_dir': r'\\fake_remote\c$\inst_dir'},
+              {'conf_instances_path': r'\\fake_share\fake_path',
+               'remote_server': 'fake_remote',
+               'expected_dir': r'\\fake_share\fake_path'},
+              {'conf_instances_path_share': r'inst_share',
+               'remote_server': 'fake_remote',
+               'expected_dir': r'\\fake_remote\inst_share'})
+    @ddt.unpack
+    def test_get_instances_dir(self, expected_dir, remote_server=None,
+                               conf_instances_path='',
+                               conf_instances_path_share=''):
+        self.flags(instances_path=conf_instances_path)
+        self.flags(instances_path_share=conf_instances_path_share,
+                   group='hyperv')
+
+        instances_dir = self._pathutils.get_instances_dir(remote_server)
+
+        self.assertEqual(expected_dir, instances_dir)
+
+    @mock.patch.object(pathutils.PathUtils, 'get_instances_dir')
+    @mock.patch.object(pathutils.PathUtils, '_check_dir')
+    def test_get_instances_sub_dir(self, mock_check_dir,
+                                   mock_get_instances_dir):
+        fake_instances_dir = 'fake_instances_dir'
+        mock_get_instances_dir.return_value = fake_instances_dir
+
+        sub_dir = 'fake_subdir'
+        expected_path = os.path.join(fake_instances_dir, sub_dir)
+
+        path = self._pathutils._get_instances_sub_dir(
+            sub_dir,
+            remote_server=mock.sentinel.remote_server,
+            create_dir=mock.sentinel.create_dir,
+            remove_dir=mock.sentinel.remove_dir)
+
+        self.assertEqual(expected_path, path)
+
+        mock_get_instances_dir.assert_called_once_with(
+            mock.sentinel.remote_server)
+        mock_check_dir.assert_called_once_with(
+            expected_path,
+            create_dir=mock.sentinel.create_dir,
+            remove_dir=mock.sentinel.remove_dir)
+
+    @ddt.data({'create_dir': True, 'remove_dir': False},
+              {'create_dir': False, 'remove_dir': True})
+    @ddt.unpack
+    @mock.patch.object(pathutils.PathUtils, 'check_create_dir')
+    @mock.patch.object(pathutils.PathUtils, 'check_remove_dir')
+    def test_check_dir(self, mock_check_remove_dir, mock_check_create_dir,
+                       create_dir, remove_dir):
+        self._pathutils._check_dir(
+            mock.sentinel.dir, create_dir=create_dir, remove_dir=remove_dir)
+
+        if create_dir:
+            mock_check_create_dir.assert_called_once_with(mock.sentinel.dir)
+        else:
+            self.assertFalse(mock_check_create_dir.called)
+
+        if remove_dir:
+            mock_check_remove_dir.assert_called_once_with(mock.sentinel.dir)
+        else:
+            self.assertFalse(mock_check_remove_dir.called)
+
+    @mock.patch.object(pathutils.PathUtils, 'check_create_dir')
+    def test_check_dir_exc(self, mock_check_create_dir):
+
+        class FakeWindowsError(Exception):
+            def __init__(self, winerror=None):
+                self.winerror = winerror
+
+        mock_check_create_dir.side_effect = FakeWindowsError(
+            pathutils.ERROR_INVALID_NAME)
+        with mock.patch.object(builtins, 'WindowsError',
+                               FakeWindowsError, create=True):
+            self.assertRaises(exception.AdminRequired,
+                              self._pathutils._check_dir,
+                              mock.sentinel.dir_name,
+                              create_dir=True)
+
+    @ddt.data({},
+              {'configured_dir_exists': True},
+              {'vm_exists': True},
+              {'vm_exists': True,
+               'remote_server': mock.sentinel.remote_server})
+    @ddt.unpack
+    @mock.patch.object(pathutils.PathUtils, '_get_instances_sub_dir')
+    @mock.patch.object(pathutils.PathUtils, '_get_remote_unc_path')
+    @mock.patch.object(pathutils.PathUtils, '_check_dir')
+    @mock.patch.object(pathutils.os.path, 'exists')
+    @mock.patch('os_win.utilsfactory.get_vmutils')
+    def test_get_instance_dir(self, mock_get_vmutils,
+                              mock_exists,
+                              mock_check_dir,
+                              mock_get_remote_unc_path,
+                              mock_get_instances_sub_dir,
+                              configured_dir_exists=False,
+                              remote_server=None, vm_exists=False):
+        mock_get_instances_sub_dir.return_value = mock.sentinel.configured_dir
+        mock_exists.return_value = configured_dir_exists
+
+        expected_vmutils = (self._pathutils._vmutils
+                            if not remote_server
+                            else mock_get_vmutils.return_value)
+        mock_get_root_dir = expected_vmutils.get_vm_config_root_dir
+        mock_get_root_dir.side_effect = (
+            (mock.sentinel.config_root_dir,)
+            if vm_exists
+            else os_win_exc.HyperVVMNotFoundException(
+                vm_name=mock.sentinel.instance_name))
+
+        mock_get_remote_unc_path.return_value = mock.sentinel.remote_root_dir
+
+        instance_dir = self._pathutils.get_instance_dir(
+            mock.sentinel.instance_name,
+            remote_server=remote_server,
+            create_dir=mock.sentinel.create_dir,
+            remove_dir=mock.sentinel.remove_dir)
+
+        if configured_dir_exists or not vm_exists:
+            expected_instance_dir = mock.sentinel.configured_dir
+        else:
+            # In this case, we expect the instance location to be
+            # retrieved from the vm itself.
+            mock_get_root_dir.assert_called_once_with(
+                mock.sentinel.instance_name)
+
+            if remote_server:
+                expected_instance_dir = mock.sentinel.remote_root_dir
+                mock_get_remote_unc_path.assert_called_once_with(
+                    mock.sentinel.remote_server,
+                    mock.sentinel.config_root_dir)
+            else:
+                expected_instance_dir = mock.sentinel.config_root_dir
+
+        self.assertEqual(expected_instance_dir, instance_dir)
+
+        mock_get_instances_sub_dir.assert_called_once_with(
+            mock.sentinel.instance_name, remote_server,
+            create_dir=False, remove_dir=False)
+        mock_check_dir.assert_called_once_with(
+            expected_instance_dir,
+            create_dir=mock.sentinel.create_dir,
+            remove_dir=mock.sentinel.remove_dir)
 
     def _mock_lookup_configdrive_path(self, ext, rescue=False):
         self._pathutils.get_instance_dir = mock.MagicMock(
@@ -76,22 +226,6 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         configdrive_path = self._pathutils.lookup_configdrive_path(
             self.fake_instance_name)
         self.assertIsNone(configdrive_path)
-
-    def test_get_instances_sub_dir(self):
-
-        class WindowsError(Exception):
-            def __init__(self, winerror=None):
-                self.winerror = winerror
-
-        fake_dir_name = "fake_dir_name"
-        fake_windows_error = WindowsError
-        self._pathutils.check_create_dir = mock.MagicMock(
-            side_effect=WindowsError(pathutils.ERROR_INVALID_NAME))
-        with mock.patch.object(builtins, 'WindowsError',
-                               fake_windows_error, create=True):
-            self.assertRaises(exception.AdminRequired,
-                              self._pathutils._get_instances_sub_dir,
-                              fake_dir_name)
 
     def test_copy_vm_console_logs(self):
         fake_local_logs = [mock.sentinel.log_path,

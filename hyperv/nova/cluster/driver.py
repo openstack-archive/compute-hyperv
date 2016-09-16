@@ -42,6 +42,29 @@ class HyperVClusterDriver(driver.HyperVDriver):
             context, instance, network_info, block_device_info,
             destroy_disks, migrate_data)
 
+    def migrate_disk_and_power_off(self, context, instance, dest,
+                                   flavor, network_info,
+                                   block_device_info=None,
+                                   timeout=0, retry_interval=0):
+        self._clops.remove_from_cluster(instance)
+        super(HyperVClusterDriver, self).migrate_disk_and_power_off(
+            context, instance, dest, flavor, network_info,
+            block_device_info, timeout, retry_interval)
+
+    def finish_migration(self, context, migration, instance, disk_info,
+                         network_info, image_meta, resize_instance,
+                         block_device_info=None, power_on=True):
+        super(HyperVClusterDriver, self).finish_migration(
+            context, migration, instance, disk_info, network_info,
+            image_meta, resize_instance, block_device_info, power_on)
+        self._clops.add_to_cluster(instance)
+
+    def finish_revert_migration(self, context, instance, network_info,
+                                block_device_info=None, power_on=True):
+        super(HyperVClusterDriver, self).finish_revert_migration(
+            context, instance, network_info, block_device_info, power_on)
+        self._clops.add_to_cluster(instance)
+
     def post_live_migration_at_destination(self, context, instance,
                                            network_info,
                                            block_migration=False,

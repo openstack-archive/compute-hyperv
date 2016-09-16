@@ -65,6 +65,57 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.network_info, mock.sentinel.block_dev_info,
             mock.sentinel.destroy_disks, mock.sentinel.migrate_data)
 
+    @mock.patch.object(base_driver.HyperVDriver, 'migrate_disk_and_power_off')
+    def test_migrate_disk_and_power_off(self, mock_superclass_migrate):
+        self.driver.migrate_disk_and_power_off(self.context,
+                                               mock.sentinel.fake_instance,
+                                               mock.sentinel.destination,
+                                               mock.sentinel.flavor,
+                                               mock.sentinel.network_info,
+                                               mock.sentinel.block_dev_info,
+                                               mock.sentinel.timeout,
+                                               mock.sentinel.retry_interval)
+        self.driver._clops.remove_from_cluster.assert_called_once_with(
+            mock.sentinel.fake_instance)
+        mock_superclass_migrate.assert_called_once_with(
+            self.context, mock.sentinel.fake_instance,
+            mock.sentinel.destination, mock.sentinel.flavor,
+            mock.sentinel.network_info, mock.sentinel.block_dev_info,
+            mock.sentinel.timeout, mock.sentinel.retry_interval)
+
+    @mock.patch.object(base_driver.HyperVDriver, 'finish_migration')
+    def test_finish_migration(self, mock_superclass_finish_migration):
+        self.driver.finish_migration(self.context,
+                                     mock.sentinel.migration,
+                                     mock.sentinel.fake_instance,
+                                     mock.sentinel.disk_info,
+                                     mock.sentinel.network_info,
+                                     mock.sentinel.image_meta,
+                                     mock.sentinel.resize_instance,
+                                     mock.sentinel.block_dev_info,
+                                     mock.sentinel.power_on)
+        mock_superclass_finish_migration.assert_called_once_with(
+            self.context, mock.sentinel.migration, mock.sentinel.fake_instance,
+            mock.sentinel.disk_info, mock.sentinel.network_info,
+            mock.sentinel.image_meta, mock.sentinel.resize_instance,
+            mock.sentinel.block_dev_info, mock.sentinel.power_on)
+        self.driver._clops.add_to_cluster.assert_called_once_with(
+            mock.sentinel.fake_instance)
+
+    @mock.patch.object(base_driver.HyperVDriver, 'finish_revert_migration')
+    def test_finish_revert_migration(self, mock_superclass_finish_rev_migr):
+        self.driver.finish_revert_migration(self.context,
+                                            mock.sentinel.fake_instance,
+                                            mock.sentinel.network_info,
+                                            mock.sentinel.block_dev_info,
+                                            mock.sentinel.power_on)
+        mock_superclass_finish_rev_migr.assert_called_once_with(
+            self.context, mock.sentinel.fake_instance,
+            mock.sentinel.network_info, mock.sentinel.block_dev_info,
+            mock.sentinel.power_on)
+        self.driver._clops.add_to_cluster.assert_called_once_with(
+            mock.sentinel.fake_instance)
+
     @mock.patch.object(base_driver.HyperVDriver,
                        'post_live_migration_at_destination')
     def test_post_live_migration_at_destination(self, mock_superclass_post):

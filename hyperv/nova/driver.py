@@ -240,18 +240,21 @@ class HyperVDriver(driver.ComputeDriver):
                                                block_device_info,
                                                destroy_disks=True,
                                                migrate_data=None):
-        self.destroy(context, instance, network_info, block_device_info)
+        self.destroy(context, instance, network_info, block_device_info,
+                     destroy_disks=destroy_disks)
 
     def pre_live_migration(self, context, instance, block_device_info,
                            network_info, disk_info, migrate_data):
         self._livemigrationops.pre_live_migration(context, instance,
                                                   block_device_info,
                                                   network_info)
+        return migrate_data
 
     def post_live_migration(self, context, instance, block_device_info,
                             migrate_data=None):
         self._livemigrationops.post_live_migration(context, instance,
-                                                   block_device_info)
+                                                   block_device_info,
+                                                   migrate_data)
 
     def post_live_migration_at_source(self, context, instance, network_info):
         """Unplug VIFs from networks at source."""

@@ -73,7 +73,8 @@ class ClusterOps(object):
 
     def remove_from_cluster(self, instance):
         try:
-            self._clustutils.delete(instance.name)
+            if self._clustutils.vm_exists(instance.name):
+                self._clustutils.delete(instance.name)
             self._instance_map.pop(instance.name, None)
         except os_win_exc.HyperVClusterException:
             LOG.exception(_LE('Removing instance from cluster failed.'),

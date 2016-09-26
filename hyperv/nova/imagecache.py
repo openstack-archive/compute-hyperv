@@ -29,7 +29,7 @@ from oslo_utils import excutils
 from oslo_utils import units
 from oslo_utils import uuidutils
 
-from hyperv.i18n import _
+from hyperv.i18n import _, _LI
 from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
@@ -193,28 +193,34 @@ class ImageCache(imagecache.ImageCacheManager):
             else:
                 self._remove_if_old_image(img)
 
-    def _update_image_timestamp(self, image_name):
-        backing_files = self._get_image_backing_files(image_name)
+    def _update_image_timestamp(self, image):
+        backing_files = self._get_image_backing_files(image)
         for img in backing_files:
             os.utime(img, None)
 
-    def _get_image_backing_files(self, image_name):
-        backing_files = [self._pathutils.lookup_image_basepath(image_name)]
-        resize_re = re.compile('%s_[0-9]+$' % image_name)
+    def _get_image_backing_files(self, image):
+        base_file = self._pathutils.get_image_path(image)
+        if not base_file:
+            # not vhd or vhdx, ignore.
+            return []
+
+        backing_files = [base_file]
+        resize_re = re.compile('%s_[0-9]+$' % image)
         for img in self.unexplained_images:
             match = resize_re.match(img)
             if match:
-                backing_files.append(
-                    self._pathutils.lookup_image_basepath(img))
+                backing_files.append(self._pathutils.get_image_path(img))
 
         return backing_files
 
-    def _remove_if_old_image(self, image_name):
+    def _remove_if_old_image(self, image):
+        backing_files = self._get_image_backing_files(image)
         max_age_seconds = CONF.remove_unused_original_minimum_age_seconds
-        backing_files = self._get_image_backing_files(image_name)
+
         for img in backing_files:
             age_seconds = self._pathutils.get_age_of_file(img)
             if age_seconds > max_age_seconds:
+                LOG.info(_LI("Removing old, unused image: %s"), img)
                 self.remove_old_image(img)
 
     @synchronize_with_path
@@ -226,20 +232,25 @@ class ImageCache(imagecache.ImageCacheManager):
 
         running = self._list_running_instances(context, all_instances)
         self.used_images = running['used_images'].keys()
-        all_files = self.list_base_images(base_vhd_dir)
+        all_files = self._list_base_images(base_vhd_dir)
         self.originals = all_files['originals']
         self.unexplained_images = all_files['unexplained_images']
 
         self._age_and_verify_cached_images(context, all_instances,
                                            base_vhd_dir)
 
-    def list_base_images(self, base_dir):
+    def _list_base_images(self, base_dir):
         unexplained_images = []
         originals = []
 
         for entry in os.listdir(base_dir):
-            # remove file extension
-            file_name = os.path.splitext(entry)[0]
+            file_name, extension = os.path.splitext(entry)
+            # extension has a leading '.'. E.g.: '.vhdx'
+            if extension.lstrip('.').lower() not in ['vhd', 'vhdx']:
+                # File is not an image. Ignore it.
+                # imagecache will not store images of any other formats.
+                continue
+
             if uuidutils.is_uuid_like(file_name):
                 originals.append(file_name)
             else:

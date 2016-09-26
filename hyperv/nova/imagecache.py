@@ -173,12 +173,11 @@ class ImageCache(imagecache.ImageCacheManager):
             err_msg = _('Using a rescue image bigger than the instance '
                         'flavor disk size is not allowed. '
                         'Rescue image size: %(rescue_image_size)s. '
-                        'Flavor disk size:%(flavor_disk_size)s. '
-                        'Rescue image id %(rescue_image_id)s.')
-            raise exception.FlavorDiskSmallerThanImage(err_msg %
-                {'rescue_image_size': rescue_image_size,
-                 'flavor_disk_size': flavor_disk_size,
-                 'rescue_image_id': rescue_image_id})
+                        'Flavor disk size:%(flavor_disk_size)s.') % dict(
+                            rescue_image_size=rescue_image_size,
+                            flavor_disk_size=flavor_disk_size)
+            raise exception.ImageUnacceptable(reason=err_msg,
+                                              image_id=rescue_image_id)
 
     def get_image_details(self, context, instance):
         image_id = instance.image_ref

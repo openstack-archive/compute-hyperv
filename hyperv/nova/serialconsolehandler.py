@@ -22,7 +22,6 @@ from os_win.utils.io import ioutils
 from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
-import six
 
 from hyperv.nova import constants
 from hyperv.nova import pathutils
@@ -109,7 +108,7 @@ class SerialConsoleHandler(object):
         log_rw_pipe_output = not serial_port_mapping.get(
             constants.SERIAL_PORT_TYPE_RO)
 
-        for pipe_type, pipe_path in six.iteritems(serial_port_mapping):
+        for pipe_type, pipe_path in serial_port_mapping.items():
             enable_logging = (pipe_type == constants.SERIAL_PORT_TYPE_RO or
                               log_rw_pipe_output)
             handler = self._get_named_pipe_handler(
@@ -146,6 +145,8 @@ class SerialConsoleHandler(object):
         # as we can't use the serial port ElementName attribute because of
         # a Hyper-V bug.
         for pipe_path in serial_port_conns:
+            # expected pipe_path:
+            # '\\.\pipe\fc1bcc91-c7d3-4116-a210-0cd151e019cd_rw'
             port_type = pipe_path[-2:]
             if port_type in [constants.SERIAL_PORT_TYPE_RO,
                              constants.SERIAL_PORT_TYPE_RW]:

@@ -67,11 +67,13 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
             with excutils.save_and_reraise_exception():
                 LOG.debug("Calling live migration recover_method "
                           "for instance.", instance=instance_ref)
-                recover_method(context, instance_ref, dest, block_migration)
+                recover_method(context, instance_ref, dest, block_migration,
+                               migrate_data)
 
         LOG.debug("Calling live migration post_method for instance.",
                   instance=instance_ref)
-        post_method(context, instance_ref, dest, block_migration)
+        post_method(context, instance_ref, dest,
+                    block_migration, migrate_data)
 
     def pre_live_migration(self, context, instance, block_device_info,
                            network_info):
@@ -81,7 +83,8 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
             super(ClusterLiveMigrationOps, self).pre_live_migration(
                 context, instance, block_device_info, network_info)
 
-    def post_live_migration(self, context, instance, block_device_info):
+    def post_live_migration(self, context, instance, block_device_info,
+                            migrate_data):
         if not self._is_instance_clustered(instance.name):
             super(ClusterLiveMigrationOps, self).post_live_migration(
-                context, instance, block_device_info)
+                context, instance, block_device_info, migrate_data)

@@ -50,14 +50,16 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
 
         self.livemigrops.live_migration(
             self._fake_context, mock_instance, dest, post_method,
-            mock.sentinel.recover_method, block_migration=False,
-            migrate_data=None)
+            mock.sentinel.recover_method,
+            block_migration=mock.sentinel.block_migration,
+            migrate_data=mock.sentinel.migrate_data)
 
         clustutils = self.livemigrops._clustutils
         clustutils.live_migrate_vm.assert_called_once_with(
             mock_instance.name, dest)
         post_method.assert_called_once_with(
-            self._fake_context, mock_instance, dest, False)
+            self._fake_context, mock_instance, dest,
+            mock.sentinel.block_migration, mock.sentinel.migrate_data)
 
     def test_live_migration_in_cluster_exception(self):
         mock_instance = fake_instance.fake_instance_obj(self._fake_context)
@@ -75,10 +77,14 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             os_win_exc.HyperVVMNotFoundException,
             self.livemigrops.live_migration,
             self._fake_context, mock_instance, dest, mock.sentinel.post_method,
-            recover_method, block_migration=False, migrate_data=None)
+            recover_method,
+            block_migration=mock.sentinel.block_migration,
+            migrate_data=mock.sentinel.migrate_data)
 
         recover_method.assert_called_once_with(
-            self._fake_context, mock_instance, dest, False)
+            self._fake_context, mock_instance, dest,
+            mock.sentinel.block_migration,
+            mock.sentinel.migrate_data)
 
     @mock.patch.object(base_livemigrationops.LiveMigrationOps,
                        'live_migration')
@@ -126,7 +132,8 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     def test_post_live_migration_clustered(self, mock_post_live_migration):
         self.livemigrops.post_live_migration(self._fake_context,
                                              mock.sentinel.fake_instance,
-                                             mock.sentinel.bdi)
+                                             mock.sentinel.bdi,
+                                             mock.sentinel.migrate_data)
 
         self.assertFalse(mock_post_live_migration.called)
 
@@ -136,8 +143,10 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self.livemigrops._clustutils.vm_exists.return_value = False
         self.livemigrops.post_live_migration(self._fake_context,
                                              mock.sentinel.fake_instance,
-                                             mock.sentinel.bdi)
+                                             mock.sentinel.bdi,
+                                             mock.sentinel.migrate_data)
 
         mock_post_live_migration.assert_called_once_with(
             self._fake_context, mock.sentinel.fake_instance,
-            mock.sentinel.bdi)
+            mock.sentinel.bdi,
+            mock.sentinel.migrate_data)

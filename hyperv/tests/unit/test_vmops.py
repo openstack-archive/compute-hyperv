@@ -376,11 +376,60 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vmutils.set_boot_order.assert_called_once_with(
             mock.sentinel.FAKE_INSTANCE_NAME, mock_get_boot_order.return_value)
 
+    @mock.patch.object(vmops.objects, 'PCIDeviceBus')
+    @mock.patch.object(vmops.objects, 'NetworkInterfaceMetadata')
+    @mock.patch.object(vmops.objects.VirtualInterfaceList,
+                       'get_by_instance_uuid')
+    def test_get_vif_metadata(self, mock_get_by_inst_uuid,
+                              mock_NetworkInterfaceMetadata, mock_PCIDevBus):
+        mock_vif = mock.MagicMock(tag='taggy')
+        mock_vif.__contains__.side_effect = (
+            lambda attr: getattr(mock_vif, attr, None) is not None)
+        mock_get_by_inst_uuid.return_value = [mock_vif,
+                                              mock.MagicMock(tag=None)]
+
+        vif_metadata = self._vmops._get_vif_metadata(self.context,
+                                                     mock.sentinel.instance_id)
+
+        mock_get_by_inst_uuid.assert_called_once_with(
+            self.context, mock.sentinel.instance_id)
+        mock_NetworkInterfaceMetadata.assert_called_once_with(
+            mac=mock_vif.address,
+            bus=mock_PCIDevBus.return_value,
+            tags=[mock_vif.tag])
+        self.assertEqual([mock_NetworkInterfaceMetadata.return_value],
+                         vif_metadata)
+
+    @mock.patch.object(vmops.objects, 'InstanceDeviceMetadata')
+    @mock.patch.object(vmops.VMOps, '_get_vif_metadata')
+    def test_save_device_metadata(self, mock_get_vif_metadata,
+                                  mock_InstanceDeviceMetadata):
+        mock_instance = mock.MagicMock()
+        mock_get_vif_metadata.return_value = [mock.sentinel.vif_metadata]
+        self._vmops._block_dev_man.get_bdm_metadata.return_value = [
+            mock.sentinel.bdm_metadata]
+
+        self._vmops._save_device_metadata(self.context, mock_instance,
+                                          mock.sentinel.block_device_info)
+
+        mock_get_vif_metadata.assert_called_once_with(self.context,
+                                                      mock_instance.uuid)
+        self._vmops._block_dev_man.get_bdm_metadata.assert_called_once_with(
+            self.context, mock_instance, mock.sentinel.block_device_info)
+
+        expected_metadata = [mock.sentinel.vif_metadata,
+                             mock.sentinel.bdm_metadata]
+        mock_InstanceDeviceMetadata.assert_called_once_with(
+            devices=expected_metadata)
+        self.assertEqual(mock_InstanceDeviceMetadata.return_value,
+                         mock_instance.device_metadata)
+
     @mock.patch('hyperv.nova.vmops.VMOps.destroy')
     @mock.patch('hyperv.nova.vmops.VMOps.power_on')
     @mock.patch('hyperv.nova.vmops.VMOps.attach_config_drive')
     @mock.patch('hyperv.nova.vmops.VMOps._create_config_drive')
     @mock.patch('nova.virt.configdrive.required_by')
+    @mock.patch('hyperv.nova.vmops.VMOps._save_device_metadata')
     @mock.patch('hyperv.nova.vmops.VMOps.create_instance')
     @mock.patch('hyperv.nova.vmops.VMOps.get_image_vm_generation')
     @mock.patch('hyperv.nova.vmops.VMOps._create_ephemerals')
@@ -394,7 +443,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     mock_get_vif_driver, mock_delete_disk_files,
                     mock_create_root_device,
                     mock_create_ephemerals, mock_get_image_vm_gen,
-                    mock_create_instance, mock_configdrive_required,
+                    mock_create_instance, mock_save_device_metadata,
+                    mock_configdrive_required,
                     mock_create_config_drive, mock_attach_config_drive,
                     mock_power_on, mock_destroy, exists, configdrive_required,
                     fail, fake_vm_gen=constants.VM_GEN_2):
@@ -443,6 +493,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 self.context, mock_instance, mock.sentinel.INFO,
                 root_device_info, block_device_info, fake_vm_gen,
                 mock_image_meta)
+            mock_save_device_metadata.assert_called_once_with(
+                self.context, mock_instance, block_device_info)
             mock_configdrive_required.assert_called_once_with(mock_instance)
             if configdrive_required:
                 mock_create_config_drive.assert_called_once_with(

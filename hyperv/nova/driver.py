@@ -99,7 +99,8 @@ class HyperVDriver(driver.ComputeDriver):
         "has_imagecache": True,
         "supports_recreate": False,
         "supports_migrate_to_same_host": False,
-        "supports_attach_interface": True
+        "supports_attach_interface": True,
+        "supports_device_tagging": True,
     }
 
     def __init__(self, virtapi):

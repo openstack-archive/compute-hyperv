@@ -41,7 +41,14 @@ class HyperVBaseVIFDriver(object):
 
 class HyperVNeutronVIFDriver(HyperVBaseVIFDriver):
     """Neutron VIF driver."""
-    pass
+
+    def plug(self, instance, vif):
+        # Neutron takes care of plugging the port
+        pass
+
+    def unplug(self, instance, vif):
+        # Neutron takes care of unplugging the port
+        pass
 
 
 class HyperVNovaNetworkVIFDriver(HyperVBaseVIFDriver):
@@ -53,6 +60,10 @@ class HyperVNovaNetworkVIFDriver(HyperVBaseVIFDriver):
     def plug(self, instance, vif):
         self._netutils.connect_vnic_to_vswitch(CONF.hyperv.vswitch_name,
                                                vif['id'])
+
+    def unplug(self, instance, vif):
+        # TODO(alepilotti) Not implemented
+        pass
 
 
 class HyperVOVSVIFDriver(HyperVNovaNetworkVIFDriver):

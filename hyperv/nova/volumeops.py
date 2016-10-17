@@ -140,8 +140,7 @@ class VolumeOps(object):
         volume_driver.detach_volume(connection_info, instance_name)
         volume_driver.disconnect_volume(connection_info)
 
-    def fix_instance_volume_disk_paths(self, instance_name,
-                                       block_device_info):
+    def fix_instance_volume_disk_paths(self, instance_name, block_device_info):
         # Mapping containing the current disk paths for each volume.
         actual_disk_mapping = self.get_disk_path_mapping(block_device_info)
         if not actual_disk_mapping:

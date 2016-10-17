@@ -1,4 +1,4 @@
-# Copyright 2015 Cloudbase Solutions Srl
+# Copyright 2016 Cloudbase Solutions Srl
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -13,11 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from eventlet import patcher
-
 import functools
 import socket
 
+from eventlet import patcher
 from nova import exception
 from nova.i18n import _
 

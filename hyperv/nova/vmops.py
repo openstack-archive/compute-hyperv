@@ -94,10 +94,10 @@ class VMOps(object):
         self._vhdutils = utilsfactory.get_vhdutils()
         self._hostutils = utilsfactory.get_hostutils()
         self._pathutils = pathutils.PathUtils()
-        self._serial_console_ops = serialconsoleops.SerialConsoleOps()
         self._volumeops = volumeops.VolumeOps()
         self._imagecache = imagecache.ImageCache()
         self._vif_driver_cache = {}
+        self._serial_console_ops = serialconsoleops.SerialConsoleOps()
         self._block_dev_man = (
             block_device_manager.BlockDeviceInfoManager())
         self._pdk = pdk.PDK()

@@ -22,6 +22,7 @@ from nova.compute import power_state
 from os_win import constants
 from oslo_utils import units
 
+
 HYPERV_POWER_STATE = {
     constants.HYPERV_VM_STATE_DISABLED: power_state.SHUTDOWN,
     constants.HYPERV_VM_STATE_SHUTTING_DOWN: power_state.SHUTDOWN,
@@ -73,6 +74,7 @@ IMAGE_PROP_VM_GEN_2 = "hyperv-gen2"
 VM_GEN_1 = 1
 VM_GEN_2 = 2
 
+SERIAL_CONSOLE_BUFFER_SIZE = 4 * units.Ki
 
 IMAGE_PROP_INTERACTIVE_SERIAL_PORT = "interactive_serial_port"
 IMAGE_PROP_LOGGING_SERIAL_PORT = "logging_serial_port"
@@ -95,7 +97,6 @@ FLAVOR_ESPEC_REMOTEFX_VRAM = 'os:vram'
 
 IOPS_BASE_SIZE = 8 * units.Ki
 
-SERIAL_CONSOLE_BUFFER_SIZE = 4 * units.Ki
 MAX_CONSOLE_LOG_FILE_SIZE = units.Mi // 2
 
 IMAGE_PROP_SECURE_BOOT = "os_secure_boot"

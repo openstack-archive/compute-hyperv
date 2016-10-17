@@ -1,4 +1,4 @@
-# Copyright 2015 Cloudbase Solutions Srl
+# Copyright 2016 Cloudbase Solutions Srl
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -14,9 +14,8 @@
 #    under the License.
 
 import mock
-from six.moves import builtins
-
 from nova import exception
+from six.moves import builtins
 
 from hyperv.nova import serialconsolehandler
 from hyperv.nova import serialconsoleops

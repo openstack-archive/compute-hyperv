@@ -20,14 +20,11 @@ from nova import exception
 from nova.i18n import _, _LI, _LE, _LW  # noqa
 from nova import utils
 from os_win import utilsfactory
-from oslo_config import cfg
 from oslo_log import log as logging
 import six
 
 from hyperv.nova import pathutils
 from hyperv.nova import serialconsolehandler
-
-CONF = cfg.CONF
 
 LOG = logging.getLogger(__name__)
 

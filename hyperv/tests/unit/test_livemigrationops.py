@@ -35,8 +35,9 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         super(LiveMigrationOpsTestCase, self).setUp()
         self.context = 'fake_context'
         self._livemigrops = livemigrationops.LiveMigrationOps()
-        self._livemigrops._block_dev_man = mock.MagicMock()
+        self._livemigrops._livemigrutils = mock.MagicMock()
         self._livemigrops._pathutils = mock.MagicMock()
+        self._livemigrops._block_dev_man = mock.MagicMock()
         self._pathutils = self._livemigrops._pathutils
 
     @mock.patch.object(serialconsoleops.SerialConsoleOps,
@@ -176,10 +177,10 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
                 mock_instance.host,
                 mock.sentinel.disk_path_mapping)
 
-    def test_pre_live_migration_having_phys_disks_attached(self):
+    def test_pre_live_migration(self):
         self._test_pre_live_migration()
 
-    def test_pre_live_migration_without_phys_disks_attached(self):
+    def test_pre_live_migration_invalid_disk_mapping(self):
         self._test_pre_live_migration(phys_disks_attached=False)
 
     @mock.patch('hyperv.nova.volumeops.VolumeOps.disconnect_volumes')

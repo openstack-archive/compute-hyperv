@@ -20,7 +20,6 @@ import datetime
 import platform
 import time
 
-
 from nova.compute import api
 from nova.compute import arch
 from nova.compute import hv_type

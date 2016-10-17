@@ -194,7 +194,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.CACHED_ISO_PATH, mock.sentinel.ROOT_ISO_PATH)
 
     def _prepare_create_root_device_mocks(self, use_cow_images, vhd_format,
-                                          vhd_size):
+                                       vhd_size):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_instance.flavor.root_gb = self.FAKE_SIZE
         self.flags(use_cow_images=use_cow_images)
@@ -300,20 +300,20 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_create_root_vhd(self):
         self._test_create_root_vhd(vhd_format=constants.DISK_FORMAT_VHD)
 
-    def test_create_root_vhd_ex(self):
+    def test_create_root_vhdx(self):
         self._test_create_root_vhd(vhd_format=constants.DISK_FORMAT_VHDX)
 
     def test_create_root_vhd_use_cow_images_true(self):
         self._test_create_root_vhd_qcow(vhd_format=constants.DISK_FORMAT_VHD)
 
-    def test_create_root_vhd_ex_use_cow_images_true(self):
+    def test_create_root_vhdx_use_cow_images_true(self):
         self._test_create_root_vhd_qcow(vhd_format=constants.DISK_FORMAT_VHDX)
 
     def test_create_rescue_vhd(self):
         self._test_create_root_vhd(vhd_format=constants.DISK_FORMAT_VHD,
                                    is_rescue_vhd=True)
 
-    def test_create_root_vhd_ex_size_less_than_internal(self):
+    def test_create_root_vhdx_size_less_than_internal(self):
         self._test_create_root_vhd_exception(
             vhd_format=constants.DISK_FORMAT_VHD)
 
@@ -447,8 +447,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     mock_create_instance, mock_save_device_metadata,
                     mock_configdrive_required,
                     mock_create_config_drive, mock_attach_config_drive,
-                    mock_power_on, mock_destroy, exists, configdrive_required,
-                    fail, fake_vm_gen=constants.VM_GEN_2):
+                    mock_power_on, mock_destroy, exists,
+                    configdrive_required, fail,
+                    fake_vm_gen=constants.VM_GEN_2):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_image_meta = mock.MagicMock()
         root_device_info = mock.sentinel.ROOT_DEV_INFO
@@ -574,14 +575,16 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(vmops.volumeops.VolumeOps, 'attach_volumes')
     @mock.patch.object(vmops.VMOps, '_set_instance_disk_qos_specs')
     @mock.patch.object(vmops.VMOps, '_attach_root_device')
-    @mock.patch.object(vmops.VMOps, '_attach_ephemerals')
     @mock.patch.object(vmops.VMOps, '_get_image_serial_port_settings')
     @mock.patch.object(vmops.VMOps, '_create_vm_com_port_pipes')
+    @mock.patch.object(vmops.VMOps, '_attach_ephemerals')
     @mock.patch.object(vmops.VMOps, '_configure_remotefx')
     @mock.patch.object(vmops.VMOps, '_get_instance_vnuma_config')
     def _test_create_instance(self, mock_get_instance_vnuma_config,
-                              mock_configure_remotefx, mock_create_pipes,
-                              mock_get_port_settings, mock_attach_ephemerals,
+                              mock_configure_remotefx,
+                              mock_attach_ephemerals,
+                              mock_create_pipes,
+                              mock_get_port_settings,
                               mock_attach_root_device,
                               mock_set_qos_specs,
                               mock_attach_volumes,
@@ -627,8 +630,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 vm_gen=vm_gen,
                 image_meta=mock.sentinel.image_meta)
 
-        mock_configure_remotefx.assert_called_once_with(mock_instance, vm_gen)
-
         self._vmops._vmutils.create_vm.assert_called_once_with(
             mock_instance.name, vnuma_enabled, vm_gen,
             instance_path, [mock_instance.uuid])
@@ -637,6 +638,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance.flavor.vcpus, cpus_per_numa,
             CONF.hyperv.limit_cpu_features, dynamic_memory_ratio)
 
+        mock_configure_remotefx.assert_called_once_with(mock_instance, vm_gen)
         mock_create_scsi_ctrl = self._vmops._vmutils.create_scsi_controller
         mock_create_scsi_ctrl.assert_called_once_with(mock_instance.name)
 
@@ -655,8 +657,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance.name, mock.sentinel.ID, mock.sentinel.ADDRESS)
         mock_vif_driver.plug.assert_called_once_with(mock_instance,
                                                      fake_network_info)
-        mock_enable = (
-            self._vmops._metricsutils.enable_vm_metrics_collection)
+        mock_enable = self._vmops._metricsutils.enable_vm_metrics_collection
         if enable_instance_metrics:
             mock_enable.assert_called_once_with(mock_instance.name)
         mock_set_qos_specs.assert_called_once_with(mock_instance)
@@ -673,12 +674,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     def test_create_instance(self):
         self._test_create_instance(enable_instance_metrics=True)
-
-    def test_create_instance_exception(self):
-        # Secure Boot requires Generation 2 VMs. If boot is required while the
-        # vm_gen is 1, exception is raised.
-        self._test_create_instance(enable_instance_metrics=True,
-                                   vm_gen=constants.VM_GEN_1)
 
     def test_create_instance_enable_instance_metrics_false(self):
         self._test_create_instance(enable_instance_metrics=False)
@@ -1061,8 +1056,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vmutils.vm_exists.return_value = True
 
         self._vmops.destroy(instance=mock_instance,
-                            block_device_info=mock.sentinel.FAKE_BD_INFO,
-                            network_info=mock.sentinel.fake_network_info)
+                            network_info=mock.sentinel.fake_network_info,
+                            block_device_info=mock.sentinel.FAKE_BD_INFO)
 
         self._vmops._vmutils.vm_exists.assert_called_with(
             mock_instance.name)
@@ -1242,6 +1237,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         self._vmops.power_off(instance, 1, 0)
 
+        serialops = self._vmops._serial_console_ops
+        serialops.stop_console_handler.assert_called_once_with(
+            instance.name)
         mock_soft_shutdown.assert_called_once_with(
             instance, 1, vmops.SHUTDOWN_TIME_INCREMENT)
         self.assertFalse(mock_set_state.called)

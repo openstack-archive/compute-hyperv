@@ -26,11 +26,9 @@ import os
 import eventlet
 eventlet.monkey_patch(os=False)
 
+import fixtures
 import inspect
 import mock
-import six
-
-import fixtures
 from nova.tests import fixtures as nova_fixtures
 from nova.tests.unit import conf_fixture
 from nova.tests.unit import policy_fixture
@@ -38,6 +36,7 @@ from oslo_config import cfg
 from oslo_log.fixture import logging_error as log_fixture
 from oslo_log import log as logging
 from oslotest import moxstubout
+import six
 import testtools
 
 

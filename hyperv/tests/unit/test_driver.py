@@ -189,7 +189,7 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.instance)
 
     def test_attach_volume(self):
-        mock_instance = mock.MagicMock()
+        mock_instance = fake_instance.fake_instance_obj(self.context)
         self.driver.attach_volume(
             mock.sentinel.context, mock.sentinel.connection_info,
             mock_instance, mock.sentinel.mountpoint, mock.sentinel.disk_bus,
@@ -200,7 +200,7 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock_instance.name)
 
     def test_detach_volume(self):
-        mock_instance = mock.MagicMock()
+        mock_instance = fake_instance.fake_instance_obj(self.context)
         self.driver.detach_volume(
             mock.sentinel.connection_info, mock_instance,
             mock.sentinel.mountpoint, mock.sentinel.encryption)

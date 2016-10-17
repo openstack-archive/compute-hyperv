@@ -36,9 +36,6 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         self.fake_instance_name = 'fake_instance_name'
 
         self._pathutils = pathutils.PathUtils()
-        self._pathutils._smb_conn_attr = mock.MagicMock()
-        self._pathutils._smbutils = mock.MagicMock()
-        self._smbutils = self._pathutils._smbutils
 
     @ddt.data({'conf_instances_path': r'c:\inst_dir',
                'expected_dir': r'c:\inst_dir'},

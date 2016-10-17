@@ -21,11 +21,10 @@ import sys
 
 import ddt
 import mock
-from oslo_config import cfg
-
 from nova import exception
 from nova.tests.unit import fake_block_device
 from os_win import exceptions as os_win_exc
+from oslo_config import cfg
 from oslo_utils import units
 
 from hyperv.nova import constants
@@ -35,12 +34,12 @@ from hyperv.tests.unit import test_base
 CONF = cfg.CONF
 
 connection_data = {'volume_id': 'fake_vol_id',
-                   'target_lun': mock.sentinel.target_lun,
-                   'target_iqn': mock.sentinel.target_iqn,
-                   'target_portal': mock.sentinel.target_portal,
+                   'target_lun': mock.sentinel.fake_lun,
+                   'target_iqn': mock.sentinel.fake_iqn,
+                   'target_portal': mock.sentinel.fake_portal,
                    'auth_method': 'chap',
-                   'auth_username': mock.sentinel.auth_username,
-                   'auth_password': mock.sentinel.auth_password}
+                   'auth_username': mock.sentinel.fake_user,
+                   'auth_password': mock.sentinel.fake_pass}
 
 
 def get_fake_block_dev_info(dev_count=1):

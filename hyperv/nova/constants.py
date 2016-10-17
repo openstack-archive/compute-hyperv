@@ -66,6 +66,7 @@ HOST_POWER_ACTION_REBOOT = "reboot"
 HOST_POWER_ACTION_STARTUP = "startup"
 
 IMAGE_PROP_VM_GEN = "hw_machine_type"
+FLAVOR_SPEC_SECURE_BOOT = "os:secure_boot"
 IMAGE_PROP_VM_GEN_1 = "hyperv-gen1"
 IMAGE_PROP_VM_GEN_2 = "hyperv-gen2"
 
@@ -96,7 +97,6 @@ SERIAL_CONSOLE_BUFFER_SIZE = 4 * units.Ki
 MAX_CONSOLE_LOG_FILE_SIZE = units.Mi // 2
 
 IMAGE_PROP_SECURE_BOOT = "os_secure_boot"
-FLAVOR_SPEC_SECURE_BOOT = "os:secure_boot"
 REQUIRED = "required"
 DISABLED = "disabled"
 OPTIONAL = "optional"

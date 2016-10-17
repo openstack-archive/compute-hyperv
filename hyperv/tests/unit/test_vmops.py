@@ -18,6 +18,7 @@ from eventlet import timeout as etimeout
 import mock
 from nova.compute import vm_states
 from nova import exception
+from nova.objects import fields
 from nova.objects import flavor as flavor_obj
 from nova.tests.unit.objects import test_flavor
 from nova.tests.unit.objects import test_virtual_interface
@@ -451,7 +452,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_image_meta = mock.MagicMock()
         root_device_info = mock.sentinel.ROOT_DEV_INFO
-        fake_vm_gen = mock_get_image_vm_gen.return_value
+        mock_get_image_vm_gen.return_value = fake_vm_gen
         fake_config_drive_path = mock_create_config_drive.return_value
         block_device_info = {'ephemerals': [], 'root_disk': root_device_info}
 
@@ -567,10 +568,10 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                          events)
 
     @mock.patch.object(vmops.VMOps, '_configure_secure_vm')
-    @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
-    @mock.patch.object(vmops.VMOps, '_requires_certificate')
     @mock.patch('hyperv.nova.vif.get_vif_driver')
     @mock.patch.object(vmops.VMOps, '_set_instance_disk_qos_specs')
+    @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
+    @mock.patch.object(vmops.VMOps, '_requires_certificate')
     @mock.patch.object(vmops.volumeops.VolumeOps, 'attach_volumes')
     @mock.patch.object(vmops.VMOps, '_attach_root_device')
     @mock.patch.object(vmops.VMOps, '_attach_ephemerals')
@@ -582,9 +583,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               mock_configure_remotefx, mock_create_pipes,
                               mock_get_port_settings, mock_attach_ephemerals,
                               mock_attach_root_device, mock_attach_volumes,
-                              mock_set_qos_specs, mock_get_vif_driver,
                               mock_requires_certificate,
                               mock_requires_secure_boot,
+                              mock_set_qos_specs, mock_get_vif_driver,
                               mock_configure_secure_vm,
                               enable_instance_metrics,
                               vm_gen=constants.VM_GEN_1, vnuma_enabled=False,
@@ -599,7 +600,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                              'address': mock.sentinel.ADDRESS}
         mock_instance = fake_instance.fake_instance_obj(self.context)
         instance_path = os.path.join(CONF.instances_path, mock_instance.name)
-        mock_requires_secure_boot.return_value = requires_sec_boot
+        mock_requires_secure_boot.return_value = True
 
         if vnuma_enabled:
             mock_get_instance_vnuma_config.return_value = (
@@ -657,17 +658,16 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         if enable_instance_metrics:
             mock_enable.assert_called_once_with(mock_instance.name)
         mock_set_qos_specs.assert_called_once_with(mock_instance)
-        if requires_sec_boot:
-            mock_requires_secure_boot.assert_called_once_with(
-                mock_instance, mock.sentinel.image_meta, vm_gen)
-            mock_requires_certificate.assert_called_once_with(
-                mock_instance.uuid,
-                mock.sentinel.image_meta)
-            enable_secure_boot = self._vmops._vmutils.enable_secure_boot
-            enable_secure_boot.assert_called_once_with(
-                mock_instance.name, mock_requires_certificate.return_value)
-            mock_configure_secure_vm.assert_called_once_with(self.context,
-                mock_instance, mock.sentinel.image_meta, requires_sec_boot)
+        mock_requires_secure_boot.assert_called_once_with(
+            mock_instance, mock.sentinel.image_meta, vm_gen)
+        mock_requires_certificate.assert_called_once_with(
+            mock.sentinel.image_meta)
+        enable_secure_boot = self._vmops._vmutils.enable_secure_boot
+        enable_secure_boot.assert_called_once_with(
+            mock_instance.name,
+            msft_ca_required=mock_requires_certificate.return_value)
+        mock_configure_secure_vm.assert_called_once_with(self.context,
+            mock_instance, mock.sentinel.image_meta, requires_sec_boot)
 
     def test_create_instance(self):
         self._test_create_instance(enable_instance_metrics=True)
@@ -807,6 +807,82 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           self._vmops.check_vm_image_type,
                           mock.sentinel.instance_id, constants.VM_GEN_2,
                           mock.sentinel.FAKE_PATH)
+
+    def _check_requires_certificate(self, os_type):
+        mock_image_meta = {'properties': {'os_type': os_type}}
+
+        expected_result = os_type == fields.OSType.LINUX
+        result = self._vmops._requires_certificate(mock_image_meta)
+        self.assertEqual(expected_result, result)
+
+    def test_requires_certificate_windows(self):
+        self._check_requires_certificate(os_type=fields.OSType.WINDOWS)
+
+    def test_requires_certificate_linux(self):
+        self._check_requires_certificate(os_type=fields.OSType.LINUX)
+
+    def _check_requires_secure_boot(
+            self, image_prop_os_type=fields.OSType.LINUX,
+            image_prop_secure_boot=fields.SecureBoot.REQUIRED,
+            flavor_secure_boot=fields.SecureBoot.REQUIRED,
+            vm_gen=constants.VM_GEN_2, expected_exception=True):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        if flavor_secure_boot:
+            mock_instance.flavor.extra_specs = {
+                constants.FLAVOR_SPEC_SECURE_BOOT: flavor_secure_boot}
+        mock_image_meta = {'properties': {'os_type': image_prop_os_type}}
+        if image_prop_secure_boot:
+            mock_image_meta['properties']['os_secure_boot'] = (
+                image_prop_secure_boot)
+
+        if expected_exception:
+            self.assertRaises(exception.InstanceUnacceptable,
+                              self._vmops._requires_secure_boot,
+                              mock_instance, mock_image_meta, vm_gen)
+        else:
+            result = self._vmops._requires_secure_boot(mock_instance,
+                                                       mock_image_meta,
+                                                       vm_gen)
+
+            requires_sb = fields.SecureBoot.REQUIRED in [
+                flavor_secure_boot, image_prop_secure_boot]
+            self.assertEqual(requires_sb, result)
+
+    def test_requires_secure_boot_ok(self):
+        self._check_requires_secure_boot(
+            expected_exception=False)
+
+    def test_requires_secure_boot_image_img_prop_none(self):
+        self._check_requires_secure_boot(
+            image_prop_secure_boot=None,
+            expected_exception=False)
+
+    def test_requires_secure_boot_image_extra_spec_none(self):
+        self._check_requires_secure_boot(
+            flavor_secure_boot=None,
+            expected_exception=False)
+
+    def test_requires_secure_boot_flavor_no_os_type(self):
+        self._check_requires_secure_boot(
+            image_prop_os_type=None)
+
+    def test_requires_secure_boot_flavor_no_os_type_no_exc(self):
+        self._check_requires_secure_boot(
+            image_prop_os_type=None,
+            image_prop_secure_boot=fields.SecureBoot.DISABLED,
+            flavor_secure_boot=fields.SecureBoot.DISABLED,
+            expected_exception=False)
+
+    def test_requires_secure_boot_flavor_disabled(self):
+        self._check_requires_secure_boot(
+            flavor_secure_boot=fields.SecureBoot.DISABLED)
+
+    def test_requires_secure_boot_image_disabled(self):
+        self._check_requires_secure_boot(
+            image_prop_secure_boot=fields.SecureBoot.DISABLED)
+
+    def test_requires_secure_boot_generation_1(self):
+        self._check_requires_secure_boot(vm_gen=constants.VM_GEN_1)
 
     @mock.patch('nova.api.metadata.base.InstanceMetadata')
     @mock.patch('nova.virt.configdrive.ConfigDriveBuilder')
@@ -1811,71 +1887,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         self.assertEqual(mock_parse_specs.return_value, ret_val)
         mock_parse_specs.assert_called_once_with(expected_qos_specs_dict)
-
-    def _test_requires_secure_boot(self, flavor_secure_boot,
-                                   image_prop_secure_boot,
-                                   fake_vm_gen=constants.VM_GEN_2):
-        mock_instance = mock.MagicMock()
-        flavor_secure_boot = {
-            'extra_specs': {'os:secure_boot': flavor_secure_boot}}
-        mock_image_meta = {'properties':
-                           {'os_secure_boot': image_prop_secure_boot}}
-
-        if flavor_secure_boot in ('required', 'disabled'):
-            expected_result = constants.REQUIRED == flavor_secure_boot
-        else:
-            expected_result = image_prop_secure_boot == 'required'
-        if fake_vm_gen != constants.VM_GEN_2 and expected_result:
-            self.assertRaises(os_win_exc.HyperVException,
-                              self._vmops._requires_secure_boot,
-                              mock_instance, mock_image_meta)
-        else:
-            result = self._vmops._requires_secure_boot(mock_instance,
-                                                       mock_image_meta,
-                                                       fake_vm_gen)
-            self.assertEqual(expected_result, result)
-
-    def test_requires_secure_boot_disabled(self):
-        self._test_requires_secure_boot(
-            flavor_secure_boot=constants.DISABLED,
-            image_prop_secure_boot=constants.REQUIRED)
-
-    def test_requires_secure_boot_optional(self):
-        self._test_requires_secure_boot(
-            flavor_secure_boot=constants.OPTIONAL,
-            image_prop_secure_boot=constants.OPTIONAL)
-
-    def test_requires_secure_boot_required(self):
-        self._test_requires_secure_boot(
-            flavor_secure_boot=constants.REQUIRED,
-            image_prop_secure_boot=constants.OPTIONAL)
-
-    def test_requires_secure_boot_bad_vm_gen(self):
-        self._test_requires_secure_boot(
-            flavor_secure_boot=constants.REQUIRED,
-            image_prop_secure_boot=constants.OPTIONAL,
-            fake_vm_gen=constants.VM_GEN_1)
-
-    def _test_requires_certificate(self, os_type):
-        image_meta = {'properties': {'os_type': os_type}}
-        if not os_type:
-            self.assertRaises(exception.InstanceUnacceptable,
-                              self._vmops._requires_certificate,
-                              mock.sentinel.instance_id, image_meta)
-        else:
-            expected_result = os_type == 'linux'
-            result = self._vmops._requires_certificate(
-                mock.sentinel.instance_id, image_meta)
-            self.assertEqual(expected_result, result)
-
-    def test_requires_certificate_windows(self):
-        self._test_requires_certificate(os_type='windows')
-
-    def test_requires_certificate_linux(self):
-        self._test_requires_certificate(os_type='linux')
-
-    def test_requires_certificate_os_type_none(self):
-        self._test_requires_certificate(os_type=None)
 
     @mock.patch.object(vmops.VMOps, '_check_vtpm_requirements')
     @mock.patch.object(vmops.VMOps, '_feature_requested')

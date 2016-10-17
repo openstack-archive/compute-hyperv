@@ -28,6 +28,7 @@ from nova.compute import vm_states
 import nova.conf
 from nova import exception
 from nova import objects
+from nova.objects import fields
 from nova import utils
 from nova.virt import configdrive
 from nova.virt import hardware
@@ -355,44 +356,12 @@ class VMOps(object):
         return [('network-vif-plugged', vif['id'])
                 for vif in network_info if vif.get('active') is False]
 
-    def _requires_certificate(self, instance_id, image_meta):
-        os_type = image_meta.get('properties', {}).get('os_type', None)
-        if not os_type:
-            reason = _('For secure boot, os_type must be specified in image '
-                       'properties.')
-            raise exception.InstanceUnacceptable(instance_id=instance_id,
-                                                 reason=reason)
-        elif os_type == 'windows':
-            return False
-        return True
-
-    # Secure Boot feature will be enabled by setting the "os_secure_boot"
-    # image property or the "os:secure_boot" flavor extra spec to required.
-    # The flavor extra spec value overrides the image property value.
-    def _requires_secure_boot(self, instance, image_meta, vm_gen):
-        flavor = instance.flavor
-        flavor_secure_boot = flavor.extra_specs.get(
-            constants.FLAVOR_SPEC_SECURE_BOOT, None)
-
-        image_props = image_meta['properties']
-        image_prop_secure_boot = image_props.get(
-            constants.IMAGE_PROP_SECURE_BOOT, None)
-
-        if flavor_secure_boot in (constants.REQUIRED, constants.DISABLED):
-            requires_secure_boot = constants.REQUIRED == flavor_secure_boot
-        else:
-            requires_secure_boot = image_prop_secure_boot == constants.REQUIRED
-        if vm_gen != constants.VM_GEN_2 and requires_secure_boot:
-
-            reason = _('Secure boot requires generation 2 VM.')
-            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
-                                                 reason=reason)
-        return requires_secure_boot
-
     def create_instance(self, context, instance, network_info, root_device,
                         block_device_info, vm_gen, image_meta):
         instance_name = instance.name
         instance_path = os.path.join(CONF.instances_path, instance_name)
+        secure_boot_enabled = self._requires_secure_boot(instance, image_meta,
+                                                         vm_gen)
 
         memory_per_numa_node, cpus_per_numa_node = (
             self._get_instance_vnuma_config(instance, image_meta))
@@ -445,13 +414,12 @@ class VMOps(object):
 
         if CONF.hyperv.enable_instance_metrics_collection:
             self._metricsutils.enable_vm_metrics_collection(instance_name)
-        secure_boot_enabled = self._requires_secure_boot(
-            instance, image_meta, vm_gen)
+
         if secure_boot_enabled:
-            certificate_required = self._requires_certificate(instance.uuid,
-                                                              image_meta)
-            self._vmutils.enable_secure_boot(instance.name,
-                                             certificate_required)
+            certificate_required = self._requires_certificate(image_meta)
+            self._vmutils.enable_secure_boot(
+                instance.name, msft_ca_required=certificate_required)
+
         self._configure_secure_vm(context, instance, image_meta,
                                   secure_boot_enabled)
 
@@ -546,6 +514,63 @@ class VMOps(object):
                          'instead of VHDX.') % vm_gen
             raise exception.InstanceUnacceptable(instance_id=instance_id,
                                                  reason=reason)
+
+    def _requires_certificate(self, image_meta):
+        os_type = image_meta.get('properties', {}).get('os_type', None)
+        if os_type == fields.OSType.WINDOWS:
+            return False
+        return True
+
+    def _requires_secure_boot(self, instance, image_meta, vm_gen):
+        """Checks whether the given instance requires Secure Boot.
+
+        Secure Boot feature will be enabled by setting the "os_secure_boot"
+        image property or the "os:secure_boot" flavor extra spec to required.
+
+        :raises exception.InstanceUnacceptable: if the given image_meta has
+            no os_type property set, or if the image property value and the
+            flavor extra spec value are conflicting, or if Secure Boot is
+            required, but the instance's VM generation is 1.
+        """
+        img_secure_boot = image_meta['properties'].get('os_secure_boot')
+        flavor_secure_boot = instance.flavor.extra_specs.get(
+            constants.FLAVOR_SPEC_SECURE_BOOT)
+
+        requires_sb = False
+        conflicting_values = False
+
+        if flavor_secure_boot == fields.SecureBoot.REQUIRED:
+            requires_sb = True
+            if img_secure_boot == fields.SecureBoot.DISABLED:
+                conflicting_values = True
+        elif img_secure_boot == fields.SecureBoot.REQUIRED:
+            requires_sb = True
+            if flavor_secure_boot == fields.SecureBoot.DISABLED:
+                conflicting_values = True
+
+        if conflicting_values:
+            reason = _(
+                "Conflicting image metadata property and flavor extra_specs "
+                "values: os_secure_boot (%(image_secure_boot)s) / "
+                "os:secure_boot (%(flavor_secure_boot)s)") % {
+                    'image_secure_boot': img_secure_boot,
+                    'flavor_secure_boot': flavor_secure_boot}
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
+
+        if requires_sb:
+            if vm_gen != constants.VM_GEN_2:
+                reason = _('Secure boot requires generation 2 VM.')
+                raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                     reason=reason)
+
+            os_type = image_meta['properties'].get('os_type')
+            if not os_type:
+                reason = _('For secure boot, os_type must be specified in '
+                           'image properties.')
+                raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                     reason=reason)
+        return requires_sb
 
     def _create_config_drive(self, context, instance, injected_files,
                              admin_password, network_info, rescue=False):

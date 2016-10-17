@@ -195,12 +195,12 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def _prepare_create_root_device_mocks(self, use_cow_images, vhd_format,
                                           vhd_size):
         mock_instance = fake_instance.fake_instance_obj(self.context)
-        mock_instance.root_gb = self.FAKE_SIZE
+        mock_instance.flavor.root_gb = self.FAKE_SIZE
         self.flags(use_cow_images=use_cow_images)
         self._vmops._vhdutils.get_vhd_info.return_value = {'VirtualSize':
                                                            vhd_size * units.Gi}
         self._vmops._vhdutils.get_vhd_format.return_value = vhd_format
-        root_vhd_internal_size = mock_instance.root_gb * units.Gi
+        root_vhd_internal_size = mock_instance.flavor.root_gb * units.Gi
         get_size = self._vmops._vhdutils.get_internal_vhd_size_by_file_size
         get_size.return_value = root_vhd_internal_size
         self._vmops._pathutils.exists.return_value = True
@@ -236,7 +236,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_cached_image.return_value = fake_vhd_path
 
         fake_root_path = self._vmops._pathutils.get_root_vhd_path.return_value
-        root_vhd_internal_size = mock_instance.root_gb * units.Gi
+        root_vhd_internal_size = mock_instance.flavor.root_gb * units.Gi
         get_size = self._vmops._vhdutils.get_internal_vhd_size_by_file_size
 
         response = self._vmops._create_root_vhd(context=self.context,
@@ -271,7 +271,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.rescue_image_id if is_rescue_vhd else None)
 
         fake_root_path = self._vmops._pathutils.get_root_vhd_path.return_value
-        root_vhd_internal_size = mock_instance.root_gb * units.Gi
+        root_vhd_internal_size = mock_instance.flavor.root_gb * units.Gi
         get_size = self._vmops._vhdutils.get_internal_vhd_size_by_file_size
 
         response = self._vmops._create_root_vhd(
@@ -630,8 +630,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance.name, vnuma_enabled, vm_gen,
             instance_path, [mock_instance.uuid])
         self._vmops._vmutils.update_vm.assert_called_once_with(
-            mock_instance.name, mock_instance.memory_mb, mem_per_numa,
-            mock_instance.vcpus, cpus_per_numa,
+            mock_instance.name, mock_instance.flavor.memory_mb, mem_per_numa,
+            mock_instance.flavor.vcpus, cpus_per_numa,
             CONF.hyperv.limit_cpu_features, dynamic_memory_ratio)
 
         mock_create_scsi_ctrl = self._vmops._vmutils.create_scsi_controller

@@ -220,6 +220,9 @@ class PathUtils(pathutils.PathUtils):
         # Check if shared storage is being used by creating a temporary
         # file at the destination path and checking if it exists at the
         # source path.
+        LOG.debug("Checking if %(src_dir)s and %(dest_dir)s point "
+                  "to the same location.",
+                  dict(src_dir=src_dir, dest_dir=dest_dir))
         with tempfile.NamedTemporaryFile(dir=dest_dir) as tmp_file:
             src_path = os.path.join(src_dir,
                                     os.path.basename(tmp_file.name))

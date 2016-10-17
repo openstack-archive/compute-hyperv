@@ -39,29 +39,25 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._livemigrops._pathutils = mock.MagicMock()
         self._pathutils = self._livemigrops._pathutils
 
-    @ddt.data({'migrate_data_received': False},
-              {'migrate_data_version': '1.0'},
-              {'shared_storage': True},
-              {'side_effect': os_win_exc.HyperVException})
-    @ddt.unpack
     @mock.patch.object(serialconsoleops.SerialConsoleOps,
                        'stop_console_handler')
     @mock.patch('hyperv.nova.vmops.VMOps.copy_vm_dvd_disks')
-    def test_live_migration(self, mock_copy_dvd_disks,
-                            mock_stop_console_handler, side_effect=None,
-                            shared_storage=False,
-                            migrate_data_received=True,
-                            migrate_data_version='1.1'):
+    def _test_live_migration(self, mock_copy_dvd_disk,
+                             mock_stop_console_handler,
+                             side_effect=None,
+                             shared_storage=False,
+                             migrate_data_received=True,
+                             migrate_data_version='1.1'):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_post = mock.MagicMock()
         mock_recover = mock.MagicMock()
         mock_copy_logs = self._livemigrops._pathutils.copy_vm_console_logs
         fake_dest = mock.sentinel.DESTINATION
+        mock_check_shared_inst_dir = (
+            self._pathutils.check_remote_instances_dir_shared)
+        mock_check_shared_inst_dir.return_value = shared_storage
         self._livemigrops._livemigrutils.live_migrate_vm.side_effect = [
             side_effect]
-        mock_check_shared_storage = (
-            self._livemigrops._pathutils.check_remote_instances_dir_shared)
-        mock_check_shared_storage.return_value = shared_storage
 
         if migrate_data_received:
             migrate_data = migrate_data_obj.HyperVLiveMigrateData()
@@ -90,15 +86,15 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
                                              block_migration=(
                                                 mock.sentinel.block_migr),
                                              migrate_data=migrate_data)
+            post_call_args = mock_post.call_args_list
+            self.assertEqual(1, len(post_call_args))
 
-            mock_post.assert_called_once_with(self.context,
-                                              mock_instance,
-                                              fake_dest,
-                                              mock.sentinel.block_migr,
-                                              mock.ANY)
+            post_call_args_list = post_call_args[0][0]
+            self.assertEqual((self.context, mock_instance,
+                              fake_dest, mock.sentinel.block_migr),
+                             post_call_args_list[:-1])
             # The last argument, the migrate_data object, should be created
             # by the callee if not received.
-            post_call_args_list = mock_post.call_args_list[0][0]
             migrate_data_arg = post_call_args_list[-1]
             self.assertIsInstance(
                 migrate_data_arg,
@@ -106,28 +102,39 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             self.assertEqual(shared_storage,
                              migrate_data_arg.is_shared_instance_path)
 
-            if not migrate_data_received or migrate_data_version == '1.0':
-                mock_check_shared_storage.assert_called_once_with(fake_dest)
-            else:
-                self.assertFalse(mock_check_shared_storage.called)
+        if not migrate_data_received or migrate_data_version == '1.0':
+            mock_check_shared_inst_dir.assert_called_once_with(fake_dest)
+        else:
+            self.assertFalse(mock_check_shared_inst_dir.called)
 
-            mock_stop_console_handler.assert_called_once_with(
-                mock_instance.name)
+        mock_stop_console_handler.assert_called_once_with(mock_instance.name)
 
-            if not shared_storage:
-                mock_copy_logs.assert_called_once_with(mock_instance.name,
+        if not shared_storage:
+            mock_copy_logs.assert_called_once_with(mock_instance.name,
+                                                   fake_dest)
+            mock_copy_dvd_disk.assert_called_once_with(mock_instance.name,
                                                        fake_dest)
-                mock_copy_dvd_disks.assert_called_once_with(
-                    mock_instance.name, fake_dest)
-            else:
-                self.assertFalse(mock_copy_logs.called)
-                self.assertFalse(mock_copy_dvd_disks.called)
+        else:
+            self.assertFalse(mock_copy_logs.called)
+            self.assertFalse(mock_copy_dvd_disk.called)
 
-            mock_live_migr = self._livemigrops._livemigrutils.live_migrate_vm
-            mock_live_migr.assert_called_once_with(mock_instance.name,
-                                                   fake_dest,
-                                                   migrate_disks=(
-                                                       not shared_storage))
+        mock_live_migr = self._livemigrops._livemigrutils.live_migrate_vm
+        mock_live_migr.assert_called_once_with(
+            mock_instance.name,
+            fake_dest,
+            migrate_disks=not shared_storage)
+
+    def test_live_migration(self):
+        self._test_live_migration(migrate_data_received=False)
+
+    def test_live_migration_old_migrate_data_version(self):
+        self._test_live_migration(migrate_data_version='1.0')
+
+    def test_live_migration_exception(self):
+        self._test_live_migration(side_effect=os_win_exc.HyperVException)
+
+    def test_live_migration_shared_storage(self):
+        self._test_live_migration(shared_storage=True)
 
     @mock.patch('hyperv.nova.volumeops.VolumeOps.get_disk_path_mapping')
     @mock.patch('hyperv.nova.imagecache.ImageCache.get_cached_image')
@@ -175,12 +182,9 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     def test_pre_live_migration_without_phys_disks_attached(self):
         self._test_pre_live_migration(phys_disks_attached=False)
 
-    @ddt.data({},
-              {'shared_storage': True})
-    @ddt.unpack
     @mock.patch('hyperv.nova.volumeops.VolumeOps.disconnect_volumes')
-    def test_post_live_migration(self, mock_disconnect_volumes,
-                                 shared_storage=False):
+    def _test_post_live_migration(self, mock_disconnect_volumes,
+                                  shared_storage=False):
         migrate_data = migrate_data_obj.HyperVLiveMigrateData(
             is_shared_instance_path=shared_storage)
 
@@ -199,14 +203,11 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         else:
             self.assertFalse(mock_get_inst_dir.called)
 
-    @mock.patch.object(livemigrationops.vmops.VMOps, 'post_start_vifs')
-    def test_post_live_migration_at_destination(self, mock_post_start_vifs):
-        self._livemigrops.post_live_migration_at_destination(
-            mock.sentinel.context, mock.sentinel.instance,
-            mock.sentinel.network_info, mock.sentinel.block_migration)
+    def test_post_block_migration(self):
+        self._test_post_live_migration()
 
-        mock_post_start_vifs.assert_called_once_with(
-            mock.sentinel.instance, mock.sentinel.network_info)
+    def test_post_live_migration_shared_storage(self):
+        self._test_post_live_migration(shared_storage=True)
 
     @mock.patch.object(migrate_data_obj, 'HyperVLiveMigrateData')
     def test_check_can_live_migrate_destination(self, mock_migr_data_cls):

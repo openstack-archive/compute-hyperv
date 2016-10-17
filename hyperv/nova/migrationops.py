@@ -49,6 +49,7 @@ class MigrationOps(object):
     def _migrate_disk_files(self, instance_name, disk_files, dest):
         # TODO(mikal): it would be nice if this method took a full instance,
         # because it could then be passed to the log messages below.
+
         instance_path = self._pathutils.get_instance_dir(instance_name)
         dest_path = self._pathutils.get_instance_dir(instance_name, dest)
         revert_path = self._pathutils.get_instance_migr_revert_dir(
@@ -57,6 +58,7 @@ class MigrationOps(object):
         shared_storage = (self._pathutils.exists(dest_path) and
                           self._pathutils.check_dirs_shared_storage(
                               instance_path, dest_path))
+
         try:
             if shared_storage:
                 # Since source and target are the same, we copy the files to
@@ -78,6 +80,7 @@ class MigrationOps(object):
 
             if shared_storage:
                 self._pathutils.move_folder_files(dest_path, instance_path)
+                self._pathutils.rmtree(dest_path)
         except Exception:
             with excutils.save_and_reraise_exception():
                 self._cleanup_failed_disk_migration(instance_path, revert_path,

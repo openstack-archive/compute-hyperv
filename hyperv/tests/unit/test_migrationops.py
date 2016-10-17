@@ -85,6 +85,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             fake_dest_path = '%s_tmp' % instance_path
             expected_move_calls.append(mock.call(fake_dest_path,
                                                  instance_path))
+            self._migrationops._pathutils.rmtree.assert_called_once_with(
+                fake_dest_path)
         else:
             fake_dest_path = dest_instance_path
 

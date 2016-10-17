@@ -402,7 +402,6 @@ class VMOps(object):
 
         serial_ports = self._get_image_serial_port_settings(image_meta)
         self._create_vm_com_port_pipes(instance, serial_ports)
-        self._set_instance_disk_qos_specs(instance)
 
         for vif in network_info:
             LOG.debug('Creating nic for instance', instance=instance)
@@ -414,6 +413,8 @@ class VMOps(object):
 
         if CONF.hyperv.enable_instance_metrics_collection:
             self._metricsutils.enable_vm_metrics_collection(instance_name)
+
+        self._set_instance_disk_qos_specs(instance)
 
         if secure_boot_enabled:
             certificate_required = self._requires_certificate(image_meta)
@@ -1076,6 +1077,38 @@ class VMOps(object):
 
         self.power_on(instance)
 
+    def _set_instance_disk_qos_specs(self, instance):
+        quota_specs = self._get_scoped_flavor_extra_specs(instance, 'quota')
+
+        disk_total_bytes_sec = int(
+            quota_specs.get('disk_total_bytes_sec') or 0)
+        disk_total_iops_sec = int(
+            quota_specs.get('disk_total_iops_sec') or
+            self._volumeops.bytes_per_sec_to_iops(disk_total_bytes_sec))
+
+        if disk_total_iops_sec:
+            local_disks = self._get_instance_local_disks(instance.name)
+            for disk_path in local_disks:
+                self._vmutils.set_disk_qos_specs(disk_path,
+                                                 disk_total_iops_sec)
+
+    def _get_instance_local_disks(self, instance_name):
+        instance_path = self._pathutils.get_instance_dir(instance_name)
+        instance_disks = self._vmutils.get_vm_storage_paths(instance_name)[0]
+        local_disks = [disk_path for disk_path in instance_disks
+                       if instance_path in disk_path]
+        return local_disks
+
+    def _get_scoped_flavor_extra_specs(self, instance, scope):
+        extra_specs = instance.flavor.extra_specs or {}
+        filtered_specs = {}
+        for spec, value in extra_specs.items():
+            if ':' in spec:
+                _scope, key = spec.split(':')
+                if _scope == scope:
+                    filtered_specs[key] = value
+        return filtered_specs
+
     def unplug_vifs(self, instance, network_info):
         if network_info:
             for vif in network_info:
@@ -1087,31 +1120,6 @@ class VMOps(object):
             for vif in network_info:
                 vif_driver = self._get_vif_driver(vif.get('type'))
                 vif_driver.post_start(instance, vif)
-
-    def _set_instance_disk_qos_specs(self, instance):
-        min_iops, max_iops = self._get_storage_qos_specs(instance)
-        if min_iops or max_iops:
-            local_disks = self._get_instance_local_disks(instance.name)
-            for disk_path in local_disks:
-                self._vmutils.set_disk_qos_specs(instance.name, disk_path,
-                                                 min_iops, max_iops)
-
-    def _get_instance_local_disks(self, instance_name):
-        instance_path = self._pathutils.get_instance_dir(instance_name)
-        instance_disks = self._vmutils.get_vm_storage_paths(instance_name)[0]
-        local_disks = [disk_path for disk_path in instance_disks
-                       if disk_path.find(instance_path) != -1]
-        return local_disks
-
-    def _get_storage_qos_specs(self, instance):
-        extra_specs = instance.flavor.get('extra_specs') or {}
-        storage_qos_specs = {}
-        for spec, value in six.iteritems(extra_specs):
-            if ':' in spec:
-                scope, key = spec.split(':')
-                if scope == 'storage_qos':
-                    storage_qos_specs[key] = value
-        return self._volumeops.parse_disk_qos_specs(storage_qos_specs)
 
     def _configure_secure_vm(self, context, instance, image_meta,
                              secure_boot_enabled):

@@ -569,10 +569,10 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(vmops.VMOps, '_configure_secure_vm')
     @mock.patch('hyperv.nova.vif.get_vif_driver')
-    @mock.patch.object(vmops.VMOps, '_set_instance_disk_qos_specs')
     @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
     @mock.patch.object(vmops.VMOps, '_requires_certificate')
     @mock.patch.object(vmops.volumeops.VolumeOps, 'attach_volumes')
+    @mock.patch.object(vmops.VMOps, '_set_instance_disk_qos_specs')
     @mock.patch.object(vmops.VMOps, '_attach_root_device')
     @mock.patch.object(vmops.VMOps, '_attach_ephemerals')
     @mock.patch.object(vmops.VMOps, '_get_image_serial_port_settings')
@@ -582,10 +582,12 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def _test_create_instance(self, mock_get_instance_vnuma_config,
                               mock_configure_remotefx, mock_create_pipes,
                               mock_get_port_settings, mock_attach_ephemerals,
-                              mock_attach_root_device, mock_attach_volumes,
+                              mock_attach_root_device,
+                              mock_set_qos_specs,
+                              mock_attach_volumes,
                               mock_requires_certificate,
                               mock_requires_secure_boot,
-                              mock_set_qos_specs, mock_get_vif_driver,
+                              mock_get_vif_driver,
                               mock_configure_secure_vm,
                               enable_instance_metrics,
                               vm_gen=constants.VM_GEN_1, vnuma_enabled=False,
@@ -1697,6 +1699,67 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           self._vmops.unrescue_instance,
                           mock_instance)
 
+    @mock.patch.object(volumeops.VolumeOps, 'bytes_per_sec_to_iops')
+    @mock.patch.object(vmops.VMOps, '_get_scoped_flavor_extra_specs')
+    @mock.patch.object(vmops.VMOps, '_get_instance_local_disks')
+    def test_set_instance_disk_qos_specs(self, mock_get_local_disks,
+                                         mock_get_scoped_specs,
+                                         mock_bytes_per_sec_to_iops):
+        fake_total_bytes_sec = 8
+        fake_total_iops_sec = 1
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_local_disks = [mock.sentinel.root_vhd_path,
+                            mock.sentinel.eph_vhd_path]
+
+        mock_get_local_disks.return_value = mock_local_disks
+        mock_set_qos_specs = self._vmops._vmutils.set_disk_qos_specs
+        mock_get_scoped_specs.return_value = dict(
+            disk_total_bytes_sec=fake_total_bytes_sec)
+        mock_bytes_per_sec_to_iops.return_value = fake_total_iops_sec
+
+        self._vmops._set_instance_disk_qos_specs(mock_instance)
+
+        mock_bytes_per_sec_to_iops.assert_called_once_with(
+            fake_total_bytes_sec)
+
+        mock_get_local_disks.assert_called_once_with(mock_instance.name)
+        expected_calls = [mock.call(disk_path, fake_total_iops_sec)
+                          for disk_path in mock_local_disks]
+        mock_set_qos_specs.assert_has_calls(expected_calls)
+
+    def test_get_instance_local_disks(self):
+        fake_instance_dir = 'fake_instance_dir'
+        fake_local_disks = [os.path.join(fake_instance_dir, disk_name)
+                            for disk_name in ['root.vhd', 'configdrive.iso']]
+        fake_instance_disks = ['fake_remote_disk'] + fake_local_disks
+
+        mock_get_storage_paths = self._vmops._vmutils.get_vm_storage_paths
+        mock_get_storage_paths.return_value = [fake_instance_disks, []]
+        mock_get_instance_dir = self._vmops._pathutils.get_instance_dir
+        mock_get_instance_dir.return_value = fake_instance_dir
+
+        ret_val = self._vmops._get_instance_local_disks(
+            mock.sentinel.instance_name)
+
+        self.assertEqual(fake_local_disks, ret_val)
+
+    def test_get_scoped_flavor_extra_specs(self):
+        # The flavor extra spect dict contains only string values.
+        fake_total_bytes_sec = '8'
+
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_instance.flavor.extra_specs = {
+            'spec_key': 'spec_value',
+            'quota:total_bytes_sec': fake_total_bytes_sec}
+
+        ret_val = self._vmops._get_scoped_flavor_extra_specs(
+            mock_instance, scope='quota')
+
+        expected_specs = {
+            'total_bytes_sec': fake_total_bytes_sec
+        }
+        self.assertEqual(expected_specs, ret_val)
+
     @mock.patch.object(vmops.hardware, 'numa_get_constraints')
     @mock.patch.object(vmops.objects.ImageMeta, 'from_dict')
     def _check_get_instance_vnuma_config_exception(self, mock_from_dict,
@@ -1831,62 +1894,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             interactive_port: constants.SERIAL_PORT_TYPE_RW
         }
         self.assertEqual(expected_serial_ports, ret_val)
-
-    def test_get_instance_local_disks(self):
-        fake_instance_dir = 'fake_instance_dir'
-        fake_local_disks = [os.path.join(fake_instance_dir, disk_name)
-                            for disk_name in ['root.vhd', 'configdrive.iso']]
-        fake_instance_disks = ['fake_remote_disk'] + fake_local_disks
-
-        mock_get_storage_paths = self._vmops._vmutils.get_vm_storage_paths
-        mock_get_storage_paths.return_value = [fake_instance_disks, []]
-        mock_get_instance_dir = self._vmops._pathutils.get_instance_dir
-        mock_get_instance_dir.return_value = fake_instance_dir
-
-        ret_val = self._vmops._get_instance_local_disks(
-            mock.sentinel.instance_name)
-
-        self.assertEqual(fake_local_disks, ret_val)
-
-    @mock.patch.object(vmops.VMOps, '_get_storage_qos_specs')
-    @mock.patch.object(vmops.VMOps, '_get_instance_local_disks')
-    def test_set_instance_disk_qos_specs(self, mock_get_local_disks,
-                                         mock_get_qos_specs):
-        mock_instance = fake_instance.fake_instance_obj(self.context)
-        mock_local_disks = [mock.sentinel.root_vhd_path,
-                            mock.sentinel.eph_vhd_path]
-
-        mock_get_local_disks.return_value = mock_local_disks
-        mock_set_qos_specs = self._vmops._vmutils.set_disk_qos_specs
-        mock_get_qos_specs.return_value = [mock.sentinel.min_iops,
-                                           mock.sentinel.max_iops]
-
-        self._vmops._set_instance_disk_qos_specs(mock_instance)
-        mock_get_local_disks.assert_called_once_with(mock_instance.name)
-        expected_calls = [mock.call(mock_instance.name, disk_path,
-                                    mock.sentinel.min_iops,
-                                    mock.sentinel.max_iops)
-                          for disk_path in mock_local_disks]
-        mock_set_qos_specs.assert_has_calls(expected_calls)
-
-    @mock.patch.object(volumeops.VolumeOps, 'parse_disk_qos_specs')
-    def test_get_storage_qos_specs(self, mock_parse_specs):
-        fake_extra_specs = {'spec_key': 'spec_value',
-                            'storage_qos:min_bytes_sec':
-                                mock.sentinel.min_bytes_sec,
-                            'storage_qos:max_bytes_sec':
-                                mock.sentinel.max_bytes_sec}
-
-        mock_instance = mock.Mock(flavor={'extra_specs': fake_extra_specs})
-        ret_val = self._vmops._get_storage_qos_specs(mock_instance)
-
-        expected_qos_specs_dict = {
-            'min_bytes_sec': mock.sentinel.min_bytes_sec,
-            'max_bytes_sec': mock.sentinel.max_bytes_sec
-        }
-
-        self.assertEqual(mock_parse_specs.return_value, ret_val)
-        mock_parse_specs.assert_called_once_with(expected_qos_specs_dict)
 
     @mock.patch.object(vmops.VMOps, '_check_vtpm_requirements')
     @mock.patch.object(vmops.VMOps, '_feature_requested')

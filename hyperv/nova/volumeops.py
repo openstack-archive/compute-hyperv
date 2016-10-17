@@ -115,10 +115,9 @@ class VolumeOps(object):
                                         disk_bus=disk_bus)
 
             qos_specs = connection_info['data'].get('qos_specs') or {}
-            min_iops, max_iops = self.parse_disk_qos_specs(qos_specs)
-            if min_iops or max_iops:
+            if qos_specs:
                 volume_driver.set_disk_qos_specs(connection_info,
-                                                 min_iops, max_iops)
+                                                 qos_specs)
         except Exception:
             with excutils.save_and_reraise_exception():
                 LOG.exception(_LE('Unable to attach volume to instance %s'),
@@ -181,41 +180,25 @@ class VolumeOps(object):
             volume_driver = self._get_volume_driver(connection_info)
             volume_driver.connect_volume(connection_info)
 
-    def parse_disk_qos_specs(self, qos_specs):
-        total_bytes_sec = int(qos_specs.get('total_bytes_sec', 0))
-        min_bytes_sec = int(qos_specs.get('min_bytes_sec', 0))
-
-        total_iops = int(qos_specs.get('total_iops_sec',
-                                       self._bytes_per_sec_to_iops(
-                                           total_bytes_sec)))
-        min_iops = int(qos_specs.get('min_iops_sec',
-                                     self._bytes_per_sec_to_iops(
-                                         min_bytes_sec)))
-
-        if total_iops and total_iops < min_iops:
-            err_msg = (_("Invalid QoS specs: minimum IOPS cannot be greater "
-                         "than maximum IOPS. "
-                         "Requested minimum IOPS: %(min_iops)s "
-                         "Requested maximum IOPS: %(total_iops)s.") %
-                       {'min_iops': min_iops,
-                        'total_iops': total_iops})
-            raise exception.Invalid(err_msg)
-
-        unsupported_specs = [spec for spec in qos_specs if
-                             spec not in self._SUPPORTED_QOS_SPECS]
-        if unsupported_specs:
-            LOG.warning(_LW('Ignoring unsupported qos specs: '
-                            '%(unsupported_specs)s. '
-                            'Supported qos specs: %(supported_qos_speces)s'),
-                        {'unsupported_specs': unsupported_specs,
-                         'supported_qos_speces': self._SUPPORTED_QOS_SPECS})
-
-        return min_iops, total_iops
-
-    def _bytes_per_sec_to_iops(self, no_bytes):
+    @staticmethod
+    def bytes_per_sec_to_iops(no_bytes):
         # Hyper-v uses normalized IOPS (8 KB increments)
         # as IOPS allocation units.
-        return (no_bytes + self._IOPS_BASE_SIZE - 1) // self._IOPS_BASE_SIZE
+        return (
+            (no_bytes + constants.IOPS_BASE_SIZE - 1) //
+            constants.IOPS_BASE_SIZE)
+
+    @staticmethod
+    def validate_qos_specs(qos_specs, supported_qos_specs):
+        unsupported_specs = set(qos_specs.keys()).difference(
+            supported_qos_specs)
+        if unsupported_specs:
+            msg = (_LW('Got unsupported QoS specs: '
+                       '%(unsupported_specs)s. '
+                       'Supported qos specs: %(supported_qos_specs)s') %
+                   {'unsupported_specs': unsupported_specs,
+                    'supported_qos_specs': supported_qos_specs})
+            LOG.warning(msg)
 
     def get_disk_path_mapping(self, block_device_info, block_dev_only=False):
         block_mapping = driver.block_device_info_get_mapping(block_device_info)
@@ -557,9 +540,18 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
     def connect_volume(self, connection_info):
         self.ensure_share_mounted(connection_info)
 
-    def set_disk_qos_specs(self, connection_info, min_iops, max_iops):
-        disk_path = self._get_disk_path(connection_info)
-        self._vmutils.set_disk_qos_specs(disk_path, min_iops, max_iops)
+    def set_disk_qos_specs(self, connection_info, qos_specs):
+        supported_qos_specs = ['total_iops_sec', 'total_bytes_sec']
+        VolumeOps.validate_qos_specs(qos_specs, supported_qos_specs)
+
+        total_bytes_sec = int(qos_specs.get('total_bytes_sec') or 0)
+        total_iops_sec = int(qos_specs.get('total_iops_sec') or
+                             VolumeOps.bytes_per_sec_to_iops(
+                                total_bytes_sec))
+
+        if total_iops_sec:
+            disk_path = self._get_disk_path(connection_info)
+            self._vmutils.set_disk_qos_specs(disk_path, total_iops_sec)
 
 
 class FCVolumeDriver(BaseVolumeDriver):

@@ -248,6 +248,36 @@ class VMOps(object):
 
         self._vmutils.set_boot_order(instance_name, boot_order)
 
+    @staticmethod
+    def _get_vif_metadata(context, instance_id):
+        vifs = objects.VirtualInterfaceList.get_by_instance_uuid(context,
+                                                                 instance_id)
+        vif_metadata = []
+        for vif in vifs:
+            if 'tag' in vif and vif.tag:
+                device = objects.NetworkInterfaceMetadata(
+                    mac=vif.address,
+                    bus=objects.PCIDeviceBus(),
+                    tags=[vif.tag])
+                vif_metadata.append(device)
+
+        return vif_metadata
+
+    def _save_device_metadata(self, context, instance, block_device_info):
+        """Builds a metadata object for instance devices, that maps the user
+           provided tag to the hypervisor assigned device address.
+        """
+        metadata = []
+
+        metadata.extend(self._get_vif_metadata(context, instance.uuid))
+        if block_device_info:
+            metadata.extend(self._block_dev_man.get_bdm_metadata(
+                context, instance, block_device_info))
+
+        if metadata:
+            instance.device_metadata = objects.InstanceDeviceMetadata(
+                devices=metadata)
+
     @check_admin_permissions
     def spawn(self, context, instance, image_meta, injected_files,
               admin_password, network_info, block_device_info=None):
@@ -274,6 +304,7 @@ class VMOps(object):
                 self.create_instance(context, instance, network_info,
                                      root_device, block_device_info,
                                      vm_gen, image_meta)
+            self._save_device_metadata(context, instance, block_device_info)
 
             if configdrive.required_by(instance):
                 configdrive_path = self._create_config_drive(instance,

@@ -102,7 +102,7 @@ class HostOps(object):
     def _get_storage_info_gb(self):
         instances_dir = self._pathutils.get_instances_dir()
         (size, free_space) = self._diskutils.get_disk_capacity(
-                                instances_dir)
+            instances_dir)
 
         total_gb = size // units.Gi
         free_gb = free_space // units.Gi

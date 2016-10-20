@@ -106,8 +106,6 @@ class NoDBTestCase(testtools.TestCase):
         self.addCleanup(self._clear_attrs)
         self.policy = self.useFixture(policy_fixture.PolicyFixture())
 
-        self.useFixture(nova_fixtures.PoisonFunctions())
-
     def _clear_attrs(self):
         # Delete attributes that don't start with _ so they don't pin
         # memory around unnecessarily for the duration of the test

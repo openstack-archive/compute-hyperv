@@ -25,7 +25,7 @@ from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
 
-from hyperv.i18n import _, _LW, _LE
+from hyperv.i18n import _, _LW
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
 from hyperv.nova import imagecache
@@ -46,58 +46,17 @@ class MigrationOps(object):
         self._imagecache = imagecache.ImageCache()
         self._block_dev_man = block_device_manager.BlockDeviceInfoManager()
 
-    def _migrate_disk_files(self, instance_name, disk_files, dest):
-        # TODO(mikal): it would be nice if this method took a full instance,
-        # because it could then be passed to the log messages below.
-
-        instance_path = self._pathutils.get_instance_dir(instance_name)
-        dest_path = self._pathutils.get_instance_dir(instance_name, dest)
+    def _move_vm_files(self, instance):
+        instance_path = self._pathutils.get_instance_dir(instance.name)
         revert_path = self._pathutils.get_instance_migr_revert_dir(
-            instance_name, remove_dir=True, create_dir=True)
+            instance.name, remove_dir=True, create_dir=True)
 
-        shared_storage = (self._pathutils.exists(dest_path) and
-                          self._pathutils.check_dirs_shared_storage(
-                              instance_path, dest_path))
+        # copy the given instance's files to a _revert folder, as backup.
+        LOG.debug("Moving instance files to a revert path: %s",
+                  revert_path, instance=instance)
+        self._pathutils.move_folder_files(instance_path, revert_path)
 
-        try:
-            if shared_storage:
-                # Since source and target are the same, we copy the files to
-                # a temporary location before moving them into place.
-                # This applies when the migration target is the source host or
-                # when shared storage is used for the instance files.
-                dest_path = '%s_tmp' % instance_path
-
-            self._pathutils.check_remove_dir(dest_path)
-            self._pathutils.makedirs(dest_path)
-
-            for disk_file in disk_files:
-                LOG.debug('Copying disk "%(disk_file)s" to '
-                          '"%(dest_path)s"',
-                          {'disk_file': disk_file, 'dest_path': dest_path})
-                self._pathutils.copy(disk_file, dest_path)
-
-            self._pathutils.move_folder_files(instance_path, revert_path)
-
-            if shared_storage:
-                self._pathutils.move_folder_files(dest_path, instance_path)
-                self._pathutils.rmtree(dest_path)
-        except Exception:
-            with excutils.save_and_reraise_exception():
-                self._cleanup_failed_disk_migration(instance_path, revert_path,
-                                                    dest_path)
-
-    def _cleanup_failed_disk_migration(self, instance_path,
-                                       revert_path, dest_path):
-        try:
-            if dest_path and self._pathutils.exists(dest_path):
-                self._pathutils.rmtree(dest_path)
-            if self._pathutils.exists(revert_path):
-                self._pathutils.move_folder_files(revert_path, instance_path)
-                self._pathutils.rmtree(revert_path)
-        except Exception as ex:
-            # Log and ignore this exception
-            LOG.exception(ex)
-            LOG.error(_LE("Cannot cleanup migration files"))
+        return revert_path
 
     def _check_target_flavor(self, instance, flavor):
         new_root_gb = flavor.root_gb
@@ -121,17 +80,12 @@ class MigrationOps(object):
         self._check_target_flavor(instance, flavor)
 
         self._vmops.power_off(instance, timeout, retry_interval)
+        instance_path = self._move_vm_files(instance)
 
-        (disk_files,
-         volume_drives) = self._vmutils.get_vm_storage_paths(instance.name)
+        self._vmops.destroy(instance, destroy_disks=True)
 
-        if disk_files:
-            self._migrate_disk_files(instance.name, disk_files, dest)
-
-        self._vmops.destroy(instance, destroy_disks=False)
-
-        # disk_info is not used
-        return ""
+        # return the instance's path location.
+        return instance_path
 
     def confirm_migration(self, context, migration, instance, network_info):
         LOG.debug("confirm_migration called", instance=instance)
@@ -245,10 +199,21 @@ class MigrationOps(object):
             self._vhdutils.reconnect_parent_vhd(diff_vhd_path,
                                                 base_vhd_path)
 
+    def _migrate_disks_from_source(self, migration, instance,
+                                   source_inst_dir):
+        source_inst_dir = self._pathutils.get_remote_path(
+            migration.source_compute, source_inst_dir)
+        inst_dir = self._pathutils.get_instance_dir(
+            instance.name, create_dir=True, remove_dir=True)
+
+        self._pathutils.copy_folder_files(source_inst_dir, inst_dir)
+
     def finish_migration(self, context, migration, instance, disk_info,
                          network_info, image_meta, resize_instance=False,
                          block_device_info=None, power_on=True):
         LOG.debug("finish_migration called", instance=instance)
+        self._migrate_disks_from_source(migration, instance, disk_info)
+
         vm_gen = self._vmops.get_image_vm_generation(instance.uuid, image_meta)
         self._check_and_update_disks(context, instance, vm_gen, image_meta,
                                      block_device_info,

@@ -45,6 +45,23 @@ class PathUtils(pathutils.PathUtils):
         super(PathUtils, self).__init__()
         self._vmutils = utilsfactory.get_vmutils()
 
+    def copy_folder_files(self, src_dir, dest_dir):
+        """Copies the files of the given src_dir to dest_dir.
+
+        It will ignore any nested folders.
+
+        :param src_dir: Given folder from which to copy files.
+        :param dest_dir: Folder to which to copy files.
+        """
+
+        # NOTE(claudiub): this will have to be moved to os-win.
+
+        for fname in os.listdir(src_dir):
+            src = os.path.join(src_dir, fname)
+            # ignore subdirs.
+            if os.path.isfile(src):
+                self.copy(src, os.path.join(dest_dir, fname))
+
     def get_instances_dir(self, remote_server=None):
         local_instance_path = os.path.normpath(CONF.instances_path)
 
@@ -55,11 +72,11 @@ class PathUtils(pathutils.PathUtils):
                 # In this case, we expect the instance dir to have the same
                 # location on the remote server.
                 path = local_instance_path
-            return self._get_remote_unc_path(remote_server, path)
+            return self.get_remote_path(remote_server, path)
         else:
             return local_instance_path
 
-    def _get_remote_unc_path(self, remote_server, remote_path):
+    def get_remote_path(self, remote_server, remote_path):
         if remote_path.startswith('\\\\'):
             remote_unc_path = remote_path
         else:
@@ -114,8 +131,8 @@ class PathUtils(pathutils.PathUtils):
                 instance_dir = vmutils.get_vm_config_root_dir(
                     instance_name)
                 if remote_server:
-                    instance_dir = self._get_remote_unc_path(remote_server,
-                                                             instance_dir)
+                    instance_dir = self.get_remote_path(remote_server,
+                                                        instance_dir)
                 LOG.info(_LI("Found instance dir at non-default location: %s"),
                          instance_dir)
             except os_win_exc.HyperVVMNotFoundException:

@@ -67,14 +67,17 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(base_driver.HyperVDriver, 'migrate_disk_and_power_off')
     def test_migrate_disk_and_power_off(self, mock_superclass_migrate):
-        self.driver.migrate_disk_and_power_off(self.context,
-                                               mock.sentinel.fake_instance,
-                                               mock.sentinel.destination,
-                                               mock.sentinel.flavor,
-                                               mock.sentinel.network_info,
-                                               mock.sentinel.block_dev_info,
-                                               mock.sentinel.timeout,
-                                               mock.sentinel.retry_interval)
+        disk_info = self.driver.migrate_disk_and_power_off(
+            self.context,
+            mock.sentinel.fake_instance,
+            mock.sentinel.destination,
+            mock.sentinel.flavor,
+            mock.sentinel.network_info,
+            mock.sentinel.block_dev_info,
+            mock.sentinel.timeout,
+            mock.sentinel.retry_interval)
+
+        self.assertEqual(mock_superclass_migrate.return_value, disk_info)
         self.driver._clops.remove_from_cluster.assert_called_once_with(
             mock.sentinel.fake_instance)
         mock_superclass_migrate.assert_called_once_with(

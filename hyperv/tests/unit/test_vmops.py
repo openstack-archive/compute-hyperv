@@ -18,6 +18,7 @@ from eventlet import timeout as etimeout
 import mock
 from nova.compute import vm_states
 from nova import exception
+from nova import objects
 from nova.objects import fields
 from nova.objects import flavor as flavor_obj
 from nova.tests.unit.objects import test_flavor
@@ -565,6 +566,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual([], events)
         mock_is_neutron.assert_called_once_with()
 
+    @mock.patch.object(vmops.VMOps, '_attach_pci_devices')
     @mock.patch.object(vmops.VMOps, '_configure_secure_vm')
     @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
     @mock.patch.object(vmops.VMOps, '_requires_certificate')
@@ -587,9 +589,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               mock_requires_certificate,
                               mock_requires_secure_boot,
                               mock_configure_secure_vm,
+                              mock_attach_pci_devices,
                               enable_instance_metrics,
                               vm_gen=constants.VM_GEN_1,
                               vnuma_enabled=False,
+                              pci_requests=None,
                               requires_sec_boot=True):
         self.flags(dynamic_memory_ratio=2.0, group='hyperv')
         self.flags(enable_instance_metrics_collection=enable_instance_metrics,
@@ -605,6 +609,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         flavor = flavor_obj.Flavor(**test_flavor.fake_flavor)
         mock_instance.flavor = flavor
+        instance_pci_requests = objects.InstancePCIRequests(
+            requests=pci_requests or [], instance_uuid=mock_instance.uuid)
+        mock_instance.pci_requests = instance_pci_requests
+        host_shutdown_action = (os_win_const.HOST_SHUTDOWN_ACTION_SHUTDOWN
+                                if pci_requests else None)
 
         if vnuma_enabled:
             mock_get_vnuma_config.return_value = (
@@ -632,7 +641,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vmutils.update_vm.assert_called_once_with(
             mock_instance.name, mock_instance.flavor.memory_mb, mem_per_numa,
             mock_instance.flavor.vcpus, cpus_per_numa,
-            CONF.hyperv.limit_cpu_features, dynamic_memory_ratio)
+            CONF.hyperv.limit_cpu_features, dynamic_memory_ratio,
+            host_shutdown_action=host_shutdown_action)
 
         mock_configure_remotefx.assert_called_once_with(mock_instance, vm_gen)
         mock_create_scsi_ctrl = self._vmops._vmutils.create_scsi_controller
@@ -665,6 +675,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             msft_ca_required=mock_requires_certificate.return_value)
         mock_configure_secure_vm.assert_called_once_with(self.context,
             mock_instance, mock.sentinel.image_meta, requires_sec_boot)
+        mock_attach_pci_devices.assert_called_once_with(mock_instance)
 
     def test_create_instance(self):
         self._test_create_instance(enable_instance_metrics=True)
@@ -679,6 +690,29 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_create_instance_vnuma_enabled(self):
         self._test_create_instance(enable_instance_metrics=False,
                                    vnuma_enabled=True)
+
+    def test_create_instance_pci_requested(self):
+        vendor_id = 'fake_vendor_id'
+        product_id = 'fake_product_id'
+        spec = {'vendor_id': vendor_id, 'product_id': product_id}
+        request = objects.InstancePCIRequest(count=1, spec=[spec])
+        self._test_create_instance(enable_instance_metrics=False,
+                                   pci_requests=[request])
+
+    def test_attach_pci_devices(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        vendor_id = 'fake_vendor_id'
+        product_id = 'fake_product_id'
+        spec = {'vendor_id': vendor_id, 'product_id': product_id}
+        request = objects.InstancePCIRequest(count=2, spec=[spec])
+        instance_pci_requests = objects.InstancePCIRequests(
+            requests=[request], instance_uuid=mock_instance.uuid)
+        mock_instance.pci_requests = instance_pci_requests
+
+        self._vmops._attach_pci_devices(mock_instance)
+
+        self._vmops._vmutils.add_pci_device.assert_has_calls(
+            [mock.call(mock_instance.name, vendor_id, product_id)] * 2)
 
     @mock.patch.object(vmops.hardware, 'numa_get_constraints')
     @mock.patch.object(vmops.objects.ImageMeta, 'from_dict')

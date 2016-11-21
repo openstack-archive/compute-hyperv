@@ -161,33 +161,18 @@ class MigrationOps(object):
     def finish_revert_migration(self, context, instance, network_info,
                                 block_device_info=None, power_on=True):
         LOG.debug("finish_revert_migration called", instance=instance)
-
-        instance_name = instance.name
-        self._revert_migration_files(instance_name)
+        self._revert_migration_files(instance.name)
 
         image_meta = self._imagecache.get_image_details(context, instance)
         vm_gen = self._vmops.get_image_vm_generation(instance.uuid, image_meta)
-
-        self._block_dev_man.validate_and_update_bdi(instance, image_meta,
-                                                    vm_gen, block_device_info)
-        root_device = block_device_info['root_disk']
-
-        if root_device['type'] == constants.DISK:
-            root_vhd_path = self._pathutils.lookup_root_vhd_path(instance_name)
-            root_device['path'] = root_vhd_path
-            if not root_vhd_path:
-                base_vhd_path = self._pathutils.get_instance_dir(instance_name)
-                raise exception.DiskNotFound(location=base_vhd_path)
-
-        ephemerals = block_device_info['ephemerals']
-        self._check_ephemeral_disks(instance, ephemerals)
+        self._check_and_update_disks(context, instance, vm_gen, image_meta,
+                                     block_device_info)
 
         self._vmops.create_instance(context, instance, network_info,
-                                    root_device, block_device_info, vm_gen,
-                                    image_meta)
+                                    block_device_info, vm_gen, image_meta)
 
         self._check_and_attach_config_drive(instance, vm_gen)
-        self._vmops.set_boot_order(vm_gen, block_device_info, instance_name)
+        self._vmops.set_boot_order(vm_gen, block_device_info, instance.name)
         if power_on:
             self._vmops.power_on(instance, network_info=network_info)
 
@@ -264,19 +249,30 @@ class MigrationOps(object):
                          network_info, image_meta, resize_instance=False,
                          block_device_info=None, power_on=True):
         LOG.debug("finish_migration called", instance=instance)
-
-        instance_name = instance.name
         vm_gen = self._vmops.get_image_vm_generation(instance.uuid, image_meta)
+        self._check_and_update_disks(context, instance, vm_gen, image_meta,
+                                     block_device_info,
+                                     resize_instance=resize_instance)
 
+        self._vmops.create_instance(context, instance, network_info,
+                                    block_device_info, vm_gen, image_meta)
+
+        self._check_and_attach_config_drive(instance, vm_gen)
+        self._vmops.set_boot_order(vm_gen, block_device_info, instance.name)
+        if power_on:
+            self._vmops.power_on(instance)
+
+    def _check_and_update_disks(self, context, instance, vm_gen, image_meta,
+                                block_device_info, resize_instance=False):
         self._block_dev_man.validate_and_update_bdi(instance, image_meta,
                                                     vm_gen, block_device_info)
         root_device = block_device_info['root_disk']
 
         if root_device['type'] == constants.DISK:
-            root_vhd_path = self._pathutils.lookup_root_vhd_path(instance_name)
+            root_vhd_path = self._pathutils.lookup_root_vhd_path(instance.name)
             root_device['path'] = root_vhd_path
             if not root_vhd_path:
-                base_vhd_path = self._pathutils.get_instance_dir(instance_name)
+                base_vhd_path = self._pathutils.get_instance_dir(instance.name)
                 raise exception.DiskNotFound(location=base_vhd_path)
 
             root_vhd_info = self._vhdutils.get_vhd_info(root_vhd_path)
@@ -291,15 +287,6 @@ class MigrationOps(object):
 
         ephemerals = block_device_info['ephemerals']
         self._check_ephemeral_disks(instance, ephemerals, resize_instance)
-
-        self._vmops.create_instance(context, instance, network_info,
-                                    root_device, block_device_info,
-                                    vm_gen, image_meta)
-
-        self._check_and_attach_config_drive(instance, vm_gen)
-        self._vmops.set_boot_order(vm_gen, block_device_info, instance_name)
-        if power_on:
-            self._vmops.power_on(instance)
 
     def _check_ephemeral_disks(self, instance, ephemerals,
                                resize_instance=False):

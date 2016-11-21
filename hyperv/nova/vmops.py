@@ -303,8 +303,7 @@ class VMOps(object):
         try:
             with self.wait_vif_plug_events(instance, network_info):
                 self.create_instance(context, instance, network_info,
-                                     root_device, block_device_info,
-                                     vm_gen, image_meta)
+                                     block_device_info, vm_gen, image_meta)
             self._save_device_metadata(context, instance, block_device_info)
 
             if configdrive.required_by(instance):
@@ -356,8 +355,9 @@ class VMOps(object):
         return [('network-vif-plugged', vif['id'])
                 for vif in network_info if vif.get('active') is False]
 
-    def create_instance(self, context, instance, network_info, root_device,
+    def create_instance(self, context, instance, network_info,
                         block_device_info, vm_gen, image_meta):
+        root_device = block_device_info['root_disk']
         instance_name = instance.name
         instance_path = os.path.join(CONF.instances_path, instance_name)
         secure_boot_enabled = self._requires_secure_boot(instance, image_meta,

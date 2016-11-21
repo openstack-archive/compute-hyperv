@@ -30,7 +30,6 @@ from nova import utils
 from nova.virt import driver
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
-from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
@@ -42,23 +41,7 @@ from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
 
-hyper_volumeops_opts = [
-    cfg.BoolOpt('use_multipath_io',
-                default=False,
-                help='Use multipath connections when attaching iSCSI or '
-                     'FC disks. This requires the Multipath IO Windows '
-                     'feature to be enabled. MPIO must be configured to '
-                     'claim such devices.'),
-    cfg.ListOpt('iscsi_initiator_list',
-                default=[],
-                help='List of iSCSI initiators that will be used for '
-                     'estabilishing iSCSI sessions. If none is specified, '
-                     'the Microsoft iSCSI initiator service will choose '
-                     'the initiator.'),
-]
-
 CONF = nova.conf.CONF
-CONF.register_opts(hyper_volumeops_opts, 'hyperv')
 
 
 class VolumeOps(object):

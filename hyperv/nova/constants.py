@@ -97,6 +97,10 @@ FLAVOR_ESPEC_REMOTEFX_VRAM = 'os:vram'
 
 IOPS_BASE_SIZE = 8 * units.Ki
 
+STORAGE_PROTOCOL_ISCSI = 'iscsi'
+STORAGE_PROTOCOL_FC = 'fibre_channel'
+STORAGE_PROTOCOL_SMBFS = 'smbfs'
+
 MAX_CONSOLE_LOG_FILE_SIZE = units.Mi // 2
 
 IMAGE_PROP_SECURE_BOOT = "os_secure_boot"

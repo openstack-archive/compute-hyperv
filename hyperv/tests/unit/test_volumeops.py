@@ -14,15 +14,22 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import contextlib
+import os
+
+import ddt
 import mock
+from nova.compute import task_states
 from nova import exception
 from nova import test
 from nova.tests.unit import fake_block_device
 from os_brick.initiator import connector
+from os_win import constants as os_win_const
 from oslo_config import cfg
 from oslo_utils import units
 
 from hyperv.nova import constants
+from hyperv.nova import vmops
 from hyperv.nova import volumeops
 from hyperv.tests.unit import test_base
 
@@ -57,6 +64,8 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
         self._volumeops = volumeops.VolumeOps()
         self._volumeops._volutils = mock.MagicMock()
         self._volumeops._vmutils = mock.Mock()
+        self._volumeops._volume_api = mock.Mock()
+        self._volume_api = self._volumeops._volume_api
 
     def test_get_volume_driver(self):
         fake_conn_info = {'driver_volume_type': mock.sentinel.fake_driver_type}
@@ -308,6 +317,133 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
                                            supported_qos_specs)
         self.assertTrue(mock_warning.called)
 
+    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
+    @mock.patch.object(volumeops.driver_block_device, 'convert_volume')
+    @mock.patch.object(volumeops.objects, 'BlockDeviceMapping')
+    def test_volume_snapshot_create(self, mock_bdm_cls, mock_convert_volume,
+                                    mock_get_vol_drv):
+        mock_instance = mock.Mock()
+        fake_create_info = {'snapshot_id': mock.sentinel.snapshot_id}
+
+        mock_bdm = mock_bdm_cls.get_by_volume_and_instance.return_value
+        mock_driver_bdm = mock_convert_volume.return_value
+        mock_vol_driver = mock_get_vol_drv.return_value
+
+        self._volumeops.volume_snapshot_create(
+            mock.sentinel.context, mock_instance,
+            mock.sentinel.volume_id, fake_create_info)
+
+        mock_bdm_cls.get_by_volume_and_instance.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.volume_id,
+            mock_instance.uuid)
+        mock_convert_volume.assert_called_once_with(mock_bdm)
+        mock_get_vol_drv.assert_called_once_with(
+            mock_driver_bdm['connection_info'])
+
+        mock_vol_driver.create_snapshot.assert_called_once_with(
+            mock_driver_bdm['connection_info'],
+            mock_instance,
+            fake_create_info)
+        mock_driver_bdm.save.assert_called_once_with()
+
+        self._volume_api.update_snapshot_status.assert_called_once_with(
+            mock.sentinel.context,
+            mock.sentinel.snapshot_id,
+            'creating')
+
+        self.assertIsNone(mock_instance.task_state)
+        mock_instance.save.assert_has_calls(
+            [mock.call(expected_task_state=[None]),
+             mock.call(expected_task_state=[
+                 task_states.IMAGE_SNAPSHOT_PENDING])])
+
+    @mock.patch.object(volumeops.objects, 'BlockDeviceMapping')
+    def test_volume_snapshot_create_exc(self, mock_bdm_cls):
+        mock_instance = mock.Mock()
+        fake_create_info = {'snapshot_id': mock.sentinel.snapshot_id}
+
+        mock_bdm_cls.get_by_volume_and_instance.side_effect = (
+            test.TestingException)
+
+        self.assertRaises(test.TestingException,
+                          self._volumeops.volume_snapshot_create,
+                          mock.sentinel.context,
+                          mock_instance,
+                          mock.sentinel.volume_id,
+                          fake_create_info)
+        self._volume_api.update_snapshot_status.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.snapshot_id, 'error')
+
+        self.assertIsNone(mock_instance.task_state)
+        mock_instance.save.assert_has_calls(
+            [mock.call(expected_task_state=[None]),
+             mock.call(expected_task_state=[
+                 task_states.IMAGE_SNAPSHOT_PENDING])])
+
+    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
+    @mock.patch.object(volumeops.driver_block_device, 'convert_volume')
+    @mock.patch.object(volumeops.objects, 'BlockDeviceMapping')
+    def test_volume_snapshot_delete(self, mock_bdm_cls, mock_convert_volume,
+                                     mock_get_vol_drv):
+        mock_instance = mock.Mock()
+
+        mock_bdm = mock_bdm_cls.get_by_volume_and_instance.return_value
+        mock_driver_bdm = mock_convert_volume.return_value
+        mock_vol_driver = mock_get_vol_drv.return_value
+
+        self._volumeops.volume_snapshot_delete(
+            mock.sentinel.context, mock_instance,
+            mock.sentinel.volume_id,
+            mock.sentinel.snapshot_id,
+            mock.sentinel.delete_info)
+
+        mock_bdm_cls.get_by_volume_and_instance.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.volume_id,
+            mock_instance.uuid)
+        mock_convert_volume.assert_called_once_with(mock_bdm)
+        mock_get_vol_drv.assert_called_once_with(
+            mock_driver_bdm['connection_info'])
+
+        mock_vol_driver.delete_snapshot.assert_called_once_with(
+            mock_driver_bdm['connection_info'],
+            mock_instance,
+            mock.sentinel.delete_info)
+        mock_driver_bdm.save.assert_called_once_with()
+
+        self._volume_api.update_snapshot_status.assert_called_once_with(
+            mock.sentinel.context,
+            mock.sentinel.snapshot_id,
+            'deleting')
+
+        self.assertIsNone(mock_instance.task_state)
+        mock_instance.save.assert_has_calls(
+            [mock.call(expected_task_state=[None]),
+             mock.call(expected_task_state=[
+                 task_states.IMAGE_SNAPSHOT_PENDING])])
+
+    @mock.patch.object(volumeops.objects, 'BlockDeviceMapping')
+    def test_volume_snapshot_delete_exc(self, mock_bdm_cls):
+        mock_instance = mock.Mock()
+
+        mock_bdm_cls.get_by_volume_and_instance.side_effect = (
+            test.TestingException)
+
+        self.assertRaises(test.TestingException,
+                          self._volumeops.volume_snapshot_delete,
+                          mock.sentinel.context,
+                          mock_instance,
+                          mock.sentinel.volume_id,
+                          mock.sentinel.snapshot_id,
+                          mock.sentinel.delete_info)
+        self._volume_api.update_snapshot_status.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.snapshot_id, 'error_deleting')
+
+        self.assertIsNone(mock_instance.task_state)
+        mock_instance.save.assert_has_calls(
+            [mock.call(expected_task_state=[None]),
+             mock.call(expected_task_state=[
+                 task_states.IMAGE_SNAPSHOT_PENDING])])
+
 
 class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for Hyper-V BaseVolumeDriver class."""
@@ -538,6 +674,7 @@ class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):
                          vol_driver._extra_connector_args)
 
 
+@ddt.ddt
 class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V SMBFSVolumeDriver class."""
 
@@ -548,7 +685,13 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         super(SMBFSVolumeDriverTestCase, self).setUp()
         self._volume_driver = volumeops.SMBFSVolumeDriver()
         self._volume_driver._conn = mock.Mock()
+        self._volume_driver._pathutils = mock.Mock()
+        self._volume_driver._vmutils = mock.Mock()
+        self._volume_driver._vhdutils = mock.Mock()
         self._conn = self._volume_driver._conn
+        self._vmutils = self._volume_driver._vmutils
+        self._pathutils = self._volume_driver._pathutils
+        self._vhdutils = self._volume_driver._vhdutils
 
     def test_get_export_path(self):
         export_path = self._volume_driver._get_export_path(
@@ -606,3 +749,260 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         mock_set_qos_specs.assert_called_once_with(
             mock.sentinel.disk_path,
             fake_total_iops_sec)
+
+    @contextlib.contextmanager
+    def check_prepare_for_vol_snap_mock(self, *args, **kwargs):
+        # Mocks the according context manager and ensures that
+        # it has been called with the expected arguments.
+        mock_prepare_for_vol_snap = mock.MagicMock()
+
+        patcher = mock.patch.object(vmops.VMOps,
+                                   'prepare_for_volume_snapshot',
+                                    mock_prepare_for_vol_snap)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        try:
+            yield
+        finally:
+            mock_prepare_for_vol_snap.assert_called_once_with(
+                *args, **kwargs)
+
+    def _get_fake_disk_attachment_info(self,
+                                       ctrl_type=constants.CTRL_TYPE_SCSI):
+        return dict(controller_type=ctrl_type,
+                    controller_path=mock.sentinel.ctrl_path,
+                    controller_slot=mock.sentinel.ctrl_slot)
+
+    @ddt.data(constants.CTRL_TYPE_SCSI, constants.CTRL_TYPE_IDE)
+    @mock.patch.object(volumeops.SMBFSVolumeDriver, '_create_snapshot_ide')
+    @mock.patch.object(volumeops.SMBFSVolumeDriver, '_create_snapshot_scsi')
+    @mock.patch.object(volumeops.SMBFSVolumeDriver, 'get_disk_resource_path')
+    def test_create_snapshot(self, ctrl_type, mock_get_disk_res_path,
+                             mock_create_snap_scsi, mock_create_snap_ide):
+        mock_instance = mock.Mock()
+
+        conn_info = get_fake_connection_info()
+        mock_att_info = self._get_fake_disk_attachment_info(ctrl_type)
+        mock_attached_disk_dir = 'fake_share'
+        mock_attached_disk_name = 'volume-vol_id-hv_guid.vhdx'
+        mock_attached_disk_path = os.path.join(mock_attached_disk_dir,
+                                               mock_attached_disk_name)
+        mock_new_file_name = 'volume-vol_id-snap_id.vhdx'
+        fake_create_info = {'new_file': mock_new_file_name}
+        expected_new_file_path = os.path.join(mock_attached_disk_dir,
+                                              mock_new_file_name)
+
+        mock_get_disk_res_path.return_value = mock_attached_disk_path
+        self._vmutils.get_disk_attachment_info.return_value = mock_att_info
+
+        self._volume_driver.create_snapshot(conn_info,
+                                            mock_instance,
+                                            fake_create_info)
+
+        if ctrl_type == constants.CTRL_TYPE_SCSI:
+            mock_create_snap_scsi.assert_called_once_with(
+                mock_instance, mock_att_info,
+                mock_attached_disk_path, expected_new_file_path)
+        else:
+            mock_create_snap_ide.assert_called_once_with(
+                mock_instance, mock_attached_disk_path,
+                expected_new_file_path)
+
+        mock_get_disk_res_path.assert_called_once_with(conn_info)
+        self._vmutils.get_disk_attachment_info.assert_called_once_with(
+            mock_attached_disk_path, is_physical=False)
+
+        self.assertEqual(mock_new_file_name,
+                         conn_info['data']['name'])
+
+    def test_create_snapshot_ide(self):
+        mock_instance = mock.Mock()
+
+        with self.check_prepare_for_vol_snap_mock(mock_instance):
+            self._volume_driver._create_snapshot_ide(
+                mock_instance,
+                mock.sentinel.attached_path,
+                mock.sentinel.new_path)
+
+        self._vhdutils.create_differencing_vhd.assert_called_once_with(
+            mock.sentinel.new_path, mock.sentinel.attached_path)
+        self._vmutils.update_vm_disk_path.assert_called_once_with(
+            mock.sentinel.attached_path,
+            mock.sentinel.new_path,
+            is_physical=False)
+
+    def test_create_snapshot_scsi(self):
+        mock_instance = mock.Mock()
+        mock_att_info = self._get_fake_disk_attachment_info()
+
+        with self.check_prepare_for_vol_snap_mock(mock_instance,
+                                                  allow_paused=True):
+            self._volume_driver._create_snapshot_scsi(
+                mock_instance,
+                mock_att_info,
+                mock.sentinel.attached_path,
+                mock.sentinel.new_path)
+
+        self._vmutils.detach_vm_disk.assert_called_once_with(
+            mock_instance.name, mock.sentinel.attached_path,
+            is_physical=False)
+        self._vhdutils.create_differencing_vhd.assert_called_once_with(
+            mock.sentinel.new_path, mock.sentinel.attached_path)
+        self._vmutils.attach_drive.assert_called_once_with(
+            mock_instance.name, mock.sentinel.new_path,
+            mock_att_info['controller_path'],
+            mock_att_info['controller_slot'])
+
+    @ddt.data({'merge_latest': True},
+              {'ctrl_type': constants.CTRL_TYPE_IDE,
+               'prep_vm_state': os_win_const.HYPERV_VM_STATE_SUSPENDED},
+              {'prep_vm_state': os_win_const.HYPERV_VM_STATE_PAUSED},
+              {'merge_latest': True,
+               'prep_vm_state': os_win_const.HYPERV_VM_STATE_PAUSED})
+    @ddt.unpack
+    @mock.patch.object(volumeops.SMBFSVolumeDriver,
+                      '_do_delete_snapshot')
+    @mock.patch.object(volumeops.SMBFSVolumeDriver, 'get_disk_resource_path')
+    def test_delete_snapshot(
+            self, mock_get_disk_res_path,
+            mock_delete_snap,
+            merge_latest=False,
+            ctrl_type=constants.CTRL_TYPE_SCSI,
+            prep_vm_state=os_win_const.HYPERV_VM_STATE_DISABLED):
+        mock_instance = mock.Mock()
+
+        conn_info = get_fake_connection_info()
+
+        mock_att_info = self._get_fake_disk_attachment_info(ctrl_type)
+        mock_attached_disk_dir = 'fake_share'
+        mock_attached_disk_name = 'volume-vol_id-hv_guid.vhdx'
+        mock_attached_disk_path = os.path.join(mock_attached_disk_dir,
+                                               mock_attached_disk_name)
+        mock_new_top_img = (mock_attached_disk_path if not merge_latest
+                            else 'parent.vhdx')
+        mock_file_to_merge = (mock_attached_disk_name
+                              if merge_latest
+                              else 'volume-vol_id-snap_id.vhdx')
+        exp_file_to_merge_path = os.path.join(mock_attached_disk_dir,
+                                              mock_file_to_merge)
+
+        mock_delete_info = {'file_to_merge': mock_file_to_merge}
+
+        self._vmutils.get_disk_attachment_info.return_value = mock_att_info
+        self._vmutils.get_vm_state.return_value = prep_vm_state
+        mock_get_disk_res_path.return_value = mock_attached_disk_path
+        mock_delete_snap.return_value = mock_new_top_img
+
+        exp_detach = prep_vm_state == os_win_const.HYPERV_VM_STATE_PAUSED
+        exp_allow_paused = ctrl_type == constants.CTRL_TYPE_SCSI
+
+        with self.check_prepare_for_vol_snap_mock(
+                mock_instance,
+                allow_paused=exp_allow_paused):
+            self._volume_driver.delete_snapshot(conn_info,
+                                                mock_instance,
+                                                mock_delete_info)
+
+        mock_get_disk_res_path.assert_called_once_with(conn_info)
+        self._vmutils.get_disk_attachment_info.assert_called_once_with(
+            mock_attached_disk_path, is_physical=False)
+        self._vmutils.get_vm_state.assert_called_once_with(
+            mock_instance.name)
+
+        mock_delete_snap.assert_called_once_with(mock_attached_disk_path,
+                                                 exp_file_to_merge_path)
+
+        if exp_detach:
+            self._vmutils.detach_vm_disk.assert_called_once_with(
+                mock_instance.name,
+                mock_attached_disk_path,
+                is_physical=False)
+            self._vmutils.attach_drive.assert_called_once_with(
+                mock_instance.name,
+                mock_new_top_img,
+                mock_att_info['controller_path'],
+                mock_att_info['controller_slot'])
+        else:
+            self.assertFalse(self._vmutils.detach_vm_disk.called)
+            self.assertFalse(self._vmutils.attach_drive.called)
+
+            if merge_latest:
+                self._vmutils.update_vm_disk_path.assert_called_once_with(
+                    mock_attached_disk_path,
+                    mock_new_top_img,
+                    is_physical=False)
+            else:
+                self.assertFalse(self._vmutils.update_vm_disk_path.called)
+
+        self.assertEqual(os.path.basename(mock_new_top_img),
+                         conn_info['data']['name'])
+
+    @ddt.data({'merge_latest': True},
+              {'merge_latest': False})
+    @ddt.unpack
+    @mock.patch.object(volumeops.SMBFSVolumeDriver,
+                      '_get_higher_image_from_chain')
+    def test_do_delete_snapshot(self, mock_get_higher_img,
+                                merge_latest=False):
+        mock_attached_disk_path = 'fake-attached-disk.vhdx'
+        mock_file_to_merge = (mock_attached_disk_path
+                              if merge_latest
+                              else 'fake-file-to-merge.vhdx')
+
+        self._vhdutils.get_vhd_parent_path.return_value = (
+            mock.sentinel.vhd_parent_path)
+        mock_get_higher_img.return_value = mock.sentinel.higher_img
+
+        exp_new_top_img = (mock.sentinel.vhd_parent_path if merge_latest
+                           else mock_attached_disk_path)
+
+        new_top_img = self._volume_driver._do_delete_snapshot(
+            mock_attached_disk_path,
+            mock_file_to_merge)
+
+        self.assertEqual(exp_new_top_img, new_top_img)
+
+        self._vhdutils.get_vhd_parent_path.assert_called_once_with(
+            mock_file_to_merge)
+        self._vhdutils.merge_vhd.assert_called_once_with(
+            mock_file_to_merge, delete_merged_image=False)
+
+        if not merge_latest:
+            mock_get_higher_img.assert_called_once_with(
+                mock_file_to_merge,
+                mock_attached_disk_path)
+            self._vhdutils.reconnect_parent_vhd.assert_called_once_with(
+                mock.sentinel.higher_img,
+                mock.sentinel.vhd_parent_path)
+        else:
+            mock_get_higher_img.assert_not_called()
+            self._vhdutils.reconnect_parent_vhd.assert_not_called()
+
+    @ddt.data(2, 3, 4, 5)
+    def test_get_higher_image(self, vhd_idx):
+        vhd_chain_length = 5
+        vhd_chain = ['vhd-%s.vhdx' % idx
+                     for idx in range(vhd_chain_length)][::-1]
+        vhd_path = 'vhd-%s.vhdx' % vhd_idx
+
+        self._vhdutils.get_vhd_parent_path.side_effect = (
+            vhd_chain[1:] + [None])
+
+        if vhd_idx in range(vhd_chain_length - 1):
+            exp_higher_vhd_path = 'vhd-%s.vhdx' % (vhd_idx + 1)
+            result = self._volume_driver._get_higher_image_from_chain(
+                vhd_path,
+                vhd_chain[0])
+
+            self.assertEqual(exp_higher_vhd_path, result)
+
+            self._vhdutils.get_vhd_parent_path.assert_has_calls(
+                [mock.call(path)
+                 for path in vhd_chain[:vhd_chain_length - vhd_idx - 1]])
+        else:
+            self.assertRaises(
+                exception.ImageNotFound,
+                self._volume_driver._get_higher_image_from_chain,
+                vhd_path,
+                vhd_chain[0])

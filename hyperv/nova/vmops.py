@@ -1292,3 +1292,26 @@ class VMOps(object):
         if not fsk_computer_name:
             fsk_pairs[fsk_computername_key] = instance.hostname
         return fsk_pairs
+
+    @contextlib.contextmanager
+    def prepare_for_volume_snapshot(self, instance, allow_paused=False):
+        set_previous_state = False
+
+        try:
+            curr_state = self._vmutils.get_vm_state(instance.name)
+
+            allowed_states = [os_win_const.HYPERV_VM_STATE_DISABLED,
+                              os_win_const.HYPERV_VM_STATE_SUSPENDED]
+            if allow_paused:
+                allowed_states.append(os_win_const.HYPERV_VM_STATE_PAUSED)
+
+            if curr_state not in allowed_states:
+                if allow_paused:
+                    self.pause(instance)
+                else:
+                    self.suspend(instance)
+                set_previous_state = True
+            yield
+        finally:
+            if set_previous_state:
+                self._set_vm_state(instance, curr_state)

@@ -204,6 +204,16 @@ class HyperVDriver(driver.ComputeDriver):
         self._snapshotops.snapshot(context, instance, image_id,
                                    update_task_state)
 
+    def volume_snapshot_create(self, context, instance, volume_id,
+                               create_info):
+        self._volumeops.volume_snapshot_create(context, instance, volume_id,
+                                               create_info)
+
+    def volume_snapshot_delete(self, context, instance, volume_id,
+                               snapshot_id, delete_info):
+        self._volumeops.volume_snapshot_delete(context, instance, volume_id,
+                                               snapshot_id, delete_info)
+
     def pause(self, instance):
         self._vmops.pause(instance)
 

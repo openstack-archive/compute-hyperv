@@ -17,23 +17,53 @@
 """
 Management class for Storage-related functions (attach, detach, etc).
 """
+import inspect
+import os
 import time
 
+from nova.compute import task_states
 import nova.conf
 from nova import exception
+from nova import objects
 from nova import utils
+from nova.virt import block_device as driver_block_device
 from nova.virt import driver
+from nova.volume import cinder
 from os_brick.initiator import connector
+from os_win import constants as os_win_const
 from os_win import utilsfactory
 from oslo_log import log as logging
+from oslo_utils import excutils
+from oslo_utils import importutils
 from oslo_utils import strutils
 
 from hyperv.i18n import _, _LI, _LE, _LW
 from hyperv.nova import constants
+from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
 
 CONF = nova.conf.CONF
+
+
+def volume_snapshot_lock(f):
+    """Synchronizes volume snapshot related operations.
+
+    The locks will be applied on a per-instance basis. The decorated method
+    must accept an instance object.
+    """
+    def inner(*args, **kwargs):
+        all_args = inspect.getcallargs(f, *args, **kwargs)
+        instance = all_args['instance']
+
+        lock_name = "volume-snapshot-%s" % instance.name
+
+        @utils.synchronized(lock_name)
+        def synchronized():
+            return f(*args, **kwargs)
+
+        return synchronized()
+    return inner
 
 
 class VolumeOps(object):
@@ -41,6 +71,8 @@ class VolumeOps(object):
     """
 
     def __init__(self):
+        self._volume_api = cinder.API()
+
         self._vmutils = utilsfactory.get_vmutils()
         self._default_root_device = 'vda'
         self.volume_drivers = {
@@ -205,6 +237,89 @@ class VolumeOps(object):
                     'supported_qos_specs': supported_qos_specs})
             LOG.warning(msg)
 
+    @volume_snapshot_lock
+    def volume_snapshot_create(self, context, instance, volume_id,
+                               create_info):
+        LOG.debug("Creating snapshot for volume %(volume_id)s on instance "
+                  "%(instance_name)s with create info %(create_info)s",
+                  {"volume_id": volume_id,
+                   "instance_name": instance.name,
+                   "create_info": create_info})
+        snapshot_id = create_info['snapshot_id']
+
+        try:
+            instance.task_state = task_states.IMAGE_SNAPSHOT_PENDING
+            instance.save(expected_task_state=[None])
+
+            bdm = objects.BlockDeviceMapping.get_by_volume_and_instance(
+                context, volume_id, instance.uuid)
+            driver_bdm = driver_block_device.convert_volume(bdm)
+            connection_info = driver_bdm['connection_info']
+
+            volume_driver = self._get_volume_driver(connection_info)
+            volume_driver.create_snapshot(connection_info, instance,
+                                          create_info)
+
+            # The volume driver is expected to
+            # update the connection info.
+            driver_bdm.save()
+
+            self._volume_api.update_snapshot_status(
+                context, snapshot_id, 'creating')
+        except Exception:
+            with excutils.save_and_reraise_exception():
+                err_msg = ('Error occurred while snapshotting volume. '
+                           'sending error status to Cinder.')
+                LOG.exception(err_msg,
+                              instance=instance)
+                self._volume_api.update_snapshot_status(
+                    context, snapshot_id, 'error')
+        finally:
+            instance.task_state = None
+            instance.save(
+                expected_task_state=[task_states.IMAGE_SNAPSHOT_PENDING])
+
+    @volume_snapshot_lock
+    def volume_snapshot_delete(self, context, instance, volume_id,
+                               snapshot_id, delete_info):
+        LOG.debug("Deleting snapshot for volume %(volume_id)s on instance "
+                  "%(instance_name)s with delete info %(delete_info)s",
+                  {"volume_id": volume_id,
+                   "instance_name": instance.name,
+                   "delete_info": delete_info})
+
+        try:
+            instance.task_state = task_states.IMAGE_SNAPSHOT_PENDING
+            instance.save(expected_task_state=[None])
+
+            bdm = objects.BlockDeviceMapping.get_by_volume_and_instance(
+                context, volume_id, instance.uuid)
+            driver_bdm = driver_block_device.convert_volume(bdm)
+            connection_info = driver_bdm['connection_info']
+
+            volume_driver = self._get_volume_driver(connection_info)
+            volume_driver.delete_snapshot(connection_info, instance,
+                                          delete_info)
+
+            # The volume driver is expected to
+            # update the connection info.
+            driver_bdm.save()
+
+            self._volume_api.update_snapshot_status(
+                context, snapshot_id, 'deleting')
+        except Exception:
+            with excutils.save_and_reraise_exception():
+                err_msg = ('Error occurred while deleting volume '
+                           'snapshot. Sending error status to Cinder.')
+                LOG.exception(err_msg,
+                              instance=instance)
+                self._volume_api.update_snapshot_status(
+                    context, snapshot_id, 'error_deleting')
+        finally:
+            instance.task_state = None
+            instance.save(
+                expected_task_state=[task_states.IMAGE_SNAPSHOT_PENDING])
+
 
 class BaseVolumeDriver(object):
     _is_block_dev = True
@@ -310,6 +425,12 @@ class BaseVolumeDriver(object):
                      "does not support QoS. Ignoring QoS specs."),
                  dict(protocol=self._protocol))
 
+    def create_snapshot(self, connection_info, instance, create_info):
+        raise NotImplementedError()
+
+    def delete_snapshot(self, connection_info, instance, delete_info):
+        raise NotImplementedError()
+
 
 class ISCSIVolumeDriver(BaseVolumeDriver):
     _is_block_dev = True
@@ -326,6 +447,20 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
     _is_block_dev = False
     _protocol = constants.STORAGE_PROTOCOL_SMBFS
     _extra_connector_args = dict(local_path_for_loopback=True)
+
+    def __init__(self):
+        self._vmops_prop = None
+        self._pathutils = pathutils.PathUtils()
+        self._vhdutils = utilsfactory.get_vhdutils()
+        super(SMBFSVolumeDriver, self).__init__()
+
+    @property
+    def _vmops(self):
+        # We have to avoid a circular dependency.
+        if not self._vmops_prop:
+            self._vmops_prop = importutils.import_class(
+                'hyperv.nova.vmops.VMOps')()
+        return self._vmops_prop
 
     def export_path_synchronized(f):
         def wrapper(inst, connection_info, *args, **kwargs):
@@ -363,6 +498,128 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
         if total_iops_sec:
             disk_path = self.get_disk_resource_path(connection_info)
             self._vmutils.set_disk_qos_specs(disk_path, total_iops_sec)
+
+    def create_snapshot(self, connection_info, instance, create_info):
+        attached_path = self.get_disk_resource_path(connection_info)
+        # Cinder tells us the new differencing disk file name it expects.
+        # The image does not exist yet, so we'll have to create it.
+        new_path = os.path.join(os.path.dirname(attached_path),
+                                create_info['new_file'])
+        attachment_info = self._vmutils.get_disk_attachment_info(
+            attached_path, is_physical=False)
+        disk_ctrl_type = attachment_info['controller_type']
+
+        if disk_ctrl_type == constants.CTRL_TYPE_SCSI:
+            self._create_snapshot_scsi(instance, attachment_info,
+                                       attached_path, new_path)
+        else:
+            # IDE disks cannot be hotplugged.
+            self._create_snapshot_ide(instance, attached_path, new_path)
+
+        connection_info['data']['name'] = create_info['new_file']
+
+    def _create_snapshot_ide(self, instance, attached_path, new_path):
+        with self._vmops.prepare_for_volume_snapshot(instance):
+            self._vhdutils.create_differencing_vhd(new_path, attached_path)
+            self._vmutils.update_vm_disk_path(attached_path, new_path,
+                                              is_physical=False)
+
+    def _create_snapshot_scsi(self, instance, attachment_info,
+                              attached_path, new_path):
+        with self._vmops.prepare_for_volume_snapshot(instance,
+                                                     allow_paused=True):
+            self._vmutils.detach_vm_disk(instance.name,
+                                         attached_path,
+                                         is_physical=False)
+            self._vhdutils.create_differencing_vhd(new_path, attached_path)
+            self._vmutils.attach_drive(instance.name,
+                                       new_path,
+                                       attachment_info['controller_path'],
+                                       attachment_info['controller_slot'])
+
+    def delete_snapshot(self, connection_info, instance, delete_info):
+        attached_path = self.get_disk_resource_path(connection_info)
+        attachment_info = self._vmutils.get_disk_attachment_info(
+            attached_path, is_physical=False)
+        disk_ctrl_type = attachment_info['controller_type']
+
+        base_dir = os.path.dirname(attached_path)
+        file_to_merge_name = delete_info['file_to_merge']
+        file_to_merge = os.path.join(base_dir, file_to_merge_name)
+
+        allow_paused = disk_ctrl_type == constants.CTRL_TYPE_SCSI
+        with self._vmops.prepare_for_volume_snapshot(
+                instance,
+                allow_paused=allow_paused):
+            curr_state = self._vmutils.get_vm_state(instance.name)
+            # We need to detach the image in order to alter the vhd chain
+            # while the instance is paused.
+            needs_detach = curr_state == os_win_const.HYPERV_VM_STATE_PAUSED
+
+            if needs_detach:
+                self._vmutils.detach_vm_disk(instance.name,
+                                             attached_path,
+                                             is_physical=False)
+            new_top_img_path = self._do_delete_snapshot(attached_path,
+                                                        file_to_merge)
+            attachment_changed = (attached_path.lower() !=
+                                  new_top_img_path.lower())
+
+            if needs_detach:
+                self._vmutils.attach_drive(instance.name,
+                                           new_top_img_path,
+                                           attachment_info['controller_path'],
+                                           attachment_info['controller_slot'])
+            elif attachment_changed:
+                # When merging the latest snapshot, we have to update
+                # the attachment. Luckily, although we cannot detach
+                # IDE disks, we can swap them.
+                self._vmutils.update_vm_disk_path(attached_path,
+                                                  new_top_img_path,
+                                                  is_physical=False)
+
+            connection_info['data']['name'] = os.path.basename(
+                new_top_img_path)
+
+    def _do_delete_snapshot(self, attached_path, file_to_merge):
+        parent_path = self._vhdutils.get_vhd_parent_path(file_to_merge)
+        path_to_reconnect = None
+
+        merging_top_image = attached_path.lower() == file_to_merge.lower()
+        if not merging_top_image:
+            path_to_reconnect = self._get_higher_image_from_chain(
+                file_to_merge, attached_path)
+
+        # We'll let Cinder delete this image. At this point, Cinder may
+        # safely query it, considering that it will no longer be in-use.
+        self._vhdutils.merge_vhd(file_to_merge,
+                                 delete_merged_image=False)
+
+        if path_to_reconnect:
+            self._vhdutils.reconnect_parent_vhd(path_to_reconnect,
+                                                parent_path)
+
+        new_top_img_path = (parent_path if merging_top_image
+                            else attached_path)
+        return new_top_img_path
+
+    def _get_higher_image_from_chain(self, vhd_path, top_vhd_path):
+        # We're searching for the child image of the specified vhd.
+        # We start by looking at the top image, looping through the
+        # parent images.
+        current_path = top_vhd_path
+        parent_path = self._vhdutils.get_vhd_parent_path(current_path)
+        while parent_path:
+            if parent_path.lower() == vhd_path.lower():
+                return current_path
+
+            current_path = parent_path
+            parent_path = self._vhdutils.get_vhd_parent_path(current_path)
+
+        err_msg = _("Could not find image %(vhd_path)s in the chain using "
+                    "top level image %(top_vhd_path)s")
+        raise exception.ImageNotFound(
+            err_msg % dict(vhd_path=vhd_path, top_vhd_path=top_vhd_path))
 
 
 class FCVolumeDriver(BaseVolumeDriver):

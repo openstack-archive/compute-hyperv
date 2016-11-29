@@ -21,7 +21,6 @@ import platform
 import time
 
 from nova.compute import api
-from nova.compute import arch
 from nova.compute import hv_type
 from nova.compute import vm_mode
 from nova.compute import vm_states
@@ -29,6 +28,7 @@ import nova.conf
 from nova import context
 from nova import exception
 from nova import objects
+from nova.objects import fields as obj_fields
 from os_win import constants as os_win_const
 from os_win import utilsfactory
 from oslo_config import cfg
@@ -188,8 +188,10 @@ class HostOps(object):
                'vcpus_used': 0,
                'cpu_info': jsonutils.dumps(cpu_info),
                'supported_instances':
-                   [(arch.I686, hv_type.HYPERV, vm_mode.HVM),
-                    (arch.X86_64, hv_type.HYPERV, vm_mode.HVM)],
+                   [(obj_fields.Architecture.I686,
+                     hv_type.HYPERV, vm_mode.HVM),
+                    (obj_fields.Architecture.X86_64,
+                     hv_type.HYPERV, vm_mode.HVM)],
                }
 
         gpu_info = self._get_remotefx_gpu_info()

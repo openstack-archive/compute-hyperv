@@ -112,9 +112,6 @@ class ClusterOps(object):
                   'old_host': old_host})
 
         instance = self._get_instance_by_name(instance_name)
-        nw_info = self._network_api.get_instance_nw_info(self._context,
-                                                         instance)
-
         if not instance:
             # Some instances on the hypervisor may not be tracked by nova
             LOG.debug('Instance %s does not exist in nova. Skipping.',
@@ -130,6 +127,8 @@ class ClusterOps(object):
         if instance.host.upper() == self._this_node.upper():
             return
 
+        nw_info = self._network_api.get_instance_nw_info(self._context,
+                                                         instance)
         if old_host and old_host.upper() == self._this_node.upper():
             LOG.debug('Actions at source node.')
             self._vmops.unplug_vifs(instance, nw_info)

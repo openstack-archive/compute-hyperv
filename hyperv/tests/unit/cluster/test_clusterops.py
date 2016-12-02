@@ -109,6 +109,25 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.clusterops._clustutils.monitor_vm_failover.assert_called_with(
             self.clusterops._failover_migrate)
 
+    @mock.patch.object(clusterops.ClusterOps, '_failover_migrate')
+    @mock.patch.object(clusterops.ClusterOps, '_get_nova_instances')
+    def test_reclaim_failovered_instances(self, mock_get_instances,
+                                          mock_failover_migrate):
+        self.clusterops._this_node = 'fake_node'
+        mock_instance1 = mock.MagicMock(host='other_host')
+        mock_instance2 = mock.MagicMock(host=self.clusterops._this_node)
+        mock_get_instances.return_value = [mock_instance1, mock_instance2]
+
+        self.clusterops.reclaim_failovered_instances()
+
+        self.clusterops._vmops.list_instance_uuids.assert_called_once_with()
+        mock_get_instances.assert_called_once_with(
+            ['id', 'uuid', 'name', 'host'],
+            self.clusterops._vmops.list_instance_uuids.return_value)
+        mock_failover_migrate.assert_called_once_with(
+            mock_instance1.name, mock_instance1.host,
+            self.clusterops._this_node)
+
     @mock.patch.object(clusterops, 'LOG')
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
     def test_failover_migrate_no_instance(self, mock_get_instance_by_name,
@@ -262,20 +281,28 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(ret, mock_instance)
         self.clusterops._update_instance_map.assert_called_with()
 
-    @mock.patch.object(clusterops.objects.InstanceList, 'get_by_filters')
-    def test_update_instance_map(self, mock_get_by_filters):
+    @mock.patch.object(clusterops.ClusterOps, '_get_nova_instances')
+    def test_update_instance_map(self, mock_get_instances):
         mock_instance = mock.MagicMock(uuid=mock.sentinel.uuid)
         mock_instance.configure_mock(name=mock.sentinel.name)
-        mock_get_by_filters.return_value = [mock_instance]
+        mock_get_instances.return_value = [mock_instance]
 
         self.clusterops._update_instance_map()
 
-        expected_attrs = ['id', 'uuid', 'name']
-        mock_get_by_filters.assert_called_once_with(
-            self.clusterops._context, {'deleted': False},
-            expected_attrs=expected_attrs)
         self.assertEqual(mock.sentinel.uuid,
                          self.clusterops._instance_map[mock.sentinel.name])
+
+    @mock.patch.object(clusterops.objects.InstanceList, 'get_by_filters')
+    def test_get_nova_instances(self, mock_get_by_filters):
+        instances = self.clusterops._get_nova_instances(
+            instance_uuids=mock.sentinel.uuids)
+
+        self.assertEqual(mock_get_by_filters.return_value, instances)
+        expected_attrs = ['id', 'uuid', 'name']
+        expected_filters = {'deleted': False, 'uuid': mock.sentinel.uuids}
+        mock_get_by_filters.assert_called_once_with(
+            self.clusterops._context, expected_filters,
+            expected_attrs=expected_attrs)
 
     @mock.patch.object(clusterops.block_device, 'DriverVolumeBlockDevice')
     @mock.patch.object(clusterops.objects.BlockDeviceMappingList,

@@ -99,6 +99,23 @@ class ClusterOps(object):
         self._daemon.start(
             interval=CONF.hyperv.cluster_event_check_interval)
 
+    def reclaim_failovered_instances(self):
+        # NOTE(claudiub): some instances might have failovered while the
+        # nova-compute service was down. Those instances will have to be
+        # reclaimed by this node.
+        expected_attrs = ['id', 'uuid', 'name', 'host']
+        host_instance_uuids = self._vmops.list_instance_uuids()
+        nova_instances = self._get_nova_instances(expected_attrs,
+                                                  host_instance_uuids)
+
+        # filter out instances that are known to be on this host.
+        nova_instances = [instance for instance in nova_instances if
+                          self._this_node.upper() != instance.host.upper()]
+
+        for instance in nova_instances:
+            self._failover_migrate(instance.name, instance.host,
+                                   self._this_node)
+
     def _failover_migrate(self, instance_name, old_host, new_host):
         """This method will check if the generated event is a legitimate
         failover to this node. If it is, it will proceed to prepare the
@@ -195,12 +212,19 @@ class ClusterOps(object):
         return objects.Instance.get_by_uuid(self._context, vm_uuid)
 
     def _update_instance_map(self):
-        expected_attrs = ['id', 'uuid', 'name']
-
-        for server in objects.InstanceList.get_by_filters(
-                self._context, {'deleted': False},
-                expected_attrs=expected_attrs):
+        for server in self._get_nova_instances():
             self._instance_map[server.name] = server.uuid
+
+    def _get_nova_instances(self, expected_attrs=None, instance_uuids=None):
+        if not expected_attrs:
+            expected_attrs = ['id', 'uuid', 'name']
+
+        filters = {'deleted': False}
+        if instance_uuids:
+            filters['uuid'] = instance_uuids
+
+        return objects.InstanceList.get_by_filters(
+            self._context, filters, expected_attrs=expected_attrs)
 
     def _get_instance_block_device_mappings(self, instance):
         """Transform block devices to the driver block_device format."""

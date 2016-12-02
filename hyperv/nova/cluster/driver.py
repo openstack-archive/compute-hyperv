@@ -27,6 +27,7 @@ class HyperVClusterDriver(driver.HyperVDriver):
         self._livemigrationops = livemigrationops.ClusterLiveMigrationOps()
 
         self._clops.start_failover_listener_daemon()
+        self._clops.reclaim_failovered_instances()
 
     def spawn(self, context, instance, image_meta, injected_files,
               admin_password, network_info=None, block_device_info=None):

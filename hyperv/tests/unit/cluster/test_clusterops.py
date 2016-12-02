@@ -122,6 +122,8 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         mock_LOG.debug.assert_called_once_with(
             'Instance %s does not exist in nova. Skipping.',
             mock.sentinel.instance_name)
+        self.assertFalse(
+            self.clusterops._network_api.get_instance_nw_info.called)
 
     @mock.patch.object(clusterops, 'LOG')
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')

@@ -493,8 +493,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                                           mock_image_meta)
             mock_create_instance.assert_called_once_with(
                 self.context, mock_instance, mock.sentinel.INFO,
-                root_device_info, block_device_info, fake_vm_gen,
-                mock_image_meta)
+                block_device_info, fake_vm_gen, mock_image_meta)
             mock_save_device_metadata.assert_called_once_with(
                 self.context, mock_instance, block_device_info)
             mock_configdrive_required.assert_called_once_with(mock_instance)
@@ -600,7 +599,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.flags(enable_instance_metrics_collection=enable_instance_metrics,
                    group='hyperv')
         root_device_info = mock.sentinel.ROOT_DEV_INFO
-        block_device_info = {'ephemerals': [], 'block_device_mapping': []}
+        block_device_info = {'root_disk': root_device_info, 'ephemerals': [],
+                             'block_device_mapping': []}
         fake_network_info = {'id': mock.sentinel.ID,
                              'address': mock.sentinel.ADDRESS}
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -626,7 +626,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 instance=mock_instance,
                 network_info=[fake_network_info],
                 block_device_info=block_device_info,
-                root_device=root_device_info,
                 vm_gen=vm_gen,
                 image_meta=mock.sentinel.image_meta)
 

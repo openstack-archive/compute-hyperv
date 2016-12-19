@@ -84,11 +84,16 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vmutils.list_instances.assert_called_once_with()
         self.assertEqual(response, [mock_instance])
 
-    def test_estimate_instance_overhead(self):
+    @ddt.data(True, False)
+    def test_estimate_instance_overhead(self, instance_automatic_shutdown):
+        self.flags(instance_automatic_shutdown=instance_automatic_shutdown,
+                   group='hyperv')
+
         instance_info = {'memory_mb': 512}
+        expected_disk_overhead = 0 if instance_automatic_shutdown else 1
         overhead = self._vmops.estimate_instance_overhead(instance_info)
         self.assertEqual(0, overhead['memory_mb'])
-        self.assertEqual(1, overhead['disk_gb'])
+        self.assertEqual(expected_disk_overhead, overhead['disk_gb'])
 
         instance_info = {'memory_mb': 500}
         overhead = self._vmops.estimate_instance_overhead(instance_info)
@@ -654,7 +659,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                    mock_configure_remotefx,
                                    mock_set_qos_specs,
                                    mock_attach_pci_devices,
-                                   pci_requests=None):
+                                   pci_requests=None,
+                                   instance_automatic_shutdown=False):
+        self.flags(instance_automatic_shutdown=instance_automatic_shutdown,
+                   group='hyperv')
+
         mock_get_vnuma_config.return_value = (mock.sentinel.mem_per_numa_node,
                                               mock.sentinel.vnuma_cpus)
         dynamic_memory_ratio = mock_get_dynamic_memory_ratio.return_value
@@ -664,7 +673,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             requests=pci_requests or [], instance_uuid=mock_instance.uuid)
         mock_instance.pci_requests = instance_pci_requests
         host_shutdown_action = (os_win_const.HOST_SHUTDOWN_ACTION_SHUTDOWN
-                                if pci_requests else None)
+                                if pci_requests or
+                                    instance_automatic_shutdown
+                                else None)
 
         self._vmops.update_vm_resources(mock_instance, mock.sentinel.vm_gen,
                                         mock.sentinel.image_meta,
@@ -694,6 +705,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         spec = {'vendor_id': vendor_id, 'product_id': product_id}
         request = objects.InstancePCIRequest(count=1, spec=[spec])
         self._check_update_vm_resources(pci_requests=[request])
+
+    def test_create_instance_automatic_shutdown(self):
+        self._check_update_vm_resources(instance_automatic_shutdown=True)
 
     def test_attach_pci_devices(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)

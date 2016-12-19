@@ -36,6 +36,7 @@ from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_concurrency import processutils
+from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_service import loopingcall
 from oslo_utils import excutils
@@ -56,8 +57,19 @@ from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 
+CONF = nova.conf.CONF
+
+hyperv_vm_opts = [
+    cfg.StrOpt('instance_automatic_shutdown',
+               default=False,
+               help='Automatically shutdown instances when the host is '
+                    'shutdown. By default, instances will be saved, which '
+                    'adds a disk overhead. Changing this option will not '
+                    'affect existing instances.'),
+]
 
 CONF = nova.conf.CONF
+CONF.register_opts(hyperv_vm_opts, 'hyperv')
 
 SHUTDOWN_TIME_INCREMENT = 5
 REBOOT_TYPE_SOFT = 'SOFT'
@@ -121,8 +133,13 @@ class VMOps(object):
         # file on the local disk. The file size is the same as the VM's amount
         # of memory. Since disk_gb must be an integer, and memory is MB, round
         # up from X512 MB.
+        # This applies only when the host is configured to save the instances
+        # when turning off.
+        disk_overhead = ((instance_info['memory_mb'] + 512) // units.Ki
+                          if not CONF.hyperv.instance_automatic_shutdown
+                          else 0)
         return {'memory_mb': 0,
-                'disk_gb': (instance_info['memory_mb'] + 512) // units.Ki}
+                'disk_gb': disk_overhead}
 
     def get_info(self, instance):
         """Get information about the VM."""
@@ -409,12 +426,20 @@ class VMOps(object):
         dynamic_memory_ratio = self._get_instance_dynamic_memory_ratio(
             instance, vnuma_enabled)
 
-        if instance.pci_requests.requests:
+        if (instance.pci_requests.requests and not
+                CONF.hyperv.instance_automatic_shutdown):
             # NOTE(claudiub): if the instance requires PCI devices, its
             # host shutdown action MUST be shutdown.
-            host_shutdown_action = os_win_const.HOST_SHUTDOWN_ACTION_SHUTDOWN
-        else:
-            host_shutdown_action = None
+            LOG.info(_LI("Instance automatic shutdown is disabled but "
+                         "passthrough PCI devices were requested. "
+                         "Setting instance automatic shutdown."))
+
+        automatic_shutdown = (CONF.hyperv.instance_automatic_shutdown or
+                              instance.pci_requests.requests)
+        host_shutdown_action = (
+            os_win_const.HOST_SHUTDOWN_ACTION_SHUTDOWN
+            if automatic_shutdown
+            else None)
 
         self._vmutils.update_vm(instance.name,
                                 instance.flavor.memory_mb,

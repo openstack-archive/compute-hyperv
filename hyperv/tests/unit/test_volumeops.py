@@ -14,16 +14,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import copy
-import os
-import platform
-import sys
-
-import ddt
 import mock
 from nova import exception
+from nova import test
 from nova.tests.unit import fake_block_device
-from os_win import exceptions as os_win_exc
+from os_brick.initiator import connector
 from oslo_config import cfg
 from oslo_utils import units
 
@@ -60,18 +55,8 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(VolumeOpsTestCase, self).setUp()
         self._volumeops = volumeops.VolumeOps()
+        self._volumeops._volutils = mock.MagicMock()
         self._volumeops._vmutils = mock.Mock()
-        self._volumeops._hostutils = mock.Mock()
-
-    def test_verify_setup(self):
-        self.flags(use_multipath_io=True, group='hyperv')
-        hostutils = self._volumeops._hostutils
-        hostutils.check_server_feature.return_value = False
-
-        self.assertRaises(exception.ServiceUnavailable,
-                          self._volumeops._verify_setup)
-        hostutils.check_server_feature.assert_called_once_with(
-            hostutils.FEATURE_MPIO)
 
     def test_get_volume_driver(self):
         fake_conn_info = {'driver_volume_type': mock.sentinel.fake_driver_type}
@@ -149,136 +134,114 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.actual_disk1_path)
 
     @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
-    def test_attach_volume_exc(self, mock_get_volume_driver):
-        fake_conn_info = {
-            'data': {'qos_specs': mock.sentinel.qos_specs}
-        }
+    def test_disconnect_volumes(self, mock_get_volume_driver):
+        block_device_info = get_fake_block_dev_info()
+        block_device_mapping = block_device_info['block_device_mapping']
+        fake_volume_driver = mock_get_volume_driver.return_value
 
-        mock_volume_driver = mock_get_volume_driver.return_value
-        mock_volume_driver.set_disk_qos_specs.side_effect = (
-            exception.NovaException)
+        self._volumeops.disconnect_volumes(block_device_info)
+        fake_volume_driver.disconnect_volume.assert_called_once_with(
+            block_device_mapping[0]['connection_info'])
 
-        self.assertRaises(exception.NovaException,
-                          self._volumeops.attach_volume,
-                          fake_conn_info,
-                          mock.sentinel.instance_name,
-                          mock.sentinel.fake_disk_bus)
+    @mock.patch('time.sleep')
+    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
+    def _test_attach_volume(self, mock_get_volume_driver, mock_sleep,
+                            attach_failed):
+        fake_conn_info = get_fake_connection_info(
+            qos_specs=mock.sentinel.qos_specs)
+        fake_volume_driver = mock_get_volume_driver.return_value
+
+        expected_try_count = 1
+        if attach_failed:
+            expected_try_count += CONF.hyperv.volume_attach_retry_count
+
+            fake_volume_driver.set_disk_qos_specs.side_effect = (
+                test.TestingException)
+
+            self.assertRaises(exception.VolumeAttachFailed,
+                              self._volumeops.attach_volume,
+                              fake_conn_info,
+                              mock.sentinel.inst_name,
+                              mock.sentinel.disk_bus)
+        else:
+            self._volumeops.attach_volume(
+                fake_conn_info,
+                mock.sentinel.inst_name,
+                mock.sentinel.disk_bus)
+
+        mock_get_volume_driver.assert_any_call(
+            fake_conn_info)
+        fake_volume_driver.attach_volume.assert_has_calls(
+            [mock.call(fake_conn_info,
+                       mock.sentinel.inst_name,
+                       mock.sentinel.disk_bus)] * expected_try_count)
+        fake_volume_driver.set_disk_qos_specs.assert_has_calls(
+            [mock.call(fake_conn_info,
+                       mock.sentinel.qos_specs)] * expected_try_count)
+
+        if attach_failed:
+            fake_volume_driver.disconnect_volume.assert_called_once_with(
+                fake_conn_info)
+            mock_sleep.assert_has_calls(
+                [mock.call(CONF.hyperv.volume_attach_retry_interval)] *
+                    CONF.hyperv.volume_attach_retry_count)
+        else:
+            mock_sleep.assert_not_called()
+
+    def test_attach_volume(self):
+        self._test_attach_volume(attach_failed=False)
+
+    def test_attach_volume_exc(self):
+        self._test_attach_volume(attach_failed=True)
+
+    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
+    def test_disconnect_volume(self, mock_get_volume_driver):
+        fake_volume_driver = mock_get_volume_driver.return_value
+
+        self._volumeops.disconnect_volume(mock.sentinel.conn_info)
 
         mock_get_volume_driver.assert_called_once_with(
-            connection_info=fake_conn_info)
-        mock_volume_driver.attach_volume.assert_called_once_with(
-            fake_conn_info,
-            mock.sentinel.instance_name,
-            disk_bus=mock.sentinel.fake_disk_bus)
-        mock_volume_driver.set_disk_qos_specs.assert_called_once_with(
-            fake_conn_info, mock.sentinel.qos_specs)
-
-        # We check that the volume was detached and disconnected
-        # after a failed attach attempt.
-        mock_volume_driver.detach_volume.assert_called_once_with(
-            fake_conn_info, mock.sentinel.instance_name)
-        mock_volume_driver.disconnect_volume.assert_called_once_with(
-            fake_conn_info)
+            mock.sentinel.conn_info)
+        fake_volume_driver.disconnect_volume.assert_called_once_with(
+            mock.sentinel.conn_info)
 
     @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
     def test_detach_volume(self, mock_get_volume_driver):
-        self._volumeops.detach_volume(mock.sentinel.conn_info,
-                                      mock.sentinel.instance_name)
+        fake_volume_driver = mock_get_volume_driver.return_value
+        fake_conn_info = {'data': 'fake_conn_info_data'}
+
+        self._volumeops.detach_volume(fake_conn_info,
+                                      mock.sentinel.inst_name)
 
         mock_get_volume_driver.assert_called_once_with(
-            mock.sentinel.conn_info)
-        mock_volume_driver = mock_get_volume_driver.return_value
-        mock_volume_driver.detach_volume.assert_called_once_with(
-            mock.sentinel.conn_info, mock.sentinel.instance_name)
-        mock_volume_driver.disconnect_volume.assert_called_once_with(
-            mock.sentinel.conn_info)
+            fake_conn_info)
+        fake_volume_driver.detach_volume.assert_called_once_with(
+            fake_conn_info, mock.sentinel.inst_name)
+        fake_volume_driver.disconnect_volume.assert_called_once_with(
+            fake_conn_info)
 
-    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
-    def test_disconnect_volumes(self, mock_get_volume_driver):
-        block_device_info = get_fake_block_dev_info()
-        conn_info = block_device_info[
-            'block_device_mapping'][0]['connection_info']
+    @mock.patch.object(connector, 'get_connector_properties')
+    def test_get_volume_connector(self, mock_get_connector):
+        conn = self._volumeops.get_volume_connector()
 
-        self._volumeops.disconnect_volumes(block_device_info)
-
-        mock_get_volume_driver.assert_called_once_with(conn_info)
-        disconnect_volume = (
-            mock_get_volume_driver.return_value.disconnect_volume)
-        disconnect_volume.assert_called_once_with(
-            conn_info)
-
-    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
-    def test_attach_volume(self, mock_get_volume_driver):
-        fake_conn_info = {
-            'data': {'qos_specs': mock.sentinel.qos_specs}
-        }
-
-        mock_volume_driver = mock_get_volume_driver.return_value
-
-        self._volumeops.attach_volume(fake_conn_info,
-                                      mock.sentinel.instance_name,
-                                      disk_bus=mock.sentinel.disk_bus)
-
-        mock_volume_driver.attach_volume.assert_called_once_with(
-            fake_conn_info,
-            mock.sentinel.instance_name,
-            disk_bus=mock.sentinel.disk_bus)
-        mock_volume_driver.set_disk_qos_specs.assert_called_once_with(
-            fake_conn_info, mock.sentinel.qos_specs)
-
-    def test_get_volume_connector(self):
-        fake_connector_props = {
-            'fake_vol_driver_specific_prop':
-                mock.sentinel.vol_driver_specific_val
-        }
-        mock_vol_driver = mock.Mock()
-        mock_vol_driver.get_volume_connector_props.return_value = (
-            fake_connector_props)
-        mock_vol_drivers = {
-            mock.sentinel.vol_driver_type: mock_vol_driver
-        }
-        self._volumeops.volume_drivers = mock_vol_drivers
-
-        connector = self._volumeops.get_volume_connector()
-
-        expected_connector = dict(ip=CONF.my_ip,
-                                  host=CONF.host,
-                                  multipath=CONF.hyperv.use_multipath_io,
-                                  os_type=sys.platform,
-                                  platform=platform.machine(),
-                                  **fake_connector_props)
-        self.assertEqual(expected_connector, connector)
+        mock_get_connector.assert_called_once_with(
+            root_helper=None,
+            my_ip=CONF.my_block_storage_ip,
+            multipath=CONF.hyperv.use_multipath_io,
+            enforce_multipath=True,
+            host=CONF.host)
+        self.assertEqual(mock_get_connector.return_value, conn)
 
     @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
     def test_connect_volumes(self, mock_get_volume_driver):
         block_device_info = get_fake_block_dev_info()
-        conn_info = block_device_info[
-            'block_device_mapping'][0]['connection_info']
 
         self._volumeops.connect_volumes(block_device_info)
 
-        mock_get_volume_driver.assert_called_once_with(conn_info)
-        connect_volume = (
+        init_vol_conn = (
             mock_get_volume_driver.return_value.connect_volume)
-        connect_volume.assert_called_once_with(
-            conn_info)
-
-    def test_bytes_per_sec_to_iops(self):
-        no_bytes = 15 * units.Ki
-        expected_iops = 2
-
-        resulted_iops = self._volumeops.bytes_per_sec_to_iops(no_bytes)
-        self.assertEqual(expected_iops, resulted_iops)
-
-    @mock.patch.object(volumeops.LOG, 'warning')
-    def test_validate_qos_specs(self, mock_warning):
-        supported_qos_specs = [mock.sentinel.spec1, mock.sentinel.spec2]
-        requested_qos_specs = {mock.sentinel.spec1: mock.sentinel.val,
-                               mock.sentinel.spec3: mock.sentinel.val2}
-
-        self._volumeops.validate_qos_specs(requested_qos_specs,
-                                           supported_qos_specs)
-        self.assertTrue(mock_warning.called)
+        init_vol_conn.assert_called_once_with(
+            block_device_info['block_device_mapping'][0]['connection_info'])
 
     @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
     def test_get_disk_path_mapping(self, mock_get_vol_drv):
@@ -323,34 +286,152 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
             fake_conn_info)
 
         mock_get_volume_driver.assert_called_once_with(fake_conn_info)
-        fake_volume_driver.get_disk_resource_path.assert_called_once_with(
-            fake_conn_info)
-        self.assertEqual(
-            fake_volume_driver.get_disk_resource_path.return_value,
-            resulted_disk_path)
+        get_mounted_disk = fake_volume_driver.get_disk_resource_path
+        get_mounted_disk.assert_called_once_with(fake_conn_info)
+        self.assertEqual(get_mounted_disk.return_value,
+                         resulted_disk_path)
+
+    def test_bytes_per_sec_to_iops(self):
+        no_bytes = 15 * units.Ki
+        expected_iops = 2
+
+        resulted_iops = self._volumeops.bytes_per_sec_to_iops(no_bytes)
+        self.assertEqual(expected_iops, resulted_iops)
+
+    @mock.patch.object(volumeops.LOG, 'warning')
+    def test_validate_qos_specs(self, mock_warning):
+        supported_qos_specs = [mock.sentinel.spec1, mock.sentinel.spec2]
+        requested_qos_specs = {mock.sentinel.spec1: mock.sentinel.val,
+                               mock.sentinel.spec3: mock.sentinel.val2}
+
+        self._volumeops.validate_qos_specs(requested_qos_specs,
+                                           supported_qos_specs)
+        self.assertTrue(mock_warning.called)
 
 
 class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for Hyper-V BaseVolumeDriver class."""
 
-    @mock.patch.object(volumeops.BaseVolumeDriver,
-                       '__abstractmethods__', set())
     def setUp(self):
         super(BaseVolumeDriverTestCase, self).setUp()
+
         self._base_vol_driver = volumeops.BaseVolumeDriver()
-        self._base_vol_driver._vmutils = mock.MagicMock()
+
+        self._base_vol_driver._diskutils = mock.Mock()
+        self._base_vol_driver._vmutils = mock.Mock()
+        self._base_vol_driver._conn = mock.Mock()
+        self._vmutils = self._base_vol_driver._vmutils
+        self._diskutils = self._base_vol_driver._diskutils
+        self._conn = self._base_vol_driver._conn
+
+    @mock.patch.object(connector.InitiatorConnector, 'factory')
+    def test_connector(self, mock_conn_factory):
+        self._base_vol_driver._conn = None
+        self._base_vol_driver._protocol = mock.sentinel.protocol
+        self._base_vol_driver._extra_connector_args = dict(
+            fake_conn_arg=mock.sentinel.conn_val)
+
+        conn = self._base_vol_driver._connector
+
+        self.assertEqual(mock_conn_factory.return_value, conn)
+        mock_conn_factory.assert_called_once_with(
+            protocol=mock.sentinel.protocol,
+            root_helper=None,
+            use_multipath=CONF.hyperv.use_multipath_io,
+            device_scan_attempts=CONF.hyperv.mounted_disk_query_retry_count,
+            device_scan_interval=(
+                CONF.hyperv.mounted_disk_query_retry_interval),
+            **self._base_vol_driver._extra_connector_args)
+
+    def test_connect_volume(self):
+        conn_info = get_fake_connection_info()
+
+        dev_info = self._base_vol_driver.connect_volume(conn_info)
+        expected_dev_info = self._conn.connect_volume.return_value
+
+        self.assertEqual(expected_dev_info, dev_info)
+        self._conn.connect_volume.assert_called_once_with(
+            conn_info['data'])
+
+    def test_disconnect_volume(self):
+        conn_info = get_fake_connection_info()
+
+        self._base_vol_driver.disconnect_volume(conn_info)
+
+        self._conn.disconnect_volume.assert_called_once_with(
+            conn_info['data'])
+
+    @mock.patch.object(volumeops.BaseVolumeDriver, '_get_disk_res_path')
+    def _test_get_disk_resource_path_by_conn_info(self,
+                                                  mock_get_disk_res_path,
+                                                  disk_found=True):
+        conn_info = get_fake_connection_info()
+        mock_vol_paths = [mock.sentinel.disk_path] if disk_found else []
+        self._conn.get_volume_paths.return_value = mock_vol_paths
+
+        if disk_found:
+            disk_res_path = self._base_vol_driver.get_disk_resource_path(
+                conn_info)
+
+            self._conn.get_volume_paths.assert_called_once_with(
+                conn_info['data'])
+            self.assertEqual(mock_get_disk_res_path.return_value,
+                             disk_res_path)
+            mock_get_disk_res_path.assert_called_once_with(
+                mock.sentinel.disk_path)
+        else:
+            self.assertRaises(exception.DiskNotFound,
+                              self._base_vol_driver.get_disk_resource_path,
+                              conn_info)
+
+    def test_get_existing_disk_res_path(self):
+        self._test_get_disk_resource_path_by_conn_info()
+
+    def test_get_unfound_disk_res_path(self):
+        self._test_get_disk_resource_path_by_conn_info(disk_found=False)
+
+    def test_get_block_dev_res_path(self):
+        self._base_vol_driver._is_block_dev = True
+
+        mock_get_dev_number = (
+            self._diskutils.get_device_number_from_device_name)
+        mock_get_dev_number.return_value = mock.sentinel.dev_number
+        self._vmutils.get_mounted_disk_by_drive_number.return_value = (
+            mock.sentinel.disk_path)
+
+        disk_path = self._base_vol_driver._get_disk_res_path(
+            mock.sentinel.dev_name)
+
+        mock_get_dev_number.assert_called_once_with(mock.sentinel.dev_name)
+        self._vmutils.get_mounted_disk_by_drive_number.assert_called_once_with(
+            mock.sentinel.dev_number)
+
+        self.assertEqual(mock.sentinel.disk_path, disk_path)
+
+    def test_get_virt_disk_res_path(self):
+        # For virtual disk images, we expect the resource path to be the
+        # actual image path, as opposed to passthrough disks, in which case we
+        # need the Msvm_DiskDrive resource path when attaching it to a VM.
+        self._base_vol_driver._is_block_dev = False
+
+        path = self._base_vol_driver._get_disk_res_path(
+            mock.sentinel.disk_path)
+        self.assertEqual(mock.sentinel.disk_path, path)
 
     @mock.patch.object(volumeops.BaseVolumeDriver,
-                       'get_disk_resource_path')
+                       '_get_disk_res_path')
     @mock.patch.object(volumeops.BaseVolumeDriver, '_get_disk_ctrl_and_slot')
-    def _test_attach_volume(self, mock_get_disk_ctrl_and_slot,
-                            mock_get_disk_resource_path,
+    @mock.patch.object(volumeops.BaseVolumeDriver,
+                       'connect_volume')
+    def _test_attach_volume(self, mock_connect_volume,
+                            mock_get_disk_ctrl_and_slot,
+                            mock_get_disk_res_path,
                             is_block_dev=True):
         connection_info = get_fake_connection_info()
         self._base_vol_driver._is_block_dev = is_block_dev
-        vmutils = self._base_vol_driver._vmutils
+        mock_connect_volume.return_value = dict(path=mock.sentinel.raw_path)
 
-        mock_get_disk_resource_path.return_value = (
+        mock_get_disk_res_path.return_value = (
             mock.sentinel.disk_path)
         mock_get_disk_ctrl_and_slot.return_value = (
             mock.sentinel.ctrller_path,
@@ -362,29 +443,29 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
             disk_bus=mock.sentinel.disk_bus)
 
         if is_block_dev:
-            vmutils.attach_volume_to_controller.assert_called_once_with(
+            self._vmutils.attach_volume_to_controller.assert_called_once_with(
                 mock.sentinel.instance_name,
                 mock.sentinel.ctrller_path,
                 mock.sentinel.slot,
                 mock.sentinel.disk_path,
                 serial=connection_info['serial'])
         else:
-            vmutils.attach_drive.assert_called_once_with(
+            self._vmutils.attach_drive.assert_called_once_with(
                 mock.sentinel.instance_name,
                 mock.sentinel.disk_path,
                 mock.sentinel.ctrller_path,
                 mock.sentinel.slot)
 
-        mock_get_disk_resource_path.assert_called_once_with(
-            connection_info)
+        mock_get_disk_res_path.assert_called_once_with(
+            mock.sentinel.raw_path)
         mock_get_disk_ctrl_and_slot.assert_called_once_with(
             mock.sentinel.instance_name, mock.sentinel.disk_bus)
 
     def test_attach_volume_image_file(self):
-        self._test_attach_volume(is_block_dev=True)
+        self._test_attach_volume(is_block_dev=False)
 
     def test_attach_volume_block_dev(self):
-        self._test_attach_volume()
+        self._test_attach_volume(is_block_dev=True)
 
     @mock.patch.object(volumeops.BaseVolumeDriver,
                        'get_disk_resource_path')
@@ -396,400 +477,112 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
 
         mock_get_disk_resource_path.assert_called_once_with(
             connection_info)
-        self._base_vol_driver._vmutils.detach_vm_disk.assert_called_once_with(
+        self._vmutils.detach_vm_disk.assert_called_once_with(
             mock.sentinel.instance_name,
             mock_get_disk_resource_path.return_value,
             is_physical=self._base_vol_driver._is_block_dev)
 
-    def _test_get_disk_ctrl_and_slot(self, disk_bus=constants.CTRL_TYPE_IDE):
+    def test_get_disk_ctrl_and_slot_ide(self):
         ctrl, slot = self._base_vol_driver._get_disk_ctrl_and_slot(
             mock.sentinel.instance_name,
-            disk_bus)
+            disk_bus=constants.CTRL_TYPE_IDE)
 
-        vmutils = self._base_vol_driver._vmutils
-        if disk_bus == constants.CTRL_TYPE_IDE:
-            expected_ctrl = vmutils.get_vm_ide_controller.return_value
-            expected_slot = 0
+        expected_ctrl = self._vmutils.get_vm_ide_controller.return_value
+        expected_slot = 0
 
-            vmutils.get_vm_ide_controller.assert_called_once_with(
-                mock.sentinel.instance_name, 0)
-        else:
-            expected_ctrl = vmutils.get_vm_scsi_controller.return_value
-            expected_slot = vmutils.get_free_controller_slot.return_value
-
-            vmutils.get_vm_scsi_controller.assert_called_once_with(
-                mock.sentinel.instance_name)
-            vmutils.get_free_controller_slot(
-                vmutils.get_vm_scsi_controller.return_value)
+        self._vmutils.get_vm_ide_controller.assert_called_once_with(
+            mock.sentinel.instance_name, 0)
 
         self.assertEqual(expected_ctrl, ctrl)
         self.assertEqual(expected_slot, slot)
 
-    def test_get_disk_ctrl_and_slot_ide(self):
-        self._test_get_disk_ctrl_and_slot()
-
     def test_get_disk_ctrl_and_slot_scsi(self):
-        self._test_get_disk_ctrl_and_slot(
+        ctrl, slot = self._base_vol_driver._get_disk_ctrl_and_slot(
+            mock.sentinel.instance_name,
             disk_bus=constants.CTRL_TYPE_SCSI)
 
-    def test_get_disk_ctrl_and_slot_unknown(self):
-        self.assertRaises(exception.Invalid,
-                          self._base_vol_driver._get_disk_ctrl_and_slot,
-                          mock.sentinel.instance_name,
-                          'fake bus')
+        expected_ctrl = self._vmutils.get_vm_scsi_controller.return_value
+        expected_slot = (
+            self._vmutils.get_free_controller_slot.return_value)
 
-    def test_check_device_paths_multiple_found(self):
-        device_paths = [mock.sentinel.dev_path_0, mock.sentinel.dev_path_1]
-        self.assertRaises(exception.InvalidDevicePath,
-                          self._base_vol_driver._check_device_paths,
-                          device_paths)
+        self._vmutils.get_vm_scsi_controller.assert_called_once_with(
+            mock.sentinel.instance_name)
+        self._vmutils.get_free_controller_slot(
+           self._vmutils.get_vm_scsi_controller.return_value)
 
-    def test_check_device_paths_none_found(self):
-        self.assertRaises(exception.DiskNotFound,
-                          self._base_vol_driver._check_device_paths,
-                          [])
+        self.assertEqual(expected_ctrl, ctrl)
+        self.assertEqual(expected_slot, slot)
 
-    def test_check_device_paths_one_device_found(self):
-        self._base_vol_driver._check_device_paths([mock.sentinel.dev_path])
-
-    def test_get_mounted_disk_by_dev_name(self):
-        vmutils = self._base_vol_driver._vmutils
-        diskutils = self._base_vol_driver._diskutils
-        mock_get_dev_number = diskutils.get_device_number_from_device_name
-
-        mock_get_dev_number.return_value = mock.sentinel.dev_number
-        vmutils.get_mounted_disk_by_drive_number.return_value = (
-            mock.sentinel.disk_path)
-
-        disk_path = self._base_vol_driver._get_mounted_disk_path_by_dev_name(
-            mock.sentinel.dev_name)
-
-        mock_get_dev_number.assert_called_once_with(mock.sentinel.dev_name)
-        vmutils.get_mounted_disk_by_drive_number.assert_called_once_with(
-            mock.sentinel.dev_number)
-
-        self.assertEqual(mock.sentinel.disk_path, disk_path)
+    def test_set_disk_qos_specs(self):
+        # This base method is a noop, we'll just make sure
+        # it doesn't error out.
+        self._base_vol_driver.set_disk_qos_specs(
+            mock.sentinel.conn_info, mock.sentinel.disk_qos_spes)
 
 
-@ddt.ddt
 class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):
-    """Unit tests for Hyper-V ISCSIVolumeDriver class."""
+    """Unit tests for Hyper-V BaseVolumeDriver class."""
 
-    def setUp(self):
-        super(ISCSIVolumeDriverTestCase, self).setUp()
-        self._volume_driver = volumeops.ISCSIVolumeDriver()
-        self._iscsi_utils = self._volume_driver._iscsi_utils
-        self._diskutils = self._volume_driver._diskutils
+    def test_extra_conn_args(self):
+        fake_iscsi_initiator = (
+            'PCI\\VEN_1077&DEV_2031&SUBSYS_17E8103C&REV_02\\'
+            '4&257301f0&0&0010_0')
+        self.flags(iscsi_initiator_list=[fake_iscsi_initiator],
+                   group='hyperv')
+        expected_extra_conn_args = dict(
+            initiator_list=[fake_iscsi_initiator])
 
-    def _test_get_volume_connector_props(self, initiator_present=True):
-        expected_initiator = self._volume_driver._initiator_node_name
-        expected_props = dict(initiator=expected_initiator)
-        resulted_props = self._volume_driver.get_volume_connector_props()
-        self.assertEqual(expected_props, resulted_props)
+        vol_driver = volumeops.ISCSIVolumeDriver()
 
-    def test_get_vol_connector_props(self):
-        self._test_get_volume_connector_props()
-
-    def test_get_vol_connector_props_without_initiator(self):
-        self._test_get_volume_connector_props(initiator_present=False)
-
-    @ddt.data({'requested_initiators': [mock.sentinel.initiator_0],
-               'available_initiators': [mock.sentinel.initiator_0,
-                                        mock.sentinel.initiator_1]},
-              {'requested_initiators': [mock.sentinel.initiator_0],
-               'available_initiators': [mock.sentinel.initiator_1]})
-    @ddt.unpack
-    def test_validate_initiators(self, requested_initiators,
-                                 available_initiators):
-        self.flags(iscsi_initiator_list=requested_initiators, group='hyperv')
-        self._iscsi_utils.get_iscsi_initiators.return_value = (
-            available_initiators)
-
-        expected_valid_initiator = not (
-            set(requested_initiators).difference(set(available_initiators)))
-        valid_initiator = self._volume_driver.validate_initiators()
-
-        self.assertEqual(expected_valid_initiator, valid_initiator)
-
-    def test_get_all_targets_multipath(self):
-        conn_props = {'target_portals': [mock.sentinel.portal0,
-                                         mock.sentinel.portal1],
-                      'target_iqns': [mock.sentinel.target0,
-                                      mock.sentinel.target1],
-                      'target_luns': [mock.sentinel.lun0,
-                                      mock.sentinel.lun1]}
-        expected_targets = zip(conn_props['target_portals'],
-                               conn_props['target_iqns'],
-                               conn_props['target_luns'])
-
-        resulted_targets = self._volume_driver._get_all_targets(conn_props)
-        self.assertEqual(list(expected_targets), list(resulted_targets))
-
-    def test_get_all_targets_single_path(self):
-        conn_props = dict(target_portal=mock.sentinel.portal,
-                          target_iqn=mock.sentinel.target,
-                          target_lun=mock.sentinel.lun)
-        expected_targets = [
-            (mock.sentinel.portal, mock.sentinel.target, mock.sentinel.lun)]
-        resulted_targets = self._volume_driver._get_all_targets(conn_props)
-        self.assertEqual(expected_targets, resulted_targets)
-
-    @ddt.data([mock.sentinel.initiator_1, mock.sentinel.initiator_2], [])
-    @mock.patch.object(volumeops.ISCSIVolumeDriver, '_get_all_targets')
-    def test_get_all_paths(self, requested_initiators, mock_get_all_targets):
-        self.flags(iscsi_initiator_list=requested_initiators, group='hyperv')
-
-        target = (mock.sentinel.portal, mock.sentinel.target,
-                  mock.sentinel.lun)
-        mock_get_all_targets.return_value = [target]
-
-        paths = self._volume_driver._get_all_paths(mock.sentinel.conn_props)
-
-        expected_initiators = requested_initiators or [None]
-        expected_paths = [(initiator, ) + target
-                          for initiator in expected_initiators]
-
-        self.assertEqual(expected_paths, paths)
-        mock_get_all_targets.assert_called_once_with(mock.sentinel.conn_props)
-
-    @ddt.data(True, False)
-    @mock.patch.object(volumeops.ISCSIVolumeDriver, '_get_all_paths')
-    def test_connect_volume(self, use_multipath,
-                            mock_get_all_paths):
-        self.flags(use_multipath_io=use_multipath, group='hyperv')
-        fake_paths = [(mock.sentinel.initiator_name,
-                       mock.sentinel.target_portal,
-                       mock.sentinel.target_iqn,
-                       mock.sentinel.target_lun)] * 3
-
-        mock_get_all_paths.return_value = fake_paths
-        self._iscsi_utils.login_storage_target.side_effect = [
-            os_win_exc.OSWinException, None, None]
-
-        conn_info = get_fake_connection_info()
-        conn_props = conn_info['data']
-
-        self._volume_driver.connect_volume(conn_info)
-
-        mock_get_all_paths.assert_called_once_with(conn_props)
-        expected_login_attempts = 3 if use_multipath else 2
-        self._iscsi_utils.login_storage_target.assert_has_calls(
-            [mock.call(target_lun=mock.sentinel.target_lun,
-                       target_iqn=mock.sentinel.target_iqn,
-                       target_portal=mock.sentinel.target_portal,
-                       auth_username=conn_props['auth_username'],
-                       auth_password=conn_props['auth_password'],
-                       mpio_enabled=use_multipath,
-                       initiator_name=mock.sentinel.initiator_name)] *
-            expected_login_attempts)
-
-    @mock.patch.object(volumeops.ISCSIVolumeDriver, '_get_all_paths')
-    def test_connect_volume_failed(self, mock_get_all_paths):
-        self.flags(use_multipath_io=True, group='hyperv')
-        fake_paths = [(mock.sentinel.initiator_name,
-                       mock.sentinel.target_portal,
-                       mock.sentinel.target_iqn,
-                       mock.sentinel.target_lun)] * 3
-
-        mock_get_all_paths.return_value = fake_paths
-        self._iscsi_utils.login_storage_target.side_effect = (
-            os_win_exc.OSWinException)
-
-        self.assertRaises(exception.VolumeAttachFailed,
-                          self._volume_driver.connect_volume,
-                          get_fake_connection_info())
-
-    def test_connect_volume_invalid_auth_method(self):
-        conn_info = get_fake_connection_info(auth_method='fake_auth')
-        self.assertRaises(exception.UnsupportedBDMVolumeAuthMethod,
-                          self._volume_driver.connect_volume,
-                          conn_info)
-
-    @mock.patch.object(volumeops.ISCSIVolumeDriver, '_get_all_targets')
-    def test_disconnect_volume(self, mock_get_all_targets):
-        targets = [
-            (mock.sentinel.portal_0, mock.sentinel.tg_0, mock.sentinel.lun_0),
-            (mock.sentinel.portal_1, mock.sentinel.tg_1, mock.sentinel.lun_1)]
-
-        mock_get_all_targets.return_value = targets
-        self._iscsi_utils.get_target_luns.return_value = [mock.sentinel.lun_0]
-
-        conn_info = get_fake_connection_info()
-        self._volume_driver.disconnect_volume(conn_info)
-
-        self._diskutils.rescan_disks.assert_called_once_with()
-        mock_get_all_targets.assert_called_once_with(conn_info['data'])
-        self._iscsi_utils.logout_storage_target.assert_called_once_with(
-            mock.sentinel.tg_0)
-        self._iscsi_utils.get_target_luns.assert_has_calls(
-            [mock.call(mock.sentinel.tg_0), mock.call(mock.sentinel.tg_1)])
-
-    @mock.patch.object(volumeops.ISCSIVolumeDriver, '_get_all_targets')
-    @mock.patch.object(volumeops.ISCSIVolumeDriver, '_check_device_paths')
-    @mock.patch.object(volumeops.ISCSIVolumeDriver,
-                       '_get_mounted_disk_path_by_dev_name')
-    def test_get_disk_resource_path(self, mock_get_mounted_disk,
-                                    mock_check_dev_paths,
-                                    mock_get_all_targets):
-        targets = [
-            (mock.sentinel.portal_0, mock.sentinel.tg_0, mock.sentinel.lun_0),
-            (mock.sentinel.portal_1, mock.sentinel.tg_1, mock.sentinel.lun_1)]
-
-        mock_get_all_targets.return_value = targets
-        self._iscsi_utils.get_device_number_and_path.return_value = [
-            mock.sentinel.dev_num, mock.sentinel.dev_path]
-
-        conn_info = get_fake_connection_info()
-        volume_paths = self._volume_driver.get_disk_resource_path(conn_info)
-        self.assertEqual(mock_get_mounted_disk.return_value, volume_paths)
-
-        mock_get_all_targets.assert_called_once_with(conn_info['data'])
-        self._iscsi_utils.get_device_number_and_path.assert_has_calls(
-            [mock.call(mock.sentinel.tg_0, mock.sentinel.lun_0),
-             mock.call(mock.sentinel.tg_1, mock.sentinel.lun_1)])
-        mock_check_dev_paths.assert_called_once_with(
-            set([mock.sentinel.dev_path]))
-        mock_get_mounted_disk.assert_called_once_with(mock.sentinel.dev_path)
+        self.assertEqual(expected_extra_conn_args,
+                         vol_driver._extra_connector_args)
 
 
-@ddt.ddt
 class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V SMBFSVolumeDriver class."""
 
-    _FAKE_SHARE = '//1.2.3.4/fake_share'
-    _FAKE_SHARE_NORMALIZED = _FAKE_SHARE.replace('/', '\\')
-    _FAKE_DISK_NAME = 'fake_volume_name.vhdx'
-    _FAKE_USERNAME = 'fake_username'
-    _FAKE_PASSWORD = 'fake_password'
-    _FAKE_SMB_OPTIONS = '-o username=%s,password=%s' % (_FAKE_USERNAME,
-                                                        _FAKE_PASSWORD)
-    _FAKE_CONNECTION_INFO = {'data': {'export': _FAKE_SHARE,
-                                      'name': _FAKE_DISK_NAME,
-                                      'options': _FAKE_SMB_OPTIONS,
-                                      'volume_id': 'fake_vol_id'}}
+    _FAKE_EXPORT_PATH = '//ip/share/'
+    _FAKE_CONN_INFO = get_fake_connection_info(export=_FAKE_EXPORT_PATH)
 
     def setUp(self):
         super(SMBFSVolumeDriverTestCase, self).setUp()
         self._volume_driver = volumeops.SMBFSVolumeDriver()
-        self._volume_driver._vmutils = mock.MagicMock()
-        self._volume_driver._smbutils = mock.MagicMock()
-        self._volume_driver._pathutils = mock.MagicMock()
-        self._smbutils = self._volume_driver._smbutils
-        self._pathutils = self._volume_driver._pathutils
-
-    @mock.patch.object(volumeops.SMBFSVolumeDriver, '_get_disk_path')
-    def test_get_disk_resource_path(self, mock_get_disk_path):
-        disk_path = self._volume_driver.get_disk_resource_path(
-            mock.sentinel.conn_info)
-
-        self.assertEqual(mock_get_disk_path.return_value, disk_path)
-        mock_get_disk_path.assert_called_once_with(mock.sentinel.conn_info)
-
-    def test_parse_credentials(self):
-        username, password = self._volume_driver._parse_credentials(
-            self._FAKE_SMB_OPTIONS)
-        self.assertEqual(self._FAKE_USERNAME, username)
-        self.assertEqual(self._FAKE_PASSWORD, password)
+        self._volume_driver._conn = mock.Mock()
+        self._conn = self._volume_driver._conn
 
     def test_get_export_path(self):
-        result = self._volume_driver._get_export_path(
-            self._FAKE_CONNECTION_INFO)
+        export_path = self._volume_driver._get_export_path(
+            self._FAKE_CONN_INFO)
+        expected_path = self._FAKE_EXPORT_PATH.replace('/', '\\')
+        self.assertEqual(expected_path, export_path)
 
-        expected = self._FAKE_SHARE.replace('/', '\\')
-        self.assertEqual(expected, result)
+    @mock.patch.object(volumeops.BaseVolumeDriver, 'attach_volume')
+    def test_attach_volume(self, mock_attach):
+        # The tested method will just apply a lock before calling
+        # the superclass method.
+        self._volume_driver.attach_volume(
+            self._FAKE_CONN_INFO,
+            mock.sentinel.instance_name,
+            disk_bus=mock.sentinel.disk_bus)
 
-    @ddt.data(True, False)
-    def test_get_disk_path(self, is_local):
-        fake_local_share_path = 'fake_local_share_path'
-        self._smbutils.is_local_share.return_value = is_local
-        self._smbutils.get_smb_share_path.return_value = (
-            fake_local_share_path)
+        mock_attach.assert_called_once_with(
+            self._FAKE_CONN_INFO,
+            mock.sentinel.instance_name,
+            disk_bus=mock.sentinel.disk_bus)
 
-        expected_dir = (fake_local_share_path if is_local
-                        else self._FAKE_SHARE_NORMALIZED)
-        expected_path = os.path.join(expected_dir,
-                                     self._FAKE_DISK_NAME)
+    @mock.patch.object(volumeops.BaseVolumeDriver, 'detach_volume')
+    def test_detach_volume(self, mock_detach):
+        self._volume_driver.detach_volume(
+            self._FAKE_CONN_INFO,
+            instance_name=mock.sentinel.instance_name)
 
-        disk_path = self._volume_driver._get_disk_path(
-            self._FAKE_CONNECTION_INFO)
-
-        self._smbutils.is_local_share.assert_called_once_with(
-            self._FAKE_SHARE_NORMALIZED)
-        if is_local:
-            self._smbutils.get_smb_share_path.assert_called_once_with(
-                'fake_share')
-        self.assertEqual(expected_path, disk_path)
-
-    def test_get_disk_path_not_found(self):
-        self._smbutils.is_local_share.return_value = True
-        self._smbutils.get_smb_share_path.return_value = False
-
-        self.assertRaises(exception.DiskNotFound,
-                          self._volume_driver._get_disk_path,
-                          self._FAKE_CONNECTION_INFO)
-
-    @mock.patch.object(volumeops.SMBFSVolumeDriver, '_parse_credentials')
-    @ddt.data({},
-              {'is_mounted': True},
-              {'is_local': True})
-    @ddt.unpack
-    def test_ensure_mounted(self, mock_parse_credentials,
-                            is_mounted=False, is_local=False):
-        self._smbutils.is_local_share.return_value = is_local
-        mock_mount_smb_share = self._volume_driver._smbutils.mount_smb_share
-        mock_check_smb_mapping = (
-            self._volume_driver._smbutils.check_smb_mapping)
-        mock_check_smb_mapping.return_value = is_mounted
-        mock_parse_credentials.return_value = (
-            self._FAKE_USERNAME, self._FAKE_PASSWORD)
-
-        self._volume_driver.ensure_share_mounted(
-            self._FAKE_CONNECTION_INFO)
-
-        self._smbutils.is_local_share.assert_called_once_with(
-            self._FAKE_SHARE_NORMALIZED)
-
-        if is_local or is_mounted:
-            self.assertFalse(
-                mock_mount_smb_share.called)
-        else:
-            mock_parse_credentials.assert_called_once_with(
-                self._FAKE_SMB_OPTIONS)
-            mock_mount_smb_share.assert_called_once_with(
-                self._FAKE_SHARE_NORMALIZED,
-                username=self._FAKE_USERNAME,
-                password=self._FAKE_PASSWORD)
-
-    @mock.patch.object(volumeops.SMBFSVolumeDriver, '_parse_credentials')
-    def test_ensure_mounted_missing_opts(self, mock_parse_credentials):
-        self._smbutils.is_local_share.return_value = False
-        mock_mount_smb_share = self._volume_driver._smbutils.mount_smb_share
-        mock_check_smb_mapping = (
-            self._volume_driver._smbutils.check_smb_mapping)
-        mock_check_smb_mapping.return_value = False
-        mock_parse_credentials.return_value = (None, None)
-
-        fake_conn_info = copy.deepcopy(self._FAKE_CONNECTION_INFO)
-        fake_conn_info['data']['options'] = None
-
-        self._volume_driver.ensure_share_mounted(fake_conn_info)
-
-        mock_parse_credentials.assert_called_once_with('')
-        mock_mount_smb_share.assert_called_once_with(
-            self._FAKE_SHARE_NORMALIZED,
-            username=None,
-            password=None)
-
-    def test_disconnect_volume(self):
-        self._volume_driver.disconnect_volume(self._FAKE_CONNECTION_INFO)
-
-        mock_unmount_share = self._volume_driver._smbutils.unmount_smb_share
-        mock_unmount_share.assert_called_once_with(
-            self._FAKE_SHARE_NORMALIZED)
+        mock_detach.assert_called_once_with(
+            self._FAKE_CONN_INFO,
+            instance_name=mock.sentinel.instance_name)
 
     @mock.patch.object(volumeops.VolumeOps, 'bytes_per_sec_to_iops')
     @mock.patch.object(volumeops.VolumeOps, 'validate_qos_specs')
-    @mock.patch.object(volumeops.SMBFSVolumeDriver, '_get_disk_path')
+    @mock.patch.object(volumeops.BaseVolumeDriver, 'get_disk_resource_path')
     def test_set_disk_qos_specs(self, mock_get_disk_path,
                                 mock_validate_qos_specs,
                                 mock_bytes_per_sec_to_iops):
@@ -800,154 +593,16 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         expected_supported_specs = ['total_iops_sec', 'total_bytes_sec']
         mock_set_qos_specs = self._volume_driver._vmutils.set_disk_qos_specs
         mock_bytes_per_sec_to_iops.return_value = fake_total_iops_sec
+        mock_get_disk_path.return_value = mock.sentinel.disk_path
 
-        self._volume_driver.set_disk_qos_specs(mock.sentinel.connection_info,
+        self._volume_driver.set_disk_qos_specs(self._FAKE_CONN_INFO,
                                                storage_qos_specs)
 
         mock_validate_qos_specs.assert_called_once_with(
             storage_qos_specs, expected_supported_specs)
         mock_bytes_per_sec_to_iops.assert_called_once_with(
             fake_total_bytes_sec)
-        mock_disk_path = mock_get_disk_path.return_value
-        mock_get_disk_path.assert_called_once_with(
-            mock.sentinel.connection_info)
+        mock_get_disk_path.assert_called_once_with(self._FAKE_CONN_INFO)
         mock_set_qos_specs.assert_called_once_with(
-            mock_disk_path,
+            mock.sentinel.disk_path,
             fake_total_iops_sec)
-
-
-class FCVolumeDriverTestCase(test_base.HyperVBaseTestCase):
-    def setUp(self):
-        super(FCVolumeDriverTestCase, self).setUp()
-        self._fc_driver = volumeops.FCVolumeDriver()
-        self._fc_driver._fc_utils = mock.MagicMock()
-        self._fc_driver._vmutils = mock.MagicMock()
-
-        self._fc_utils = self._fc_driver._fc_utils
-        self._vmutils = self._fc_driver._vmutils
-
-    def _test_get_volume_connector_props(self, valid_fc_hba_ports=True):
-        fake_fc_hba_ports = [{'node_name': mock.sentinel.node_name,
-                              'port_name': mock.sentinel.port_name},
-                             {'node_name': mock.sentinel.second_node_name,
-                              'port_name': mock.sentinel.second_port_name}]
-        self._fc_utils.get_fc_hba_ports.return_value = (
-            fake_fc_hba_ports if valid_fc_hba_ports else [])
-
-        resulted_fc_hba_ports = self._fc_driver.get_volume_connector_props()
-
-        self._fc_utils.refresh_hba_configuration.assert_called_once_with()
-        self._fc_utils.get_fc_hba_ports.assert_called_once_with()
-
-        if valid_fc_hba_ports:
-            expected_fc_hba_ports = {
-                'wwpns': [mock.sentinel.port_name,
-                          mock.sentinel.second_port_name],
-                'wwnns': [mock.sentinel.node_name,
-                          mock.sentinel.second_node_name]
-            }
-        else:
-            expected_fc_hba_ports = {}
-
-        self.assertItemsEqual(expected_fc_hba_ports, resulted_fc_hba_ports)
-
-    def test_get_volume_connector_props(self):
-        self._test_get_volume_connector_props()
-
-    def test_get_volume_connector_props_missing_hbas(self):
-        self._test_get_volume_connector_props(valid_fc_hba_ports=False)
-
-    @mock.patch.object(volumeops.FCVolumeDriver, 'get_disk_resource_path')
-    def test_connect_volume(self, mock_get_disk_path):
-        self._fc_driver.connect_volume(mock.sentinel.conn_info)
-        mock_get_disk_path.assert_called_once_with(mock.sentinel.conn_info)
-
-    @mock.patch.object(volumeops.FCVolumeDriver,
-                       '_get_mounted_disk_path_by_dev_name')
-    @mock.patch.object(volumeops.FCVolumeDriver, '_get_fc_volume_mappings')
-    @mock.patch.object(volumeops.FCVolumeDriver, '_check_device_paths')
-    def _test_get_disk_resource_path(self, mock_check_dev_paths,
-                                     mock_get_fc_mappings,
-                                     mock_get_disk_path_by_dev,
-                                     fc_mappings_side_effect,
-                                     expected_rescan_count,
-                                     retrieved_dev_name=None):
-        mock_get_fc_mappings.side_effect = fc_mappings_side_effect
-        mock_get_disk_path_by_dev.return_value = mock.sentinel.disk_path
-
-        if retrieved_dev_name:
-            disk_path = self._fc_driver.get_disk_resource_path(
-                mock.sentinel.conn_info)
-            self.assertEqual(mock.sentinel.disk_path, disk_path)
-            mock_check_dev_paths.assert_called_once_with(
-                set([retrieved_dev_name]))
-            mock_get_disk_path_by_dev.assert_called_once_with(
-                retrieved_dev_name)
-        else:
-            self.assertRaises(
-                exception.DiskNotFound,
-                self._fc_driver.get_disk_resource_path,
-                mock.sentinel.conn_info)
-
-        mock_get_fc_mappings.assert_any_call(mock.sentinel.conn_info)
-        self.assertEqual(
-            expected_rescan_count,
-            self._fc_driver._diskutils.rescan_disks.call_count)
-
-    def test_get_disk_resource_path_missing_dev_name(self):
-        mock_mapping = dict(device_name='')
-        fc_mappings_side_effect = [[]] + [[mock_mapping]] * 9
-
-        self._test_get_disk_resource_path(
-            fc_mappings_side_effect=fc_mappings_side_effect,
-            expected_rescan_count=self._fc_driver._MAX_RESCAN_COUNT)
-
-    def test_get_disk_resource_path_dev_name_found(self):
-        dev_name = mock.sentinel.dev_name
-        mock_mapping = dict(device_name=dev_name)
-
-        self._test_get_disk_resource_path(
-            fc_mappings_side_effect=[[mock_mapping]],
-            expected_rescan_count=1,
-            retrieved_dev_name=dev_name)
-
-    @mock.patch.object(volumeops.FCVolumeDriver, '_get_fc_hba_mapping')
-    def test_get_fc_volume_mappings(self, mock_get_fc_hba_mapping):
-        fake_target_wwpn = 'FAKE_TARGET_WWPN'
-        connection_info = get_fake_connection_info(
-            target_lun=mock.sentinel.target_lun,
-            target_wwn=[fake_target_wwpn])
-
-        mock_hba_mapping = {mock.sentinel.node_name: mock.sentinel.hba_ports}
-        mock_get_fc_hba_mapping.return_value = mock_hba_mapping
-
-        all_target_mappings = [{'device_name': mock.sentinel.dev_name,
-                                'port_name': fake_target_wwpn,
-                                'lun': mock.sentinel.target_lun},
-                               {'device_name': mock.sentinel.dev_name_1,
-                                'port_name': mock.sentinel.target_port_name_1,
-                                'lun': mock.sentinel.target_lun},
-                               {'device_name': mock.sentinel.dev_name,
-                                'port_name': mock.sentinel.target_port_name,
-                                'lun': mock.sentinel.target_lun_1}]
-        expected_mappings = [all_target_mappings[0]]
-
-        self._fc_utils.get_fc_target_mappings.return_value = (
-            all_target_mappings)
-
-        volume_mappings = self._fc_driver._get_fc_volume_mappings(
-            connection_info)
-        self.assertEqual(expected_mappings, volume_mappings)
-
-    def test_get_fc_hba_mapping(self):
-        fake_fc_hba_ports = [{'node_name': mock.sentinel.node_name,
-                              'port_name': mock.sentinel.port_name}]
-
-        self._fc_utils.get_fc_hba_ports.return_value = fake_fc_hba_ports
-
-        resulted_mapping = self._fc_driver._get_fc_hba_mapping()
-
-        expected_mapping = volumeops.collections.defaultdict(list)
-        expected_mapping[mock.sentinel.node_name].append(
-            mock.sentinel.port_name)
-        self.assertEqual(expected_mapping, resulted_mapping)

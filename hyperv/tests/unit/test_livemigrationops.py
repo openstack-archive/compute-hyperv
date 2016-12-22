@@ -138,8 +138,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch('hyperv.nova.volumeops.VolumeOps.get_disk_path_mapping')
     @mock.patch('hyperv.nova.imagecache.ImageCache.get_cached_image')
-    @mock.patch('hyperv.nova.volumeops.VolumeOps'
-                '.connect_volumes')
+    @mock.patch('hyperv.nova.volumeops.VolumeOps.connect_volumes')
     def _test_pre_live_migration(self, mock_connect_volumes,
                                  mock_get_cached_image,
                                  mock_get_disk_path_mapping,

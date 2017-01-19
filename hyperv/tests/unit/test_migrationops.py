@@ -279,7 +279,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._migrationops._vmops.set_boot_order.assert_called_once_with(
             mock_instance.name, get_image_vm_gen.return_value,
             mock.sentinel.block_device_info)
-        self._vmops.power_on.assert_called_once_with(
+        self._migrationops._vmops.power_on.assert_called_once_with(
             mock_instance, network_info=mock.sentinel.network_info)
 
     def test_merge_base_vhd(self):

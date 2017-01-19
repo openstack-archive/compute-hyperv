@@ -100,6 +100,7 @@ class VMOps(object):
         self._serial_console_ops = serialconsoleops.SerialConsoleOps()
         self._block_dev_man = (
             block_device_manager.BlockDeviceInfoManager())
+        self._vif_driver = vif_utils.HyperVVIFDriver()
         self._pdk = pdk.PDK()
 
     def list_instance_uuids(self):
@@ -209,14 +210,6 @@ class VMOps(object):
                     self._pathutils.remove(root_vhd_path)
 
         return root_vhd_path
-
-    def _get_vif_driver(self, vif_type):
-        vif_driver = self._vif_driver_cache.get(vif_type)
-        if vif_driver:
-            return vif_driver
-        vif_driver = vif_utils.get_vif_driver(vif_type)
-        self._vif_driver_cache[vif_type] = vif_driver
-        return vif_driver
 
     def _is_resize_needed(self, vhd_path, old_size, new_size, instance):
         if new_size < old_size:
@@ -414,8 +407,6 @@ class VMOps(object):
             self._vmutils.create_nic(instance_name,
                                      vif['id'],
                                      vif['address'])
-            vif_driver = self._get_vif_driver(vif.get('type'))
-            vif_driver.plug(instance, vif)
 
         if CONF.hyperv.enable_instance_metrics_collection:
             self._metricsutils.enable_vm_metrics_collection(instance_name)
@@ -715,6 +706,7 @@ class VMOps(object):
                 # Stop the VM first.
                 self._vmutils.stop_vm_jobs(instance_name)
                 self.power_off(instance)
+                self.unplug_vifs(instance, network_info)
 
                 self._vmutils.destroy_vm(instance_name)
                 self._volumeops.disconnect_volumes(block_device_info)
@@ -723,7 +715,6 @@ class VMOps(object):
 
             if destroy_disks:
                 self._delete_disk_files(instance_name)
-            self.unplug_vifs(instance, network_info)
         except Exception:
             with excutils.save_and_reraise_exception():
                 LOG.exception(_LE('Failed to destroy instance: %s'),
@@ -837,7 +828,7 @@ class VMOps(object):
                                                            block_device_info)
 
         self._set_vm_state(instance, os_win_const.HYPERV_VM_STATE_ENABLED)
-        self.post_start_vifs(instance, network_info)
+        self.plug_vifs(instance, network_info)
 
     def _set_vm_state(self, instance, req_state):
         instance_name = instance.name
@@ -906,6 +897,16 @@ class VMOps(object):
         for path in dvd_disk_paths:
             self._pathutils.copyfile(path, dest_path)
 
+    def plug_vifs(self, instance, network_info):
+        if network_info:
+            for vif in network_info:
+                self._vif_driver.plug(instance, vif)
+
+    def unplug_vifs(self, instance, network_info):
+        if network_info:
+            for vif in network_info:
+                self._vif_driver.unplug(instance, vif)
+
     def _get_image_serial_port_settings(self, image_meta):
         image_props = image_meta['properties']
         serial_ports = {}
@@ -961,9 +962,7 @@ class VMOps(object):
 
         LOG.debug('Attaching vif: %s', vif['id'], instance=instance)
         self._vmutils.create_nic(instance.name, vif['id'], vif['address'])
-        vif_driver = self._get_vif_driver(vif.get('type'))
-        vif_driver.plug(instance, vif)
-        vif_driver.post_start(instance, vif)
+        self._vif_driver.plug(instance, vif)
 
     def detach_interface(self, instance, vif):
         try:
@@ -972,8 +971,7 @@ class VMOps(object):
                     instance_uuid=instance.uuid)
 
             LOG.debug('Detaching vif: %s', vif['id'], instance=instance)
-            vif_driver = self._get_vif_driver(vif.get('type'))
-            vif_driver.unplug(instance, vif)
+            self._vif_driver.unplug(instance, vif)
             self._vmutils.destroy_nic(instance.name, vif['id'])
         except os_win_exc.HyperVVMNotFoundException:
             # TODO(claudiub): add set log level to error after string freeze.
@@ -1114,18 +1112,6 @@ class VMOps(object):
                 if _scope == scope:
                     filtered_specs[key] = value
         return filtered_specs
-
-    def unplug_vifs(self, instance, network_info):
-        if network_info:
-            for vif in network_info:
-                vif_driver = self._get_vif_driver(vif.get('type'))
-                vif_driver.unplug(instance, vif)
-
-    def post_start_vifs(self, instance, network_info):
-        if network_info:
-            for vif in network_info:
-                vif_driver = self._get_vif_driver(vif.get('type'))
-                vif_driver.post_start(instance, vif)
 
     def _configure_secure_vm(self, context, instance, image_meta,
                              secure_boot_enabled):

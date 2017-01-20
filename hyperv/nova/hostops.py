@@ -185,13 +185,13 @@ class HostOps(object):
                'hypervisor_hostname': platform.node(),
                'vcpus_used': 0,
                'cpu_info': jsonutils.dumps(cpu_info),
-               'supported_instances':
-                   [(obj_fields.Architecture.I686,
-                     obj_fields.HVType.HYPERV,
-                     obj_fields.VMMode.HVM),
-                    (obj_fields.Architecture.X86_64,
-                     obj_fields.HVType.HYPERV,
-                     obj_fields.VMMode.HVM)],
+               'supported_instances': [
+                   (obj_fields.Architecture.I686,
+                    obj_fields.HVType.HYPERV,
+                    obj_fields.VMMode.HVM),
+                   (obj_fields.Architecture.X86_64,
+                    obj_fields.HVType.HYPERV,
+                    obj_fields.VMMode.HVM)],
                'numa_topology': self._get_host_numa_topology()._to_json(),
                }
 

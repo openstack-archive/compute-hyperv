@@ -15,6 +15,7 @@
 
 import os
 
+import fixtures
 import mock
 from nova import exception
 from nova import objects
@@ -34,7 +35,6 @@ CONF = cfg.CONF
 class ImageCacheTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V ImageCache class."""
 
-    FAKE_BASE_DIR = 'fake/base/dir'
     FAKE_FORMAT = 'fake_format'
     FAKE_IMAGE_REF = 'fake_image_ref'
     FAKE_VHD_SIZE_GB = 1
@@ -48,6 +48,8 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.imagecache = imagecache.ImageCache()
         self.imagecache._pathutils = mock.MagicMock()
         self.imagecache._vhdutils = mock.MagicMock()
+
+        self.tmpdir = self.useFixture(fixtures.TempDir()).path
 
     def _test_get_root_vhd_size_gb(self, old_flavor=True):
         if old_flavor:
@@ -92,7 +94,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.instance.image_ref = self.FAKE_IMAGE_REF
         self.instance.system_metadata = {'image_disk_format': image_format}
         self.imagecache._pathutils.get_base_vhd_dir.return_value = (
-            self.FAKE_BASE_DIR)
+            self.tmpdir)
         self.imagecache._pathutils.exists.return_value = path_exists
         self.imagecache._vhdutils.get_vhd_format.return_value = (
             constants.DISK_FORMAT_VHD)
@@ -100,7 +102,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         CONF.set_override('use_cow_images', use_cow)
 
         image_file_name = rescue_image_id or self.FAKE_IMAGE_REF
-        expected_path = os.path.join(self.FAKE_BASE_DIR,
+        expected_path = os.path.join(self.tmpdir,
                                      image_file_name)
         expected_vhd_path = "%s.%s" % (expected_path,
                                        constants.DISK_FORMAT_VHD.lower())
@@ -190,7 +192,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.imagecache._age_and_verify_cached_images(
             mock.sentinel.FAKE_CONTEXT,
             mock.sentinel.all_instances,
-            mock.sentinel.FAKE_BASE_DIR)
+            self.tmpdir)
 
         self.imagecache._update_image_timestamp.assert_called_once_with(
             mock.sentinel.FAKE_IMG1)
@@ -238,7 +240,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         mock_get_backing_files.assert_called_once_with(mock.sentinel.image)
 
     def test_remove_old_image(self):
-        fake_img_path = os.path.join(self.FAKE_BASE_DIR,
+        fake_img_path = os.path.join(self.tmpdir,
                                      self.FAKE_IMAGE_REF)
         self.imagecache._remove_old_image(fake_img_path)
         self.imagecache._pathutils.remove.assert_called_once_with(

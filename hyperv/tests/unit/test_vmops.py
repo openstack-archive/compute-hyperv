@@ -603,6 +603,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         instance_path = os.path.join(CONF.instances_path, mock_instance.name)
         mock_requires_secure_boot.return_value = True
 
+        flavor = flavor_obj.Flavor(**test_flavor.fake_flavor)
+        mock_instance.flavor = flavor
+
         if vnuma_enabled:
             mock_get_vnuma_config.return_value = (
                 mock.sentinel.mem_per_numa, mock.sentinel.cpus_per_numa)
@@ -614,16 +617,12 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mem_per_numa, cpus_per_numa = (None, None)
             dynamic_memory_ratio = CONF.hyperv.dynamic_memory_ratio
 
-        flavor = flavor_obj.Flavor(**test_flavor.fake_flavor)
-        mock_instance.flavor = flavor
-
-        self._vmops.create_instance(
-                context=self.context,
-                instance=mock_instance,
-                network_info=[fake_network_info],
-                block_device_info=block_device_info,
-                vm_gen=vm_gen,
-                image_meta=mock.sentinel.image_meta)
+        self._vmops.create_instance(context=self.context,
+                                    instance=mock_instance,
+                                    network_info=[fake_network_info],
+                                    block_device_info=block_device_info,
+                                    vm_gen=vm_gen,
+                                    image_meta=mock.sentinel.image_meta)
 
         mock_get_vnuma_config.assert_called_once_with(mock_instance,
                                                       mock.sentinel.image_meta)
@@ -810,16 +809,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.FAKE_DRIVE_ADDR, mock.sentinel.FAKE_CTRL_DISK_ADDR,
             constants.DISK)
 
-    def _check_get_image_vm_gen_except(self, image_prop):
-        image_meta = {"properties": {constants.IMAGE_PROP_VM_GEN: image_prop}}
-        self._vmops._hostutils.get_supported_vm_types.return_value = [
-            constants.IMAGE_PROP_VM_GEN_1, constants.IMAGE_PROP_VM_GEN_2]
-
-        self.assertRaises(exception.InstanceUnacceptable,
-                          self._vmops.get_image_vm_generation,
-                          mock.sentinel.instance_id,
-                          image_meta)
-
     def test_get_image_vm_generation_default(self):
         image_meta = {"properties": {}}
         self._vmops._hostutils.get_default_vm_generation.return_value = (
@@ -844,7 +833,15 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(constants.VM_GEN_2, response)
 
     def test_get_image_vm_generation_bad_prop(self):
-        self._check_get_image_vm_gen_except(mock.sentinel.FAKE_IMAGE_PROP)
+        image_meta = {"properties":
+            {constants.IMAGE_PROP_VM_GEN: mock.sentinel.bad_prop}}
+        self._vmops._hostutils.get_supported_vm_types.return_value = [
+            constants.IMAGE_PROP_VM_GEN_1, constants.IMAGE_PROP_VM_GEN_2]
+
+        self.assertRaises(exception.InstanceUnacceptable,
+                          self._vmops.get_image_vm_generation,
+                          mock.sentinel.instance_id,
+                          image_meta)
 
     def test_check_vm_image_type_exception(self):
         self._vmops._vhdutils.get_vhd_format.return_value = (

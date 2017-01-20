@@ -255,18 +255,17 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         fake_image_name = 'fake_image_name'
         if found:
             mock_exists.side_effect = [False, True]
+            expected_path = os.path.join('fake_base_dir',
+                                         'fake_image_name.vhdx')
         else:
             mock_exists.return_value = False
+            expected_path = None
         mock_get_base_vhd_dir.return_value = 'fake_base_dir'
 
         res = self._pathutils.get_image_path(fake_image_name)
 
         mock_get_base_vhd_dir.assert_called_once_with()
-        if found:
-            self.assertEqual(
-                res, os.path.join('fake_base_dir', 'fake_image_name.vhdx'))
-        else:
-            self.assertIsNone(res)
+        self.assertEqual(expected_path, res)
 
     def test_get_image_path(self):
         self._test_get_image_path()

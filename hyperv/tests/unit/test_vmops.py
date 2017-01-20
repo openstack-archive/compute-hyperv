@@ -519,8 +519,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           mock.sentinel.INFO, mock.sentinel.DEV_INFO)
 
     @mock.patch.object(vmops.VMOps, '_get_neutron_events')
-    @mock.patch.object(vmops.utils, 'is_neutron')
-    def test_wait_vif_plug_events(self, mock_is_neutron, mock_get_events):
+    def test_wait_vif_plug_events(self, mock_get_events):
         self._vmops._virtapi.wait_for_instance_event.side_effect = (
             etimeout.Timeout)
         self.flags(vif_plugging_timeout=1)
@@ -534,7 +533,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertRaises(exception.VirtualInterfaceCreateException,
                           _context_user)
 
-        mock_is_neutron.assert_called_once_with()
         mock_get_events.assert_called_once_with(mock.sentinel.network_info)
         self._vmops._virtapi.wait_for_instance_event.assert_called_once_with(
             mock.sentinel.instance, mock_get_events.return_value,
@@ -547,7 +545,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           self._vmops._neutron_failed_callback,
                           mock.sentinel.event_name, mock.sentinel.instance)
 
-    def test_get_neutron_events(self):
+    @mock.patch.object(vmops.utils, 'is_neutron')
+    def test_get_neutron_events(self, mock_is_neutron):
         network_info = [{'id': mock.sentinel.vif_id1, 'active': True},
                         {'id': mock.sentinel.vif_id2, 'active': False},
                         {'id': mock.sentinel.vif_id3}]
@@ -555,6 +554,16 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         events = self._vmops._get_neutron_events(network_info)
         self.assertEqual([('network-vif-plugged', mock.sentinel.vif_id2)],
                          events)
+        mock_is_neutron.assert_called_once_with()
+
+    @mock.patch.object(vmops.utils, 'is_neutron')
+    def test_get_neutron_events_no_timeout(self, mock_is_neutron):
+        self.flags(vif_plugging_timeout=0)
+        network_info = [{'id': mock.sentinel.vif_id1, 'active': True}]
+
+        events = self._vmops._get_neutron_events(network_info)
+        self.assertEqual([], events)
+        mock_is_neutron.assert_called_once_with()
 
     @mock.patch.object(vmops.VMOps, '_configure_secure_vm')
     @mock.patch.object(vmops.VMOps, '_requires_secure_boot')

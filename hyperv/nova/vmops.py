@@ -298,8 +298,10 @@ class VMOps(object):
 
         try:
             with self.wait_vif_plug_events(instance, network_info):
+                # waiting will occur after the instance is created.
                 self.create_instance(context, instance, network_info,
                                      block_device_info, vm_gen, image_meta)
+
             self._save_device_metadata(context, instance, block_device_info)
 
             if configdrive.required_by(instance):
@@ -319,10 +321,7 @@ class VMOps(object):
     @contextlib.contextmanager
     def wait_vif_plug_events(self, instance, network_info):
         timeout = CONF.vif_plugging_timeout
-        if utils.is_neutron():
-            events = self._get_neutron_events(network_info)
-        else:
-            events = []
+        events = self._get_neutron_events(network_info)
 
         try:
             with self._virtapi.wait_for_instance_event(
@@ -348,8 +347,11 @@ class VMOps(object):
         # already up will not undergo that transition, and for
         # anything that might be stale (cache-wise) assume it's
         # already up so we don't block on it.
-        return [('network-vif-plugged', vif['id'])
-                for vif in network_info if vif.get('active') is False]
+        if utils.is_neutron() and CONF.vif_plugging_timeout:
+            return [('network-vif-plugged', vif['id'])
+                    for vif in network_info if vif.get('active') is False]
+        else:
+            return []
 
     def create_instance(self, context, instance, network_info,
                         block_device_info, vm_gen, image_meta):

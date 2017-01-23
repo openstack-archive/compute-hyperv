@@ -366,49 +366,43 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
         expected = [original[2], original[0], original[1]]
 
         self._bdman._sort_by_boot_order(original)
-
         self.assertEqual(expected, original)
-
-    def _test_get_boot_order(self, mock_get_boot_order, vm_gen, bdi):
-        self._bdman.get_boot_order(vm_gen, bdi)
-        mock_get_boot_order.assert_called_once_with(bdi)
 
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        '_get_boot_order_gen1')
     def test_get_boot_order_gen1_vm(self, mock_get_boot_order):
-        self._test_get_boot_order(mock_get_boot_order, constants.VM_GEN_1,
-                                  mock.sentinel.BLOCK_DEV_INFO)
+        self._bdman.get_boot_order(constants.VM_GEN_1,
+                                   mock.sentinel.BLOCK_DEV_INFO)
+        mock_get_boot_order.assert_called_once_with(
+            mock.sentinel.BLOCK_DEV_INFO)
 
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        '_get_boot_order_gen2')
     def test_get_boot_order_gen2_vm(self, mock_get_boot_order):
-        self._test_get_boot_order(mock_get_boot_order, constants.VM_GEN_2,
-                                  mock.sentinel.BLOCK_DEV_INFO)
-
-    def _test_get_boot_order_gen1(self, bdi, expected):
-        res = self._bdman._get_boot_order_gen1(bdi)
-
-        self.assertEqual(expected, res)
+        self._bdman.get_boot_order(constants.VM_GEN_2,
+                                   mock.sentinel.BLOCK_DEV_INFO)
+        mock_get_boot_order.assert_called_once_with(
+            mock.sentinel.BLOCK_DEV_INFO)
 
     def test_get_boot_order_gen1_iso(self):
         fake_bdi = {'root_disk': {'type': 'iso'}}
+        expected = [os_win_const.BOOT_DEVICE_CDROM,
+                    os_win_const.BOOT_DEVICE_HARDDISK,
+                    os_win_const.BOOT_DEVICE_NETWORK,
+                    os_win_const.BOOT_DEVICE_FLOPPY]
 
-        expected = [constants.BOOT_DEVICE_CDROM,
-                    constants.BOOT_DEVICE_HARDDISK,
-                    constants.BOOT_DEVICE_NETWORK,
-                    constants.BOOT_DEVICE_FLOPPY]
-
-        self._test_get_boot_order_gen1(fake_bdi, expected)
+        res = self._bdman._get_boot_order_gen1(fake_bdi)
+        self.assertEqual(expected, res)
 
     def test_get_boot_order_gen1_vhd(self):
         fake_bdi = {'root_disk': {'type': 'vhd'}}
+        expected = [os_win_const.BOOT_DEVICE_HARDDISK,
+                    os_win_const.BOOT_DEVICE_CDROM,
+                    os_win_const.BOOT_DEVICE_NETWORK,
+                    os_win_const.BOOT_DEVICE_FLOPPY]
 
-        expected = [constants.BOOT_DEVICE_HARDDISK,
-                    constants.BOOT_DEVICE_CDROM,
-                    constants.BOOT_DEVICE_NETWORK,
-                    constants.BOOT_DEVICE_FLOPPY]
-
-        self._test_get_boot_order_gen1(fake_bdi, expected)
+        res = self._bdman._get_boot_order_gen1(fake_bdi)
+        self.assertEqual(expected, res)
 
     def test_get_boot_order_gen2(self):
         fake_root_disk = {'boot_index': 0,
@@ -424,7 +418,7 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
                                    fake_eph2],
                     'block_device_mapping': [fake_bdm]}
 
-        self._bdman._volops.get_disk_resource_path = (
+        self._bdman._volops.get_mounted_disk_path_from_volume = (
             mock.MagicMock(return_value=fake_bdm['connection_info']))
 
         expected_res = [mock.sentinel.FAKE_ROOT_PATH,

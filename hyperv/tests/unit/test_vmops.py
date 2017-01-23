@@ -365,18 +365,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_create_dynamic_vhd.assert_called_once_with('fake_eph_path',
                                                         10 * units.Gi)
 
-    def test_set_boot_order(self):
-        mock_get_boot_order = self._vmops._block_dev_man.get_boot_order
-
-        self._vmops.set_boot_order(mock.sentinel.FAKE_VM_GEN,
-                                   mock.sentinel.FAKE_BDI,
-                                   mock.sentinel.FAKE_INSTANCE_NAME)
-
-        mock_get_boot_order.assert_called_once_with(
-            mock.sentinel.FAKE_VM_GEN, mock.sentinel.FAKE_BDI)
-        self._vmops._vmutils.set_boot_order.assert_called_once_with(
-            mock.sentinel.FAKE_INSTANCE_NAME, mock_get_boot_order.return_value)
-
     @mock.patch.object(vmops.objects, 'PCIDeviceBus')
     @mock.patch.object(vmops.objects, 'NetworkInterfaceMetadata')
     @mock.patch.object(vmops.objects.VirtualInterfaceList,
@@ -425,8 +413,20 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(mock_InstanceDeviceMetadata.return_value,
                          mock_instance.device_metadata)
 
+    def test_set_boot_order(self):
+        self._vmops.set_boot_order(mock.sentinel.instance_name,
+                                   mock.sentinel.vm_gen,
+                                   mock.sentinel.bdi)
+
+        mock_get_boot_order = self._vmops._block_dev_man.get_boot_order
+        mock_get_boot_order.assert_called_once_with(
+            mock.sentinel.vm_gen, mock.sentinel.bdi)
+        self._vmops._vmutils.set_boot_order.assert_called_once_with(
+            mock.sentinel.instance_name, mock_get_boot_order.return_value)
+
     @mock.patch('hyperv.nova.vmops.VMOps.destroy')
     @mock.patch('hyperv.nova.vmops.VMOps.power_on')
+    @mock.patch.object(vmops.VMOps, 'set_boot_order')
     @mock.patch('hyperv.nova.vmops.VMOps.attach_config_drive')
     @mock.patch('hyperv.nova.vmops.VMOps._create_config_drive')
     @mock.patch('nova.virt.configdrive.required_by')
@@ -441,8 +441,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('hyperv.nova.vif.get_vif_driver')
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        'validate_and_update_bdi')
-    @mock.patch.object(vmops.VMOps, 'set_boot_order')
-    def _test_spawn(self, mock_set_boot_order, mock_validate_and_update_bdi,
+    def _test_spawn(self, mock_validate_and_update_bdi,
                     mock_get_vif_driver,
                     mock_get_neutron_events,
                     mock_delete_disk_files,
@@ -451,6 +450,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     mock_create_instance, mock_save_device_metadata,
                     mock_configdrive_required,
                     mock_create_config_drive, mock_attach_config_drive,
+                    mock_set_boot_order,
                     mock_power_on, mock_destroy, exists,
                     configdrive_required, fail,
                     fake_vm_gen=constants.VM_GEN_2):
@@ -509,6 +509,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     mock.sentinel.INFO)
                 mock_attach_config_drive.assert_called_once_with(
                     mock_instance, fake_config_drive_path, fake_vm_gen)
+            mock_set_boot_order.assert_called_once_with(
+                mock_instance.name, fake_vm_gen, block_device_info)
             mock_power_on.assert_called_once_with(
                 mock_instance, network_info=mock.sentinel.INFO)
 

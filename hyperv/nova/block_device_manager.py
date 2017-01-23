@@ -237,24 +237,31 @@ class BlockDeviceInfoManager(object):
 
     def _get_boot_order_gen1(self, block_device_info):
         if block_device_info['root_disk']['type'] == 'iso':
-            return [constants.BOOT_DEVICE_CDROM,
-                    constants.BOOT_DEVICE_HARDDISK,
-                    constants.BOOT_DEVICE_NETWORK,
-                    constants.BOOT_DEVICE_FLOPPY]
+            return [os_win_const.BOOT_DEVICE_CDROM,
+                    os_win_const.BOOT_DEVICE_HARDDISK,
+                    os_win_const.BOOT_DEVICE_NETWORK,
+                    os_win_const.BOOT_DEVICE_FLOPPY]
         else:
-            return [constants.BOOT_DEVICE_HARDDISK,
-                    constants.BOOT_DEVICE_CDROM,
-                    constants.BOOT_DEVICE_NETWORK,
-                    constants.BOOT_DEVICE_FLOPPY]
+            return [os_win_const.BOOT_DEVICE_HARDDISK,
+                    os_win_const.BOOT_DEVICE_CDROM,
+                    os_win_const.BOOT_DEVICE_NETWORK,
+                    os_win_const.BOOT_DEVICE_FLOPPY]
 
     def _get_boot_order_gen2(self, block_device_info):
-        boot_order = [block_device_info['root_disk']]
-        boot_order += driver.block_device_info_get_ephemerals(
+        devices = [block_device_info['root_disk']]
+        devices += driver.block_device_info_get_ephemerals(
             block_device_info)
-        boot_order += driver.block_device_info_get_mapping(block_device_info)
+        devices += driver.block_device_info_get_mapping(block_device_info)
 
-        self._sort_by_boot_order(boot_order)
+        self._sort_by_boot_order(devices)
 
-        return [self._volops.get_disk_resource_path(
-                boot_dev['connection_info']) if boot_dev.get('connection_info')
-                else boot_dev['path'] for boot_dev in boot_order]
+        boot_order = []
+        for dev in devices:
+            if dev.get('connection_info'):
+                dev_path = self._volops.get_mounted_disk_path_from_volume(
+                    dev['connection_info'])
+                boot_order.append(dev_path)
+            else:
+                boot_order.append(dev['path'])
+
+        return boot_order

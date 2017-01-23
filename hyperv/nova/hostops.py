@@ -122,18 +122,6 @@ class HostOps(object):
         LOG.debug('Windows version: %s ', version)
         return version
 
-    def _get_host_numa_topology(self):
-        numa_nodes = self._hostutils.get_numa_nodes()
-        cells = []
-        for numa_node in numa_nodes:
-            numa_node['pinned_cpus'] = set([])
-            numa_node['mempages'] = []
-            numa_node['siblings'] = []
-            cell = objects.NUMACell(**numa_node)
-            cells.append(cell)
-
-        return objects.NUMATopology(cells=cells)
-
     def _get_remotefx_gpu_info(self):
         total_video_ram = 0
         available_video_ram = 0
@@ -149,6 +137,18 @@ class HostOps(object):
         return {'total_video_ram': total_video_ram,
                 'used_video_ram': total_video_ram - available_video_ram,
                 'gpu_info': jsonutils.dumps(gpus)}
+
+    def _get_host_numa_topology(self):
+        numa_nodes = self._hostutils.get_numa_nodes()
+        cells = []
+        for numa_node in numa_nodes:
+            # Hyper-V does not support CPU pinning / mempages.
+            # initializing the rest of the fields.
+            numa_node.update(pinned_cpus=set(), mempages=[], siblings=[])
+            cell = objects.NUMACell(**numa_node)
+            cells.append(cell)
+
+        return objects.NUMATopology(cells=cells)
 
     def get_available_resource(self):
         """Retrieve resource info.
@@ -192,16 +192,11 @@ class HostOps(object):
                     (obj_fields.Architecture.X86_64,
                      obj_fields.HVType.HYPERV,
                      obj_fields.VMMode.HVM)],
+               'numa_topology': self._get_host_numa_topology()._to_json(),
                }
 
         gpu_info = self._get_remotefx_gpu_info()
         dic.update(gpu_info)
-
-        numa_topology = self._get_host_numa_topology()
-        if numa_topology:
-            dic['numa_topology'] = numa_topology._to_json()
-        else:
-            dic['numa_topology'] = None
 
         return dic
 

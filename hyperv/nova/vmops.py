@@ -367,6 +367,9 @@ class VMOps(object):
             self._get_instance_vnuma_config(instance, image_meta))
 
         if memory_per_numa_node:
+            LOG.debug("Instance requires vNUMA topology. Host's NUMA spanning "
+                      "has to be disabled in order for the instance to "
+                      "benefit from it.", instance=instance)
             if CONF.hyperv.dynamic_memory_ratio > 1.0:
                 LOG.warning(_LW(
                     "Instance vNUMA topology requested, but dynamic memory "
@@ -423,6 +426,48 @@ class VMOps(object):
 
         self._configure_secure_vm(context, instance, image_meta,
                                   secure_boot_enabled)
+
+    def _get_instance_vnuma_config(self, instance, image_meta):
+        """Returns the appropriate NUMA configuration for Hyper-V instances,
+        given the desired instance NUMA topology.
+
+        :param instance: instance containing the flavor and it's extra_specs,
+                         where the NUMA topology is defined.
+        :param image_meta: image's metadata, containing properties related to
+                           the instance's NUMA topology.
+        :returns: memory amount and number of vCPUs per NUMA node or
+                  (None, None), if instance NUMA topology was not requested.
+        :raises exception.InstanceUnacceptable:
+            If the given instance NUMA topology is not possible on Hyper-V.
+        """
+        image_meta = objects.ImageMeta.from_dict(image_meta)
+        instance_topology = hardware.numa_get_constraints(instance.flavor,
+                                                          image_meta)
+        if not instance_topology:
+            # instance NUMA topology was not requested.
+            return None, None
+
+        memory_per_numa_node = instance_topology.cells[0].memory
+        cpus_per_numa_node = len(instance_topology.cells[0].cpuset)
+
+        # validate that the requested NUMA topology is not asymetric.
+        # e.g.: it should be like: (X cpus, X cpus, Y cpus), where X == Y.
+        # same with memory.
+        for cell in instance_topology.cells:
+            if len(cell.cpuset) != cpus_per_numa_node:
+                reason = _("Hyper-V does not support NUMA topologies with "
+                           "uneven number of processors. (%(a)s != %(b)s)") % {
+                    'a': len(cell.cpuset), 'b': cpus_per_numa_node}
+                raise exception.InstanceUnacceptable(reason=reason,
+                                                     instance_id=instance.uuid)
+            if cell.memory != memory_per_numa_node:
+                reason = _("Hyper-V does not support NUMA topologies with "
+                           "uneven amounts of memory. (%(a)s != %(b)s)") % {
+                    'a': cell.memory, 'b': memory_per_numa_node}
+                raise exception.InstanceUnacceptable(reason=reason,
+                                                     instance_id=instance.uuid)
+
+        return memory_per_numa_node, cpus_per_numa_node
 
     def _configure_remotefx(self, instance, vm_gen):
         extra_specs = instance.flavor.extra_specs
@@ -620,48 +665,6 @@ class VMOps(object):
             configdrive_path = configdrive_path_iso
 
         return configdrive_path
-
-    def _get_instance_vnuma_config(self, instance, image_meta):
-        """Returns the appropriate NUMA configuration for Hyper-V instances,
-        given the desired instance NUMA topology.
-
-        :param instance: instance containing the flavor and it's extra_specs,
-                         where the NUMA topology is defined.
-        :param image_meta: image's metadata, containing properties related to
-                           the instance's NUMA topology.
-        :returns: memory amount and number of vCPUs per NUMA node or
-                  (None, None), if instance NUMA topology was not requested.
-        :raises exception.InstanceUnacceptable:
-            If the given instance NUMA topology is not possible on Hyper-V.
-        """
-        image_meta = objects.ImageMeta.from_dict(image_meta)
-
-        instance_topology = hardware.numa_get_constraints(instance.flavor,
-                                                          image_meta)
-        if not instance_topology:
-            # instance NUMA topology was not requested.
-            return None, None
-
-        memory_per_numa_node = instance_topology.cells[0].memory
-        cpus_per_numa_node = len(instance_topology.cells[0].cpuset)
-        cpus_pinned = instance_topology.cells[0].cpu_pinning is not None
-
-        if cpus_pinned:
-            raise exception.InstanceUnacceptable(
-                reason="Hyper-V cannot guarantee the CPU pinning.",
-                instance_id=instance.uuid)
-
-        # validate that the requested NUMA topology is not asymetric.
-        # e.g.: it should be like: (X cpus, X cpus, Y cpus), where X == Y.
-        # same with memory.
-        for cell in instance_topology.cells:
-            if (len(cell.cpuset) != cpus_per_numa_node or
-                    cell.memory != memory_per_numa_node):
-                raise exception.InstanceUnacceptable(
-                    reason="Hyper-V cannot guarantee the given instance NUMA "
-                           "topology.", instance_id=instance.uuid)
-
-        return memory_per_numa_node, cpus_per_numa_node
 
     def attach_config_drive(self, instance, configdrive_path, vm_gen):
         configdrive_ext = configdrive_path[(configdrive_path.rfind('.') + 1):]

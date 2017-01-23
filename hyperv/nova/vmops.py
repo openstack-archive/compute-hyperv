@@ -424,9 +424,10 @@ class VMOps(object):
         memory_per_numa_node, cpus_per_numa_node = (
             self._get_instance_vnuma_config(instance, image_meta))
         vnuma_enabled = bool(memory_per_numa_node)
+        nested_virt_enabled = self._requires_nested_virt(instance, image_meta)
 
         dynamic_memory_ratio = self._get_instance_dynamic_memory_ratio(
-            instance, vnuma_enabled)
+            instance, vnuma_enabled, nested_virt_enabled)
 
         if (instance.pci_requests.requests and not
                 CONF.hyperv.instance_automatic_shutdown):
@@ -456,6 +457,8 @@ class VMOps(object):
 
         self._set_instance_disk_qos_specs(instance, is_resize)
         self._attach_pci_devices(instance, is_resize)
+        self._vmutils.set_nested_virtualization(instance.name,
+                                                state=nested_virt_enabled)
 
     def _attach_pci_devices(self, instance, is_resize):
         if is_resize:
@@ -513,7 +516,8 @@ class VMOps(object):
 
         return memory_per_numa_node, cpus_per_numa_node
 
-    def _get_instance_dynamic_memory_ratio(self, instance, vnuma_enabled):
+    def _get_instance_dynamic_memory_ratio(self, instance, vnuma_enabled,
+                                           nested_virt_enabled):
         dynamic_memory_ratio = CONF.hyperv.dynamic_memory_ratio
         if vnuma_enabled:
             LOG.debug("Instance requires vNUMA topology. Host's NUMA spanning "
@@ -525,6 +529,17 @@ class VMOps(object):
                     "ratio is higher than 1.0 in nova.conf. Ignoring dynamic "
                     "memory ratio option."), instance=instance)
             dynamic_memory_ratio = 1.0
+
+        if nested_virt_enabled and dynamic_memory_ratio != 1:
+            # NOTE(claudiub): instances requiring nested virtualization cannot
+            # have dynamic memory. Set dynamic memory ratio to 1 for the
+            # instance. (disabled)
+            LOG.warning(_LW("Instance %s requires nested virtualization, but "
+                            "host is configured with dynamic memory "
+                            "allocation. Creating instance without dynamic "
+                            "memory allocation."), instance.uuid)
+            dynamic_memory_ratio = 1.0
+
         return dynamic_memory_ratio
 
     def configure_remotefx(self, instance, vm_gen, is_resize=False):
@@ -686,6 +701,23 @@ class VMOps(object):
                 raise exception.InstanceUnacceptable(instance_id=instance.uuid,
                                                      reason=reason)
         return requires_sb
+
+    def _requires_nested_virt(self, instance, image_meta):
+        flavor_cpu_features = instance.flavor.extra_specs.get(
+            'hw:cpu_features', '')
+        flavor_cpu_features = flavor_cpu_features.lower().split(',')
+        image_cpu_features = image_meta['properties'].get('hw_cpu_features',
+                                                          '')
+        image_cpu_features = image_cpu_features.lower().split(',')
+
+        if 'vmx' in flavor_cpu_features or 'vmx' in image_cpu_features:
+            if self._hostutils.supports_nested_virtualization():
+                return True
+
+            reason = _('Host does not support nested virtualization.')
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
+        return False
 
     def _create_config_drive(self, context, instance, injected_files,
                              admin_password, network_info, rescue=False):

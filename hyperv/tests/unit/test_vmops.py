@@ -657,8 +657,10 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(vmops.VMOps, '_attach_pci_devices')
     @mock.patch.object(vmops.VMOps, '_set_instance_disk_qos_specs')
     @mock.patch.object(vmops.VMOps, '_get_instance_dynamic_memory_ratio')
+    @mock.patch.object(vmops.VMOps, '_requires_nested_virt')
     @mock.patch.object(vmops.VMOps, '_get_instance_vnuma_config')
     def _check_update_vm_resources(self, mock_get_vnuma_config,
+                                   mock_requires_nested_virt,
                                    mock_get_dynamic_memory_ratio,
                                    mock_set_qos_specs,
                                    mock_attach_pci_devices,
@@ -687,8 +689,10 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         mock_get_vnuma_config.assert_called_once_with(mock_instance,
                                                       mock.sentinel.image_meta)
+        mock_requires_nested_virt.assert_called_once_with(
+            mock_instance, mock.sentinel.image_meta)
         mock_get_dynamic_memory_ratio.assert_called_once_with(
-            mock_instance, True)
+            mock_instance, True, mock_requires_nested_virt.return_value)
         self._vmops._vmutils.update_vm.assert_called_once_with(
             mock_instance.name, mock_instance.flavor.memory_mb,
             mock.sentinel.mem_per_numa_node, mock_instance.flavor.vcpus,
@@ -701,6 +705,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                                    mock.sentinel.is_resize)
         mock_attach_pci_devices.assert_called_once_with(
             mock_instance, mock.sentinel.is_resize)
+        self._vmops._vmutils.set_nested_virtualization(
+            mock_instance.name, state=mock_requires_nested_virt.return_value)
 
     def test_update_vm_resources(self):
         self._check_update_vm_resources()
@@ -783,16 +789,21 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_get_instance_vnuma_config_no_topology(self):
         self._check_get_instance_vnuma_config()
 
-    @ddt.data(True, False)
-    def test_get_instance_dynamic_memory_ratio(self, vnuma_enabled):
+    @ddt.data((True, False),
+              (False, True),
+              (False, False))
+    @ddt.unpack
+    def test_get_instance_dynamic_memory_ratio(self, vnuma_enabled,
+                                               nested_virt_enabled):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
         expected_dyn_memory_ratio = 2.0
         self.flags(dynamic_memory_ratio=expected_dyn_memory_ratio,
                    group='hyperv')
-        if vnuma_enabled:
+        if vnuma_enabled or nested_virt_enabled:
             expected_dyn_memory_ratio = 1.0
 
         response = self._vmops._get_instance_dynamic_memory_ratio(
-            mock.sentinel.instance, vnuma_enabled)
+            mock_instance, vnuma_enabled, nested_virt_enabled)
         self.assertEqual(expected_dyn_memory_ratio, response)
 
     @mock.patch.object(vmops.volumeops.VolumeOps, 'attach_volume')
@@ -991,6 +1002,36 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     def test_requires_secure_boot_generation_1(self):
         self._check_requires_secure_boot(vm_gen=constants.VM_GEN_1)
+
+    def _check_requires_nested_virt(self, extra_spec='', img_prop=None,
+                                    expected=True):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_instance.flavor.extra_specs['hw:cpu_features'] = extra_spec
+        image_meta = {"properties": {'hw_cpu_features': img_prop or ''}}
+
+        requires_nested = self._vmops._requires_nested_virt(mock_instance,
+                                                            image_meta)
+        self.assertEqual(expected, requires_nested)
+
+    def test_requires_nested_virt_flavor(self):
+        self._check_requires_nested_virt(extra_spec='vmx')
+
+    def test_requires_nested_virt_image(self):
+        self._check_requires_nested_virt(img_prop='vmx')
+
+    def test_requires_nested_virt_False(self):
+        self._check_requires_nested_virt(expected=False)
+
+    def test_requires_nested_virt_unsupported(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_instance.flavor.extra_specs['hw:cpu_features'] = 'vmx'
+        mock_image_meta = mock.MagicMock()
+        self._vmops._hostutils.supports_nested_virtualization.return_value = (
+            False)
+
+        self.assertRaises(exception.InstanceUnacceptable,
+                          self._vmops._requires_nested_virt,
+                          mock_instance, mock_image_meta)
 
     @mock.patch('nova.api.metadata.base.InstanceMetadata')
     @mock.patch('nova.virt.configdrive.ConfigDriveBuilder')

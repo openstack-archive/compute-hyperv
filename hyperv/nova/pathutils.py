@@ -43,7 +43,6 @@ class PathUtils(pathutils.PathUtils):
 
     def __init__(self):
         super(PathUtils, self).__init__()
-        self._smbutils = utilsfactory.get_smbutils()
         self._vmutils = utilsfactory.get_vmutils()
 
     def get_instances_dir(self, remote_server=None):

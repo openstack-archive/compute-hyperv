@@ -40,9 +40,6 @@ class VolumeOps(object):
     """Management class for Volume-related tasks
     """
 
-    _SUPPORTED_QOS_SPECS = ['total_bytes_sec', 'min_bytes_sec',
-                            'total_iops_sec', 'min_iops_sec']
-
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
         self._default_root_device = 'vda'

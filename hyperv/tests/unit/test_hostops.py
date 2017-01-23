@@ -184,9 +184,6 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
         mock_gpu_info = self._get_mock_gpu_info()
         mock_get_gpu_info.return_value = mock_gpu_info
 
-        self._hostops._hostutils.get_supported_vm_types.return_value = [
-            constants.IMAGE_PROP_VM_GEN_1]
-
         response = self._hostops.get_available_resource()
 
         mock_get_memory_info.assert_called_once_with()

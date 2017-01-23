@@ -17,21 +17,19 @@
 import abc
 
 import nova.conf
-from nova.network import model as network_model
+from nova import exception
+from nova.i18n import _
+from nova.network import model
+from nova.network import os_vif_util
+import os_vif
 from os_win import utilsfactory
-
-from hyperv.nova import ovsutils
 
 CONF = nova.conf.CONF
 
 
-class HyperVBaseVIFDriver(object):
+class HyperVBaseVIFPlugin(object):
     @abc.abstractmethod
     def plug(self, instance, vif):
-        pass
-
-    @abc.abstractmethod
-    def post_start(self, instance, vif):
         pass
 
     @abc.abstractmethod
@@ -39,8 +37,8 @@ class HyperVBaseVIFDriver(object):
         pass
 
 
-class HyperVNeutronVIFDriver(HyperVBaseVIFDriver):
-    """Neutron VIF driver."""
+class HyperVNeutronVIFPlugin(HyperVBaseVIFPlugin):
+    """Neutron VIF plugin."""
 
     def plug(self, instance, vif):
         # Neutron takes care of plugging the port
@@ -51,8 +49,8 @@ class HyperVNeutronVIFDriver(HyperVBaseVIFDriver):
         pass
 
 
-class HyperVNovaNetworkVIFDriver(HyperVBaseVIFDriver):
-    """Nova network VIF driver."""
+class HyperVNovaNetworkVIFPlugin(HyperVBaseVIFPlugin):
+    """Nova network VIF plugin."""
 
     def __init__(self):
         self._netutils = utilsfactory.get_networkutils()
@@ -66,42 +64,40 @@ class HyperVNovaNetworkVIFDriver(HyperVBaseVIFDriver):
         pass
 
 
-class HyperVOVSVIFDriver(HyperVNovaNetworkVIFDriver):
+class HyperVVIFDriver(object):
+    def __init__(self):
+        self._netutils = utilsfactory.get_networkutils()
+        if nova.network.is_neutron():
+            self._vif_plugin = HyperVNeutronVIFPlugin()
+        else:
+            self._vif_plugin = HyperVNovaNetworkVIFPlugin()
 
-    def _get_bridge_name(self, vif):
-        return vif['network']['bridge']
+    def plug(self, instance, vif):
+        vif_type = vif['type']
+        if vif_type == model.VIF_TYPE_HYPERV:
+            self._vif_plugin.plug(instance, vif)
+        elif vif_type == model.VIF_TYPE_OVS:
+            vif = os_vif_util.nova_to_osvif_vif(vif)
+            instance = os_vif_util.nova_to_osvif_instance(instance)
 
-    def _get_ovs_interfaceid(self, vif):
-        return vif.get('ovs_interfaceid') or vif['id']
-
-    def post_start(self, instance, vif):
-        nic_name = vif['id']
-        bridge = self._get_bridge_name(vif)
-        if ovsutils.check_bridge_has_dev(bridge, nic_name,
-                                          run_as_root=False):
-            return
-
-        ovsutils.create_ovs_vif_port(
-            self._get_bridge_name(vif),
-            nic_name,
-            self._get_ovs_interfaceid(vif),
-            vif['address'],
-            instance.uuid)
+            # NOTE(claudiub): the vNIC has to be connected to a vSwitch
+            # before the ovs port is created.
+            self._netutils.connect_vnic_to_vswitch(CONF.hyperv.vswitch_name,
+                                                   vif.id)
+            os_vif.plug(vif, instance)
+        else:
+            reason = _("Failed to plug virtual interface: "
+                       "unexpected vif_type=%s") % vif_type
+            raise exception.VirtualInterfacePlugException(reason)
 
     def unplug(self, instance, vif):
-        ovsutils.delete_ovs_vif_port(
-            self._get_bridge_name(vif),
-            vif['id'])
-
-
-def get_vif_driver(vif_type):
-    # results should be cached. Creating a global driver map
-    # with instantiated classes will cause tests to fail on
-    # non windows platforms
-    if vif_type == network_model.VIF_TYPE_OVS:
-        return HyperVOVSVIFDriver()
-
-    if nova.network.is_neutron():
-        return HyperVNeutronVIFDriver()
-    else:
-        return HyperVNovaNetworkVIFDriver()
+        vif_type = vif['type']
+        if vif_type == model.VIF_TYPE_HYPERV:
+            self._vif_plugin.unplug(instance, vif)
+        elif vif_type == model.VIF_TYPE_OVS:
+            vif = os_vif_util.nova_to_osvif_vif(vif)
+            instance = os_vif_util.nova_to_osvif_instance(instance)
+            os_vif.unplug(vif, instance)
+        else:
+            reason = _("unexpected vif_type=%s") % vif_type
+            raise exception.VirtualInterfaceUnplugException(reason=reason)

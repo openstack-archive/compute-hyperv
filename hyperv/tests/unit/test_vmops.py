@@ -74,23 +74,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._pdk = mock.MagicMock()
         self._vmops._serial_console_ops = mock.MagicMock()
         self._vmops._block_dev_man = mock.MagicMock()
-
-    def test_get_vif_driver_cached(self):
-        self._vmops._vif_driver_cache = mock.MagicMock()
-        self._vmops._vif_driver_cache.get.return_value = mock.sentinel.VIF_DRV
-
-        self._vmops._get_vif_driver(mock.sentinel.VIF_TYPE)
-        self._vmops._vif_driver_cache.get.assert_called_with(
-            mock.sentinel.VIF_TYPE)
-
-    @mock.patch('hyperv.nova.vif.get_vif_driver')
-    def test_get_vif_driver_not_cached(self, mock_get_vif_driver):
-        mock_get_vif_driver.return_value = mock.sentinel.VIF_DRV
-
-        self._vmops._get_vif_driver(mock.sentinel.VIF_TYPE)
-        mock_get_vif_driver.assert_called_once_with(mock.sentinel.VIF_TYPE)
-        self.assertEqual(mock.sentinel.VIF_DRV,
-                self._vmops._vif_driver_cache[mock.sentinel.VIF_TYPE])
+        self._vmops._vif_driver = mock.MagicMock()
 
     def test_list_instances(self):
         mock_instance = mock.MagicMock()
@@ -438,11 +422,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('hyperv.nova.vmops.VMOps._delete_disk_files')
     @mock.patch('hyperv.nova.vmops.VMOps._get_neutron_events',
                 return_value=[])
-    @mock.patch('hyperv.nova.vif.get_vif_driver')
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        'validate_and_update_bdi')
     def _test_spawn(self, mock_validate_and_update_bdi,
-                    mock_get_vif_driver,
                     mock_get_neutron_events,
                     mock_delete_disk_files,
                     mock_create_root_device,
@@ -575,7 +557,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                          events)
 
     @mock.patch.object(vmops.VMOps, '_configure_secure_vm')
-    @mock.patch('hyperv.nova.vif.get_vif_driver')
     @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
     @mock.patch.object(vmops.VMOps, '_requires_certificate')
     @mock.patch.object(vmops.VMOps, '_get_instance_vnuma_config')
@@ -596,13 +577,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               mock_get_vnuma_config,
                               mock_requires_certificate,
                               mock_requires_secure_boot,
-                              mock_get_vif_driver,
                               mock_configure_secure_vm,
                               enable_instance_metrics,
                               vm_gen=constants.VM_GEN_1,
                               vnuma_enabled=False,
                               requires_sec_boot=True):
-        mock_vif_driver = mock_get_vif_driver()
         self.flags(dynamic_memory_ratio=2.0, group='hyperv')
         self.flags(enable_instance_metrics_collection=enable_instance_metrics,
                    group='hyperv')
@@ -664,8 +643,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         self._vmops._vmutils.create_nic.assert_called_once_with(
             mock_instance.name, mock.sentinel.ID, mock.sentinel.ADDRESS)
-        mock_vif_driver.plug.assert_called_once_with(mock_instance,
-                                                     fake_network_info)
         mock_enable = self._vmops._metricsutils.enable_vm_metrics_collection
         if enable_instance_metrics:
             mock_enable.assert_called_once_with(mock_instance.name)
@@ -1120,20 +1097,20 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vmutils.vm_exists.return_value = True
 
         self._vmops.destroy(instance=mock_instance,
-                            network_info=mock.sentinel.fake_network_info,
-                            block_device_info=mock.sentinel.FAKE_BD_INFO)
+                            block_device_info=mock.sentinel.FAKE_BD_INFO,
+                            network_info=mock.sentinel.fake_network_info)
 
         self._vmops._vmutils.vm_exists.assert_called_with(
             mock_instance.name)
         mock_power_off.assert_called_once_with(mock_instance)
+        mock_unplug_vifs.assert_called_once_with(
+            mock_instance, mock.sentinel.fake_network_info)
         self._vmops._vmutils.destroy_vm.assert_called_once_with(
             mock_instance.name)
         mock_disconnect_volumes.assert_called_once_with(
             mock.sentinel.FAKE_BD_INFO)
         mock_delete_disk_files.assert_called_once_with(
             mock_instance.name)
-        mock_unplug_vifs.assert_called_once_with(
-            mock_instance, mock.sentinel.fake_network_info)
 
     def test_destroy_inexistent_instance(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -1337,13 +1314,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_set_vm_state.assert_called_once_with(
             mock_instance, os_win_const.HYPERV_VM_STATE_ENABLED)
 
-    @mock.patch.object(vmops.VMOps, 'post_start_vifs')
-    def test_power_on_with_network_info(self, mock_post_start_vifs):
+    @mock.patch.object(vmops.VMOps, 'plug_vifs')
+    def test_power_on_with_network_info(self, mock_plug_vifs):
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
         self._vmops.power_on(mock_instance,
                              network_info=mock.sentinel.fake_network_info)
-        mock_post_start_vifs.assert_called_once_with(
+        mock_plug_vifs.assert_called_once_with(
             mock_instance, mock.sentinel.fake_network_info)
 
     def _test_set_vm_state(self, state):
@@ -1447,6 +1424,34 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                             mock.call(mock.sentinel.FAKE_DVD_PATH2,
                                       mock.sentinel.FAKE_DEST_PATH))
 
+    def test_plug_vifs(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        fake_vif1 = {'id': mock.sentinel.ID1,
+                     'type': mock.sentinel.vif_type1}
+        fake_vif2 = {'id': mock.sentinel.ID2,
+                     'type': mock.sentinel.vif_type2}
+        mock_network_info = [fake_vif1, fake_vif2]
+        calls = [mock.call(mock_instance, fake_vif1),
+                 mock.call(mock_instance, fake_vif2)]
+
+        self._vmops.plug_vifs(mock_instance,
+                              network_info=mock_network_info)
+        self._vmops._vif_driver.plug.assert_has_calls(calls)
+
+    def test_unplug_vifs(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        fake_vif1 = {'id': mock.sentinel.ID1,
+                     'type': mock.sentinel.vif_type1}
+        fake_vif2 = {'id': mock.sentinel.ID2,
+                     'type': mock.sentinel.vif_type2}
+        mock_network_info = [fake_vif1, fake_vif2]
+        calls = [mock.call(mock_instance, fake_vif1),
+                 mock.call(mock_instance, fake_vif2)]
+
+        self._vmops.unplug_vifs(mock_instance,
+                                network_info=mock_network_info)
+        self._vmops._vif_driver.unplug.assert_has_calls(calls)
+
     def _setup_remotefx_mocks(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_instance.flavor.extra_specs = {
@@ -1547,10 +1552,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._test_check_hotplug_available(
             expected_result=False, windows_version=self._WIN_VERSION_6_3)
 
-    @mock.patch.object(vmops.VMOps, '_get_vif_driver')
     @mock.patch.object(vmops.VMOps, '_check_hotplug_available')
-    def test_attach_interface(self, mock_check_hotplug_available,
-                              mock_get_vif_driver):
+    def test_attach_interface(self, mock_check_hotplug_available):
         mock_check_hotplug_available.return_value = True
         fake_vm = fake_instance.fake_instance_obj(self.context)
         fake_vif = test_virtual_interface.fake_vif
@@ -1558,9 +1561,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops.attach_interface(fake_vm, fake_vif)
 
         mock_check_hotplug_available.assert_called_once_with(fake_vm)
-        mock_get_vif_driver.return_value.plug.assert_called_once_with(
-            fake_vm, fake_vif)
-        mock_get_vif_driver.return_value.post_start.assert_called_once_with(
+        self._vmops._vif_driver.plug.assert_called_once_with(
             fake_vm, fake_vif)
         self._vmops._vmutils.create_nic.assert_called_once_with(
             fake_vm.name, fake_vif['id'], fake_vif['address'])
@@ -1572,10 +1573,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           self._vmops.attach_interface,
                           mock.MagicMock(), mock.sentinel.fake_vif)
 
-    @mock.patch.object(vmops.VMOps, '_get_vif_driver')
     @mock.patch.object(vmops.VMOps, '_check_hotplug_available')
-    def test_detach_interface(self, mock_check_hotplug_available,
-                              mock_get_vif_driver):
+    def test_detach_interface(self, mock_check_hotplug_available):
         mock_check_hotplug_available.return_value = True
         fake_vm = fake_instance.fake_instance_obj(self.context)
         fake_vif = test_virtual_interface.fake_vif
@@ -1583,7 +1582,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops.detach_interface(fake_vm, fake_vif)
 
         mock_check_hotplug_available.assert_called_once_with(fake_vm)
-        mock_get_vif_driver.return_value.unplug.assert_called_once_with(
+        self._vmops._vif_driver.unplug.assert_called_once_with(
             fake_vm, fake_vif)
         self._vmops._vmutils.destroy_nic.assert_called_once_with(
             fake_vm.name, fake_vif['id'])
@@ -1821,40 +1820,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             'total_bytes_sec': fake_total_bytes_sec
         }
         self.assertEqual(expected_specs, ret_val)
-
-    @mock.patch.object(vmops.VMOps, '_get_vif_driver')
-    def test_unplug_vifs(self, mock_get_vif_driver):
-        mock_instance = fake_instance.fake_instance_obj(self.context)
-        fake_vif1 = {'id': mock.sentinel.ID1,
-                     'type': mock.sentinel.vif_type1}
-        fake_vif2 = {'id': mock.sentinel.ID2,
-                     'type': mock.sentinel.vif_type2}
-        mock_network_info = [fake_vif1, fake_vif2]
-        fake_vif_driver = mock.MagicMock()
-        mock_get_vif_driver.return_value = fake_vif_driver
-        calls = [mock.call(mock_instance, fake_vif1),
-                 mock.call(mock_instance, fake_vif2)]
-
-        self._vmops.unplug_vifs(mock_instance,
-                                network_info=mock_network_info)
-        fake_vif_driver.unplug.assert_has_calls(calls)
-
-    @mock.patch.object(vmops.VMOps, '_get_vif_driver')
-    def test_post_start_vifs(self, mock_get_vif_driver):
-        mock_instance = fake_instance.fake_instance_obj(self.context)
-        fake_vif1 = {'id': mock.sentinel.ID1,
-                     'type': mock.sentinel.vif_type1}
-        fake_vif2 = {'id': mock.sentinel.ID2,
-                     'type': mock.sentinel.vif_type2}
-        mock_network_info = [fake_vif1, fake_vif2]
-        fake_vif_driver = mock.MagicMock()
-        mock_get_vif_driver.return_value = fake_vif_driver
-        calls = [mock.call(mock_instance, fake_vif1),
-                 mock.call(mock_instance, fake_vif2)]
-
-        self._vmops.post_start_vifs(mock_instance,
-                                    network_info=mock_network_info)
-        fake_vif_driver.post_start.assert_has_calls(calls)
 
     def _mock_get_port_settings(self, logging_port, interactive_port):
         mock_image_port_settings = {

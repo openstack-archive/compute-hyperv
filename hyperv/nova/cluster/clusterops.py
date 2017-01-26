@@ -161,7 +161,7 @@ class ClusterOps(object):
 
         self._nova_failover_server(instance, new_host)
         self._failover_migrate_networks(instance, old_host)
-        self._vmops.post_start_vifs(instance, nw_info)
+        self._vmops.plug_vifs(instance, nw_info)
         self._serial_console_ops.start_console_handler(instance_name)
 
     def _failover_migrate_networks(self, instance, source):

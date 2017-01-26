@@ -216,7 +216,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         mock_nova_failover_server.assert_called_once_with(instance, new_host)
         mock_failover_migrate_networks.assert_called_once_with(
             instance, old_host)
-        self.clusterops._vmops.post_start_vifs.assert_called_once_with(
+        self.clusterops._vmops.plug_vifs.assert_called_once_with(
             instance, get_inst_nw_info.return_value)
         c_handler = self.clusterops._serial_console_ops.start_console_handler
         c_handler.assert_called_once_with(mock.sentinel.instance_name)

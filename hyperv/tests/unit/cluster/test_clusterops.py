@@ -15,6 +15,7 @@
 
 import time
 
+import ddt
 import mock
 from nova.compute import power_state
 from nova.compute import task_states
@@ -27,6 +28,7 @@ from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
 
+@ddt.ddt
 class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V ClusterOps class."""
 
@@ -292,14 +294,20 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(mock.sentinel.uuid,
                          self.clusterops._instance_map[mock.sentinel.name])
 
+    @ddt.data({'instance_uuids': None},
+              {'instance_uuids': []},
+              {'instance_uuids': mock.sentinel.uuid})
+    @ddt.unpack
     @mock.patch.object(clusterops.objects.InstanceList, 'get_by_filters')
-    def test_get_nova_instances(self, mock_get_by_filters):
+    def test_get_nova_instances(self, mock_get_by_filters, instance_uuids):
         instances = self.clusterops._get_nova_instances(
-            instance_uuids=mock.sentinel.uuids)
+            instance_uuids=instance_uuids)
 
         self.assertEqual(mock_get_by_filters.return_value, instances)
         expected_attrs = ['id', 'uuid', 'name']
-        expected_filters = {'deleted': False, 'uuid': mock.sentinel.uuids}
+        expected_filters = {'deleted': False}
+        if instance_uuids is not None:
+            expected_filters['uuid'] = instance_uuids
         mock_get_by_filters.assert_called_once_with(
             self.clusterops._context, expected_filters,
             expected_attrs=expected_attrs)

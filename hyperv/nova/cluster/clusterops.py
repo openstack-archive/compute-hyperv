@@ -220,7 +220,7 @@ class ClusterOps(object):
             expected_attrs = ['id', 'uuid', 'name']
 
         filters = {'deleted': False}
-        if instance_uuids:
+        if instance_uuids is not None:
             filters['uuid'] = instance_uuids
 
         return objects.InstanceList.get_by_filters(

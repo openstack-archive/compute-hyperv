@@ -69,7 +69,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_revert_dir = (
             self._migrationops._pathutils.get_instance_migr_revert_dir)
         mock_get_revert_dir.assert_called_once_with(
-            mock_instance.name, remove_dir=True, create_dir=True)
+            mock_get_inst_dir.return_value, remove_dir=True, create_dir=True)
         mock_get_export_dir = self._migrationops._pathutils.get_export_dir
         mock_get_export_dir.assert_called_once_with(
             instance_dir=mock_get_revert_dir.return_value, create_dir=True)
@@ -141,10 +141,13 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             migration=mock.sentinel.migration, instance=mock_instance,
             network_info=mock.sentinel.network_info)
 
+        get_instance_dir = self._migrationops._pathutils.get_instance_dir
+        get_instance_dir.assert_called_once_with(mock_instance.name,
+                                                 create_dir=False)
         get_instance_migr_revert_dir = (
             self._migrationops._pathutils.get_instance_migr_revert_dir)
         get_instance_migr_revert_dir.assert_called_with(
-            mock_instance.name, remove_dir=True)
+            get_instance_dir.return_value, remove_dir=True)
 
     def test_revert_migration_files(self):
         instance_path = (
@@ -158,7 +161,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_inst_dir = self._migrationops._pathutils.get_instance_dir
         mock_get_inst_dir.assert_called_once_with(
             mock.sentinel.instance_name, create_dir=False, remove_dir=True)
-        get_revert_dir.assert_called_with(mock.sentinel.instance_name)
+        get_revert_dir.assert_called_with(instance_path)
         self._migrationops._pathutils.rename.assert_called_once_with(
             get_revert_dir.return_value, instance_path)
         self.assertEqual(mock_get_inst_dir.return_value, instance_path)

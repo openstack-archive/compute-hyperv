@@ -158,6 +158,20 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
                               mock.sentinel.dir_name,
                               create_dir=True)
 
+    @mock.patch.object(pathutils.PathUtils, '_check_dir')
+    def test_get_instance_migr_revert_dir(self, mock_check_dir):
+        dir_name = 'fake_dir'
+        expected_dir_name = '%s_revert' % dir_name
+
+        revert_dir = self._pathutils.get_instance_migr_revert_dir(
+            dir_name, create_dir=mock.sentinel.create_dir,
+            remove_dir=mock.sentinel.remove_dir)
+
+        self.assertEqual(expected_dir_name, revert_dir)
+        mock_check_dir.assert_called_once_with(expected_dir_name,
+                                               mock.sentinel.create_dir,
+                                               mock.sentinel.remove_dir)
+
     @ddt.data({},
               {'configured_dir_exists': True},
               {'vm_exists': True},

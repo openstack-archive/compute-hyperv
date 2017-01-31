@@ -54,7 +54,7 @@ class MigrationOps(object):
     def _move_vm_files(self, instance):
         instance_path = self._pathutils.get_instance_dir(instance.name)
         revert_path = self._pathutils.get_instance_migr_revert_dir(
-            instance.name, remove_dir=True, create_dir=True)
+            instance_path, remove_dir=True, create_dir=True)
         export_path = self._pathutils.get_export_dir(
             instance_dir=revert_path, create_dir=True)
 
@@ -98,7 +98,9 @@ class MigrationOps(object):
     def confirm_migration(self, context, migration, instance, network_info):
         LOG.debug("confirm_migration called", instance=instance)
 
-        self._pathutils.get_instance_migr_revert_dir(instance.name,
+        instance_path = self._pathutils.get_instance_dir(instance.name,
+                                                         create_dir=False)
+        self._pathutils.get_instance_migr_revert_dir(instance_path,
                                                      remove_dir=True)
 
     def _revert_migration_files(self, instance_name):
@@ -106,7 +108,7 @@ class MigrationOps(object):
             instance_name, create_dir=False, remove_dir=True)
 
         revert_path = self._pathutils.get_instance_migr_revert_dir(
-            instance_name)
+            instance_path)
         self._pathutils.rename(revert_path, instance_path)
         return instance_path
 

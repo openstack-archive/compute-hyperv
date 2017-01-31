@@ -581,7 +581,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(vmops.VMOps, 'configure_remotefx')
     @mock.patch.object(vmops.VMOps, '_get_image_serial_port_settings')
     @mock.patch.object(vmops.VMOps, '_create_vm_com_port_pipes')
-    @mock.patch.object(vmops.VMOps, '_attach_ephemerals')
+    @mock.patch.object(vmops.VMOps, 'attach_ephemerals')
     def test_create_instance(self, mock_attach_ephemerals,
                              mock_create_pipes,
                              mock_get_port_settings,
@@ -843,7 +843,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                        'ctrl_disk_addr': 0},
                       {'path': None}]
 
-        self._vmops._attach_ephemerals(mock_instance.name, ephemerals)
+        self._vmops.attach_ephemerals(mock_instance.name, ephemerals)
 
         mock_attach_drive.assert_has_calls(
             [mock.call(mock_instance.name, mock.sentinel.PATH1, 0,

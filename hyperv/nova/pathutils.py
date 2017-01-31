@@ -23,6 +23,7 @@ from os_win import exceptions as os_win_exc
 from os_win.utils import pathutils
 from os_win import utilsfactory
 from oslo_log import log as logging
+from oslo_utils import uuidutils
 
 from hyperv.i18n import _, _LI
 from hyperv.nova import constants
@@ -197,10 +198,16 @@ class PathUtils(pathutils.PathUtils):
     def get_base_vhd_dir(self):
         return self._get_instances_sub_dir('_base')
 
-    def get_export_dir(self, instance_name):
-        dir_name = os.path.join('export', instance_name)
-        return self._get_instances_sub_dir(dir_name, create_dir=True,
-                                           remove_dir=True)
+    def get_export_dir(self, instance_name=None, instance_dir=None,
+                       create_dir=False, remove_dir=False):
+        if not instance_dir:
+            instance_dir = self.get_instance_dir(instance_name,
+                                                 create_dir=create_dir)
+
+        export_dir = os.path.join(instance_dir, 'export')
+        self._check_dir(export_dir, create_dir=create_dir,
+                        remove_dir=remove_dir)
+        return export_dir
 
     def get_vm_console_log_paths(self, instance_name, remote_server=None):
         instance_dir = self.get_instance_dir(instance_name,
@@ -253,3 +260,39 @@ class PathUtils(pathutils.PathUtils):
         remote_inst_dir = self.get_instances_dir(dest)
         return self.check_dirs_shared_storage(local_inst_dir,
                                               remote_inst_dir)
+
+    def get_instance_snapshot_dir(self, instance_name=None, instance_dir=None):
+        if instance_name:
+            instance_dir = self.get_instance_dir(instance_name,
+                                                 create_dir=False)
+        return os.path.join(instance_dir, 'Snapshots')
+
+    def get_instance_virtual_machines_dir(self, instance_name=None,
+                                          instance_dir=None):
+        if instance_name:
+            instance_dir = self.get_instance_dir(instance_name,
+                                                 create_dir=False)
+        return os.path.join(instance_dir, "Virtual Machines")
+
+    def copy_vm_config_files(self, instance_name, dest_dir):
+        """Copies the VM configuration files to the given destination folder.
+
+        :param instance_name: the given instance's name.
+        :param dest_dir: the location where the VM configuration files are
+            copied to.
+        """
+        src_dir = self.get_instance_virtual_machines_dir(instance_name)
+        self.copy_folder_files(src_dir, dest_dir)
+
+    def get_vm_config_file(self, path):
+        for dir_file in os.listdir(path):
+            file_name, file_ext = os.path.splitext(dir_file)
+            if (file_ext.lower() in ['.vmcx', '.xml'] and
+                    uuidutils.is_uuid_like(file_name)):
+
+                config_file = os.path.join(path, dir_file)
+                LOG.debug("Found VM config file: %s", config_file)
+                return config_file
+
+        raise exception.NotFound(
+            _("Folder %s does not contain any VM config data file.") % path)

@@ -48,7 +48,7 @@ class HyperVClusterDriver(driver.HyperVDriver):
                                    block_device_info=None,
                                    timeout=0, retry_interval=0):
         self._clops.remove_from_cluster(instance)
-        super(HyperVClusterDriver, self).migrate_disk_and_power_off(
+        return super(HyperVClusterDriver, self).migrate_disk_and_power_off(
             context, instance, dest, flavor, network_info,
             block_device_info, timeout, retry_interval)
 

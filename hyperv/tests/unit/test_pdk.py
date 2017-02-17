@@ -77,7 +77,7 @@ class PDKTestCase(test_base.HyperVBaseTestCase):
         image_meta = {'properties': {}}
         mock_instance = mock.MagicMock(metadata={})
 
-        self.assertRaises(exception.MissingParameter,
+        self.assertRaises(exception.InstanceUnacceptable,
                           self._pdk._get_pdk_reference,
                           mock_instance, image_meta)
 

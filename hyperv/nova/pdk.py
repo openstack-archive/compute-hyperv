@@ -43,8 +43,8 @@ class PDK(object):
             reason = _('A reference to a barbican container containing the '
                        'pdk file must be passed as an image property. This '
                        'is required in order to enable VTPM')
-            raise exception.MissingParameter(instance_id=instance.uuid,
-                                             reason=reason)
+            raise exception.InstanceUnacceptable(instance_id=instance.uuid,
+                                                 reason=reason)
         return boot_metadata_pdk_ref or image_pdk_ref
 
     def _get_pdk_container(self, context, instance, pdk_reference):

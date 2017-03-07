@@ -388,6 +388,8 @@ class VMOps(object):
                                 instance_path,
                                 [instance.uuid])
 
+        self.configure_remotefx(instance, vm_gen)
+
         self._vmutils.create_scsi_controller(instance_name)
         self._attach_root_device(instance_name, root_device)
         self._attach_ephemerals(instance_name, block_device_info['ephemerals'])
@@ -417,7 +419,7 @@ class VMOps(object):
         self.update_vm_resources(instance, vm_gen, image_meta)
 
     def update_vm_resources(self, instance, vm_gen, image_meta,
-                            is_planned_vm=False):
+                            instance_path=None, is_resize=False):
         """Updates the VM's reconfigurable resources."""
         memory_per_numa_node, cpus_per_numa_node = (
             self._get_instance_vnuma_config(instance, image_meta))
@@ -448,14 +450,20 @@ class VMOps(object):
                                 cpus_per_numa_node,
                                 CONF.hyperv.limit_cpu_features,
                                 dynamic_memory_ratio,
+                                configuration_root_dir=instance_path,
                                 host_shutdown_action=host_shutdown_action,
-                                is_planned_vm=is_planned_vm)
+                                vnuma_enabled=vnuma_enabled)
 
-        self._configure_remotefx(instance, vm_gen)
-        self._set_instance_disk_qos_specs(instance)
-        self._attach_pci_devices(instance)
+        self._set_instance_disk_qos_specs(instance, is_resize)
+        self._attach_pci_devices(instance, is_resize)
 
-    def _attach_pci_devices(self, instance):
+    def _attach_pci_devices(self, instance, is_resize):
+        if is_resize:
+            # NOTE(claudiub): there is no way to tell which devices to add when
+            # considering the old flavor. We need to remove all the PCI devices
+            # and then reattach them according to the new flavor.
+            self._vmutils.remove_all_pci_devices(instance.name)
+
         for pci_request in instance.pci_requests.requests:
             spec = pci_request.spec[0]
             for counter in range(pci_request.count):
@@ -519,12 +527,23 @@ class VMOps(object):
             dynamic_memory_ratio = 1.0
         return dynamic_memory_ratio
 
-    def _configure_remotefx(self, instance, vm_gen):
+    def configure_remotefx(self, instance, vm_gen, is_resize=False):
+        """Configures RemoteFX for the given instance.
+
+        The given instance must be a realized VM before changing any RemoteFX
+        configurations.
+        """
         extra_specs = instance.flavor.extra_specs
         remotefx_max_resolution = extra_specs.get(
             constants.FLAVOR_ESPEC_REMOTEFX_RES)
         if not remotefx_max_resolution:
             # RemoteFX not required.
+            if is_resize and instance.old_flavor.extra_specs.get(
+                    constants.FLAVOR_ESPEC_REMOTEFX_RES):
+                # the instance was resized from a RemoteFX flavor to one
+                # without RemoteFX. We need to disable RemoteFX on the
+                # instance.
+                self._vmutils.disable_remotefx_video_adapter(instance.name)
             return
 
         if not CONF.hyperv.enable_remotefx:
@@ -1137,7 +1156,7 @@ class VMOps(object):
 
         self.power_on(instance)
 
-    def _set_instance_disk_qos_specs(self, instance):
+    def _set_instance_disk_qos_specs(self, instance, is_resize):
         quota_specs = self._get_scoped_flavor_extra_specs(instance, 'quota')
 
         disk_total_bytes_sec = int(
@@ -1146,7 +1165,9 @@ class VMOps(object):
             quota_specs.get('disk_total_iops_sec') or
             self._volumeops.bytes_per_sec_to_iops(disk_total_bytes_sec))
 
-        if disk_total_iops_sec:
+        if disk_total_iops_sec or is_resize:
+            # NOTE(claudiub): the instance might have been "resized" to a
+            # flavor with no QoS specs. We need to set them to 0 in this case.
             local_disks = self._get_instance_local_disks(instance.name)
             for disk_path in local_disks:
                 self._vmutils.set_disk_qos_specs(disk_path,

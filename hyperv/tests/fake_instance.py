@@ -79,5 +79,6 @@ def fake_instance_obj(context, **updates):
                objects.Instance(), fake_db_instance(**updates),
                expected_attrs=expected_attrs)
     inst.flavor = flavor
+    inst.old_flavor = flavor.obj_clone()
     inst.obj_reset_changes()
     return inst

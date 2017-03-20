@@ -15,11 +15,14 @@
 
 """Management class for cluster live migration VM operations."""
 
-from os_win import exceptions as os_win_exc
+from nova.compute import vm_states
+from nova import exception
+from os_win import constants as os_win_const
 from os_win import utilsfactory
 from oslo_log import log as logging
 from oslo_utils import excutils
 
+from hyperv.i18n import _
 from hyperv.nova import livemigrationops
 
 LOG = logging.getLogger(__name__)
@@ -63,8 +66,12 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
         # perform a clustered live migration.
         try:
             self._clustutils.live_migrate_vm(instance_name, dest)
-        except os_win_exc.HyperVVMNotFoundException:
+        except Exception:
             with excutils.save_and_reraise_exception():
+                self._check_failed_instance_migration(
+                    instance_ref,
+                    expected_state=os_win_const.CLUSTER_GROUP_ONLINE)
+
                 LOG.debug("Calling live migration recover_method "
                           "for instance.", instance=instance_ref)
                 recover_method(context, instance_ref, dest, block_migration,
@@ -74,6 +81,28 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
                   instance=instance_ref)
         post_method(context, instance_ref, dest,
                     block_migration, migrate_data)
+
+    def _check_failed_instance_migration(self, instance, expected_state):
+        # After a failed migration, we expect the instance to be on the
+        # source node, having its initial state and not have any queued
+        # migrations. Otherwise, we treat it as a critical error and set
+        # it to 'error' state to avoid inconsistencies.
+        state_info = self._clustutils.get_cluster_group_state_info(
+            instance.name)
+        node_name = self._clustutils.get_node_name()
+
+        if (state_info['owner_node'].lower() != node_name.lower()
+                or state_info['state'] != expected_state
+                or state_info['migration_queued']):
+            instance.vm_state = vm_states.ERROR
+            instance.save()
+
+            raise exception.InstanceInvalidState(
+                _("Instance %(instance_name)s reached an inconsistent state "
+                  "after a failed migration attempt. Setting the instance to "
+                  "'error' state. Instance state info: %(state_info)s.") %
+                dict(instance_name=instance.name,
+                     state_info=state_info))
 
     def pre_live_migration(self, context, instance, block_device_info,
                            network_info):

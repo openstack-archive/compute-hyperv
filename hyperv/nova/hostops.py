@@ -22,32 +22,23 @@ import time
 
 from nova.compute import api
 from nova.compute import vm_states
-import nova.conf
 from nova import context
 from nova import exception
 from nova import objects
 from nova.objects import fields as obj_fields
 from os_win import constants as os_win_const
 from os_win import utilsfactory
-from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_serialization import jsonutils
 from oslo_utils import units
 
 from hyperv.i18n import _, _LE, _LI
+import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import pathutils
 from hyperv.nova import vmops
 
-hyper_host_opts = [
-    cfg.IntOpt('evacuate_task_state_timeout',
-               default=600,
-               help='Number of seconds to wait for an instance to be '
-                    'evacuated during host maintenance.'),
-]
-
-CONF = nova.conf.CONF
-CONF.register_opts(hyper_host_opts, 'hyperv')
+CONF = hyperv.nova.conf.CONF
 LOG = logging.getLogger(__name__)
 
 

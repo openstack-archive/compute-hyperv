@@ -17,13 +17,13 @@
 Management class for live migration VM operations.
 """
 
-import nova.conf
 from nova.objects import migrate_data as migrate_data_obj
 from os_win import utilsfactory
 from oslo_log import log as logging
 from oslo_utils import excutils
 
 from hyperv.nova import block_device_manager
+import hyperv.nova.conf
 from hyperv.nova import imagecache
 from hyperv.nova import pathutils
 from hyperv.nova import serialconsoleops
@@ -31,7 +31,7 @@ from hyperv.nova import vmops
 from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
-CONF = nova.conf.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 class LiveMigrationOps(object):

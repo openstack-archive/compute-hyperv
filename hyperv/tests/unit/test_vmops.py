@@ -26,11 +26,11 @@ from nova.virt import hardware
 from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
 from oslo_concurrency import processutils
-from oslo_config import cfg
 from oslo_utils import fileutils
 from oslo_utils import units
 
 from hyperv.nova import block_device_manager
+import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import pdk
 from hyperv.nova import vmops
@@ -38,7 +38,7 @@ from hyperv.nova import volumeops
 from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
-CONF = cfg.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 @ddt.ddt

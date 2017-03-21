@@ -15,15 +15,15 @@
 #    under the License.
 
 import mock
-import nova.conf
 from nova import exception
 from nova.network import model
 
+import hyperv.nova.conf
 from hyperv.nova import vif
 from hyperv.tests.unit import test_base
 
 
-CONF = nova.conf.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 class HyperVNovaNetworkVIFPluginTestCase(test_base.HyperVBaseTestCase):

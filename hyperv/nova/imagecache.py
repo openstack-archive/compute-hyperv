@@ -18,7 +18,6 @@ Image caching and management.
 import os
 import re
 
-import nova.conf
 from nova import exception
 from nova import utils
 from nova.virt import imagecache
@@ -30,11 +29,12 @@ from oslo_utils import units
 from oslo_utils import uuidutils
 
 from hyperv.i18n import _, _LI
+import hyperv.nova.conf
 from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
 
-CONF = nova.conf.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 class ImageCache(imagecache.ImageCacheManager):

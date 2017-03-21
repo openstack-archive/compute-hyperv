@@ -17,14 +17,14 @@ import ddt
 import mock
 from nova.objects import migrate_data as migrate_data_obj
 from os_win import exceptions as os_win_exc
-from oslo_config import cfg
 
+import hyperv.nova.conf
 from hyperv.nova import livemigrationops
 from hyperv.nova import serialconsoleops
 from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
-CONF = cfg.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 @ddt.ddt

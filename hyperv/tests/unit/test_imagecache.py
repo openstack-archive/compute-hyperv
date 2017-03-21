@@ -21,15 +21,15 @@ from nova import exception
 from nova import objects
 from nova.tests.unit.objects import test_flavor
 from nova.tests import uuidsentinel as uuids
-from oslo_config import cfg
 from oslo_utils import units
 
+import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import imagecache
 from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
-CONF = cfg.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 class ImageCacheTestCase(test_base.HyperVBaseTestCase):

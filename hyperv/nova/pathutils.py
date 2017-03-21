@@ -17,7 +17,6 @@ import os
 import tempfile
 import time
 
-import nova.conf
 from nova import exception
 from os_win import exceptions as os_win_exc
 from os_win.utils import pathutils
@@ -26,11 +25,12 @@ from oslo_log import log as logging
 from oslo_utils import uuidutils
 
 from hyperv.i18n import _, _LI
+import hyperv.nova.conf
 from hyperv.nova import constants
 
 LOG = logging.getLogger(__name__)
 
-CONF = nova.conf.CONF
+CONF = hyperv.nova.conf.CONF
 
 ERROR_INVALID_NAME = 123
 

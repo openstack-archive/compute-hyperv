@@ -16,15 +16,17 @@
 
 import abc
 
-import nova.conf
 from nova import exception
 from nova.i18n import _
+import nova.network
 from nova.network import model
 from nova.network import os_vif_util
 import os_vif
 from os_win import utilsfactory
 
-CONF = nova.conf.CONF
+import hyperv.nova.conf
+
+CONF = hyperv.nova.conf.CONF
 
 
 class HyperVBaseVIFPlugin(object):

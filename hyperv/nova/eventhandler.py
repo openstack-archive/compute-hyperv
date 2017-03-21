@@ -13,7 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import nova.conf
 from nova.i18n import _LW
 from nova import utils
 from nova.virt import event as virtevent
@@ -22,11 +21,12 @@ from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_log import log as logging
 
+import hyperv.nova.conf
 from hyperv.nova import serialconsoleops
 
 LOG = logging.getLogger(__name__)
 
-CONF = nova.conf.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 class InstanceEventHandler(object):

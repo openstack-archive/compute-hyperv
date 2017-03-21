@@ -22,7 +22,6 @@ import os
 import time
 
 from nova.compute import task_states
-import nova.conf
 from nova import exception
 from nova import objects
 from nova import utils
@@ -38,12 +37,13 @@ from oslo_utils import importutils
 from oslo_utils import strutils
 
 from hyperv.i18n import _, _LI, _LE, _LW
+import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
 
-CONF = nova.conf.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 def volume_snapshot_lock(f):

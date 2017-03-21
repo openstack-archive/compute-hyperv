@@ -25,15 +25,15 @@ from nova import test
 from nova.tests.unit import fake_block_device
 from os_brick.initiator import connector
 from os_win import constants as os_win_const
-from oslo_config import cfg
 from oslo_utils import units
 
+import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import vmops
 from hyperv.nova import volumeops
 from hyperv.tests.unit import test_base
 
-CONF = cfg.CONF
+CONF = hyperv.nova.conf.CONF
 
 connection_data = {'volume_id': 'fake_vol_id',
                    'target_lun': mock.sentinel.fake_lun,

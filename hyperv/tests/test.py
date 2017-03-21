@@ -32,15 +32,15 @@ import mock
 from nova.tests import fixtures as nova_fixtures
 from nova.tests.unit import conf_fixture
 from nova.tests.unit import policy_fixture
-from oslo_config import cfg
 from oslo_log.fixture import logging_error as log_fixture
 from oslo_log import log as logging
 from oslotest import moxstubout
 import six
 import testtools
 
+import hyperv.nova.conf
 
-CONF = cfg.CONF
+CONF = hyperv.nova.conf.CONF
 
 logging.register_options(CONF)
 CONF.set_override('use_stderr', False)

@@ -18,30 +18,22 @@
 from nova.compute import power_state
 from nova.compute import task_states
 from nova.compute import vm_states
-import nova.conf
 from nova import context
 from nova import network
 from nova import objects
 from nova.virt import block_device
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
-from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_service import loopingcall
 
 from hyperv.i18n import _LI, _LE
+import hyperv.nova.conf
 from hyperv.nova import serialconsoleops
 from hyperv.nova import vmops
 
 LOG = logging.getLogger(__name__)
-
-hyperv_cluster_opts = [
-    cfg.IntOpt('cluster_event_check_interval',
-               default=2),
-]
-
-CONF = nova.conf.CONF
-CONF.register_opts(hyperv_cluster_opts, 'hyperv')
+CONF = hyperv.nova.conf.CONF
 
 
 class ClusterOps(object):

@@ -21,15 +21,15 @@ from nova import exception
 from nova import objects
 from nova.objects import fields as obj_fields
 from os_win import constants as os_win_const
-from oslo_config import cfg
 from oslo_serialization import jsonutils
 from oslo_utils import units
 
+import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import hostops
 from hyperv.tests.unit import test_base
 
-CONF = cfg.CONF
+CONF = hyperv.nova.conf.CONF
 
 
 class HostOpsTestCase(test_base.HyperVBaseTestCase):

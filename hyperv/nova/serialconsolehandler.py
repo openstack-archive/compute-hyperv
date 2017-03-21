@@ -20,14 +20,14 @@ from nova import exception
 from nova.i18n import _, _LI  # noqa
 from os_win.utils.io import ioutils
 from os_win import utilsfactory
-from oslo_config import cfg
 from oslo_log import log as logging
 
+import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import pathutils
 from hyperv.nova import serialproxy
 
-CONF = cfg.CONF
+CONF = hyperv.nova.conf.CONF
 LOG = logging.getLogger(__name__)
 
 threading = patcher.original('threading')

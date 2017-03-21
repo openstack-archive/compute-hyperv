@@ -25,7 +25,6 @@ import time
 from eventlet import timeout as etimeout
 from nova.api.metadata import base as instance_metadata
 from nova.compute import vm_states
-import nova.conf
 from nova import exception
 from nova import objects
 from nova.objects import fields
@@ -36,7 +35,6 @@ from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_concurrency import processutils
-from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_service import loopingcall
 from oslo_utils import excutils
@@ -47,6 +45,7 @@ import six
 
 from hyperv.i18n import _, _LI, _LE, _LW
 from hyperv.nova import block_device_manager
+import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import imagecache
 from hyperv.nova import pathutils
@@ -57,19 +56,7 @@ from hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 
-CONF = nova.conf.CONF
-
-hyperv_vm_opts = [
-    cfg.StrOpt('instance_automatic_shutdown',
-               default=False,
-               help='Automatically shutdown instances when the host is '
-                    'shutdown. By default, instances will be saved, which '
-                    'adds a disk overhead. Changing this option will not '
-                    'affect existing instances.'),
-]
-
-CONF = nova.conf.CONF
-CONF.register_opts(hyperv_vm_opts, 'hyperv')
+CONF = hyperv.nova.conf.CONF
 
 SHUTDOWN_TIME_INCREMENT = 5
 REBOOT_TYPE_SOFT = 'SOFT'

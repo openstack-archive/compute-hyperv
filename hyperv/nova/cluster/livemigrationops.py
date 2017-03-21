@@ -23,8 +23,10 @@ from oslo_log import log as logging
 from oslo_utils import excutils
 
 from hyperv.i18n import _
+import hyperv.nova.conf
 from hyperv.nova import livemigrationops
 
+CONF = hyperv.nova.conf.CONF
 LOG = logging.getLogger(__name__)
 
 
@@ -65,7 +67,10 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
         # destination is in the same cluster.
         # perform a clustered live migration.
         try:
-            self._clustutils.live_migrate_vm(instance_name, dest)
+            self._clustutils.live_migrate_vm(
+                instance_name,
+                dest,
+                CONF.hyperv.instance_live_migration_timeout)
         except Exception:
             with excutils.save_and_reraise_exception():
                 self._check_failed_instance_migration(

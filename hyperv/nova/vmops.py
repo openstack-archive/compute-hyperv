@@ -392,7 +392,7 @@ class VMOps(object):
 
         self._vmutils.create_scsi_controller(instance_name)
         self._attach_root_device(instance_name, root_device)
-        self._attach_ephemerals(instance_name, block_device_info['ephemerals'])
+        self.attach_ephemerals(instance_name, block_device_info['ephemerals'])
         self._volumeops.attach_volumes(
             block_device_info['block_device_mapping'], instance_name)
 
@@ -589,7 +589,7 @@ class VMOps(object):
                                root_dev_info['disk_bus'],
                                root_dev_info['type'])
 
-    def _attach_ephemerals(self, instance_name, ephemerals):
+    def attach_ephemerals(self, instance_name, ephemerals):
         for eph in ephemerals:
             # if an ephemeral doesn't have a path, it might have been removed
             # during resize.

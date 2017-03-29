@@ -81,7 +81,7 @@ class SnapshotOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_vhd_path = self._snapshotops._vhdutils.get_vhd_parent_path
         mock_get_vhd_path.assert_called_once_with(fake_src_path)
         self._snapshotops._pathutils.get_export_dir.assert_called_once_with(
-            mock_instance.name)
+            mock_instance.name, create_dir=True, remove_dir=True)
 
         expected = [mock.call(fake_src_path,
                               os.path.join(fake_exp_dir,

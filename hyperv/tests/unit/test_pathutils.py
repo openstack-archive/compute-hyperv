@@ -261,6 +261,23 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
             self.fake_instance_name)
         self.assertIsNone(configdrive_path)
 
+    @mock.patch.object(pathutils.PathUtils, '_check_dir')
+    @mock.patch.object(pathutils.PathUtils, 'get_instance_dir')
+    def test_export_dir(self, mock_get_instance_dir, mock_check_dir):
+        mock_get_instance_dir.return_value = self.fake_instance_dir
+
+        export_dir = self._pathutils.get_export_dir(
+            mock.sentinel.instance_name, create_dir=mock.sentinel.create_dir,
+            remove_dir=mock.sentinel.remove_dir)
+
+        expected_dir = os.path.join(self.fake_instance_dir, 'export')
+        self.assertEqual(expected_dir, export_dir)
+        mock_get_instance_dir.assert_called_once_with(
+            mock.sentinel.instance_name, create_dir=mock.sentinel.create_dir)
+        mock_check_dir.assert_called_once_with(
+            expected_dir, create_dir=mock.sentinel.create_dir,
+            remove_dir=mock.sentinel.remove_dir)
+
     def test_copy_vm_console_logs(self):
         fake_local_logs = [mock.sentinel.log_path,
                            mock.sentinel.archived_log_path]
@@ -356,3 +373,57 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
             [mock.call(), mock.call(mock.sentinel.dest)])
         mock_check_dirs_shared_storage.assert_called_once_with(
             mock.sentinel.local_inst_dir, mock.sentinel.remote_inst_dir)
+
+    @mock.patch.object(pathutils.PathUtils, 'get_instance_dir')
+    def test_get_instance_snapshot_dir(self, mock_get_instance_dir):
+        mock_get_instance_dir.return_value = self.fake_instance_dir
+        response = self._pathutils.get_instance_snapshot_dir(
+            self.fake_instance_name)
+
+        expected_path = os.path.join(self.fake_instance_dir, 'Snapshots')
+        self.assertEqual(expected_path, response)
+        mock_get_instance_dir.assert_called_once_with(self.fake_instance_name,
+                                                      create_dir=False)
+
+    @mock.patch.object(pathutils.PathUtils, 'get_instance_dir')
+    def test_get_instance_virtual_machines_dir(self, mock_get_instance_dir):
+        mock_get_instance_dir.return_value = self.fake_instance_dir
+        response = self._pathutils.get_instance_virtual_machines_dir(
+            self.fake_instance_name)
+
+        expected_path = os.path.join(self.fake_instance_dir,
+                                     'Virtual Machines')
+        self.assertEqual(expected_path, response)
+        mock_get_instance_dir.assert_called_once_with(self.fake_instance_name,
+                                                      create_dir=False)
+
+    @mock.patch.object(pathutils.PathUtils, 'copy_folder_files')
+    @mock.patch.object(pathutils.PathUtils,
+                       'get_instance_virtual_machines_dir')
+    def test_copy_vm_config_files(self, mock_get_inst_vm_dir, mock_copy_files):
+        self._pathutils.copy_vm_config_files(mock.sentinel.instance_name,
+                                             mock.sentinel.dest_dir)
+
+        mock_get_inst_vm_dir.assert_called_once_with(
+            mock.sentinel.instance_name)
+        mock_copy_files.assert_called_once_with(
+            mock_get_inst_vm_dir.return_value, mock.sentinel.dest_dir)
+
+    @mock.patch('os.listdir')
+    def test_get_vm_config_file(self, mock_listdir):
+        config_file = '81027A62-7187-4EC4-AFF5-9CA853BF7C68.vmcx'
+        mock_listdir.return_value = [config_file]
+
+        response = self._pathutils.get_vm_config_file(self.fake_instance_dir)
+
+        expected_path = os.path.join(self.fake_instance_dir, config_file)
+        self.assertEqual(expected_path, response)
+        mock_listdir.assert_called_once_with(self.fake_instance_dir)
+
+    @mock.patch('os.listdir')
+    def test_get_vm_config_file_exception(self, mock_listdir):
+        mock_listdir.return_value = ['fake_file']
+
+        self.assertRaises(exception.NotFound,
+                          self._pathutils.get_vm_config_file,
+                          mock.sentinel.instances_path)

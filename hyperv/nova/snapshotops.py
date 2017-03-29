@@ -62,7 +62,8 @@ class SnapshotOps(object):
             src_base_disk_path = self._vhdutils.get_vhd_parent_path(
                 src_vhd_path)
 
-            export_dir = self._pathutils.get_export_dir(instance_name)
+            export_dir = self._pathutils.get_export_dir(
+              instance_name, create_dir=True, remove_dir=True)
 
             dest_vhd_path = os.path.join(export_dir, os.path.basename(
                 src_vhd_path))

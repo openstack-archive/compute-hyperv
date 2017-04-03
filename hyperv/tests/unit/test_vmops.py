@@ -417,6 +417,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vmutils.set_boot_order.assert_called_once_with(
             mock.sentinel.instance_name, mock_get_boot_order.return_value)
 
+    @mock.patch.object(vmops.VMOps, 'plug_vifs')
     @mock.patch('hyperv.nova.vmops.VMOps.destroy')
     @mock.patch('hyperv.nova.vmops.VMOps.power_on')
     @mock.patch.object(vmops.VMOps, 'set_boot_order')
@@ -442,8 +443,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     mock_configdrive_required,
                     mock_create_config_drive, mock_attach_config_drive,
                     mock_set_boot_order,
-                    mock_power_on, mock_destroy, exists,
-                    configdrive_required, fail,
+                    mock_power_on, mock_destroy, mock_plug_vifs,
+                    exists, configdrive_required, fail,
                     fake_vm_gen=constants.VM_GEN_2):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_image_meta = mock.MagicMock()
@@ -490,6 +491,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_create_instance.assert_called_once_with(
                 self.context, mock_instance, mock.sentinel.INFO,
                 block_device_info, fake_vm_gen, mock_image_meta)
+            mock_plug_vifs.assert_called_once_with(mock_instance,
+                                                   mock.sentinel.INFO)
             mock_save_device_metadata.assert_called_once_with(
                 self.context, mock_instance, block_device_info)
             mock_configdrive_required.assert_called_once_with(mock_instance)
@@ -503,7 +506,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_set_boot_order.assert_called_once_with(
                 mock_instance.name, fake_vm_gen, block_device_info)
             mock_power_on.assert_called_once_with(
-                mock_instance, network_info=mock.sentinel.INFO)
+                mock_instance,
+                network_info=mock.sentinel.INFO,
+                should_plug_vifs=False)
 
     def test_spawn(self):
         self._test_spawn(exists=False, configdrive_required=True, fail=None)
@@ -1452,6 +1457,14 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                              network_info=mock.sentinel.fake_network_info)
         mock_plug_vifs.assert_called_once_with(
             mock_instance, mock.sentinel.fake_network_info)
+
+    @mock.patch.object(vmops.VMOps, 'plug_vifs')
+    def test_power_on_vifs_already_plugged(self, mock_plug_vifs):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+
+        self._vmops.power_on(mock_instance,
+                             should_plug_vifs=False)
+        self.assertFalse(mock_plug_vifs.called)
 
     def _test_set_vm_state(self, state):
         mock_instance = fake_instance.fake_instance_obj(self.context)

@@ -13,8 +13,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import ddt
 import mock
-from os_win import exceptions as os_win_exc
+from nova.compute import vm_states
+from nova import exception
+from nova import test as nova_test
+from os_win import constants as os_win_const
 
 from hyperv.nova.cluster import livemigrationops
 from hyperv.nova import livemigrationops as base_livemigrationops
@@ -22,6 +26,7 @@ from hyperv.tests import fake_instance
 from hyperv.tests.unit import test_base
 
 
+@ddt.ddt
 class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V Cluster LivemigrationOps class."""
 
@@ -31,6 +36,8 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self.livemigrops = livemigrationops.ClusterLiveMigrationOps()
         self.livemigrops._clustutils = mock.MagicMock()
         self.livemigrops._volumeops = mock.MagicMock()
+
+        self._clustutils = self.livemigrops._clustutils
 
     def test_is_instance_clustered(self):
         ret = self.livemigrops._is_instance_clustered(
@@ -61,7 +68,9 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             self._fake_context, mock_instance, dest,
             mock.sentinel.block_migration, mock.sentinel.migrate_data)
 
-    def test_live_migration_in_cluster_exception(self):
+    @mock.patch.object(livemigrationops.ClusterLiveMigrationOps,
+                       '_check_failed_instance_migration')
+    def test_live_migration_in_cluster_exception(self, mock_check_migr):
         mock_instance = fake_instance.fake_instance_obj(self._fake_context)
         self.livemigrops._clustutils.vm_exists.return_value = True
         recover_method = mock.MagicMock()
@@ -70,16 +79,19 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         get_nodes = self.livemigrops._clustutils.get_cluster_node_names
         get_nodes.return_value = node_names
         clustutils = self.livemigrops._clustutils
-        clustutils.live_migrate_vm.side_effect = [
-            os_win_exc.HyperVVMNotFoundException(mock_instance.name)]
+        clustutils.live_migrate_vm.side_effect = nova_test.TestingException
 
         self.assertRaises(
-            os_win_exc.HyperVVMNotFoundException,
+            nova_test.TestingException,
             self.livemigrops.live_migration,
             self._fake_context, mock_instance, dest, mock.sentinel.post_method,
             recover_method,
             block_migration=mock.sentinel.block_migration,
             migrate_data=mock.sentinel.migrate_data)
+
+        mock_check_migr.assert_called_once_with(
+            mock_instance,
+            expected_state=os_win_const.CLUSTER_GROUP_ONLINE)
 
         recover_method.assert_called_once_with(
             self._fake_context, mock_instance, dest,
@@ -104,6 +116,42 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_super_live_migration.assert_called_once_with(
             self._fake_context, mock_instance, dest, mock.sentinel.post_method,
             mock.sentinel.recover_method, False, None)
+
+    @ddt.data({},
+              {'state': os_win_const.CLUSTER_GROUP_PENDING,
+               'expected_invalid_state': True},
+              {'migration_queued': True,
+               'expected_invalid_state': True},
+              {'owner_node': 'some_other_node',
+               'expected_invalid_state': True})
+    @ddt.unpack
+    def test_check_failed_instance_migration(
+            self, state=os_win_const.CLUSTER_GROUP_ONLINE,
+            owner_node='source_node', migration_queued=False,
+            expected_invalid_state=False):
+        state_info = dict(owner_node=owner_node.upper(),
+                          state=state,
+                          migration_queued=migration_queued)
+        self._clustutils.get_cluster_group_state_info.return_value = (
+            state_info)
+        self._clustutils.get_node_name.return_value = 'source_node'
+
+        mock_instance = mock.Mock()
+
+        if expected_invalid_state:
+            self.assertRaises(
+                exception.InstanceInvalidState,
+                self.livemigrops._check_failed_instance_migration,
+                mock_instance,
+                os_win_const.CLUSTER_GROUP_ONLINE)
+            self.assertEqual(vm_states.ERROR, mock_instance.vm_state)
+        else:
+            self.livemigrops._check_failed_instance_migration(
+                mock_instance, os_win_const.CLUSTER_GROUP_ONLINE)
+
+        self._clustutils.get_cluster_group_state_info.assert_called_once_with(
+            mock_instance.name)
+        self._clustutils.get_node_name.assert_called_once_with()
 
     def test_pre_live_migration_clustered(self):
         self.livemigrops.pre_live_migration(self._fake_context,

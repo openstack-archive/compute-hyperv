@@ -77,6 +77,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._block_dev_man = mock.MagicMock()
         self._vmops._vif_driver = mock.MagicMock()
 
+        self._vmutils = self._vmops._vmutils
+
     def test_list_instances(self):
         mock_instance = mock.MagicMock()
         self._vmops._vmutils.list_instances.return_value = [mock_instance]
@@ -2145,3 +2147,49 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertRaises(exception.InstanceUnacceptable,
                           self._vmops._get_fsk_data,
                           mock_instance)
+
+    @ddt.data({'vm_state': os_win_const.HYPERV_VM_STATE_DISABLED},
+              {'vm_state': os_win_const.HYPERV_VM_STATE_SUSPENDED},
+              {'vm_state': os_win_const.HYPERV_VM_STATE_SUSPENDED,
+               'allow_paused': True},
+              {'vm_state': os_win_const.HYPERV_VM_STATE_PAUSED},
+              {'vm_state': os_win_const.HYPERV_VM_STATE_PAUSED,
+               'allow_paused': True},
+              {'allow_paused': True})
+    @ddt.unpack
+    @mock.patch.object(vmops.VMOps, 'pause')
+    @mock.patch.object(vmops.VMOps, 'suspend')
+    @mock.patch.object(vmops.VMOps, '_set_vm_state')
+    def test_prepare_for_volume_snapshot(
+            self, mock_set_state, mock_suspend, mock_pause,
+            vm_state=os_win_const.HYPERV_VM_STATE_ENABLED,
+            allow_paused=False):
+        self._vmops._vmutils.get_vm_state.return_value = vm_state
+
+        expect_instance_suspend = not allow_paused and vm_state not in [
+            os_win_const.HYPERV_VM_STATE_DISABLED,
+            os_win_const.HYPERV_VM_STATE_SUSPENDED]
+        expect_instance_pause = allow_paused and vm_state == (
+            os_win_const.HYPERV_VM_STATE_ENABLED)
+
+        with self._vmops.prepare_for_volume_snapshot(
+                mock.sentinel.instance, allow_paused):
+            self._vmutils.get_vm_state.assert_called_once_with(
+                mock.sentinel.instance.name)
+
+            if expect_instance_suspend:
+                mock_suspend.assert_called_once_with(mock.sentinel.instance)
+            else:
+                mock_suspend.assert_not_called()
+
+            if expect_instance_pause:
+                mock_pause.assert_called_once_with(mock.sentinel.instance)
+            else:
+                mock_pause.assert_not_called()
+
+        # We expect the previous instance state to be restored.
+        if expect_instance_suspend or expect_instance_pause:
+            mock_set_state.assert_called_once_with(mock.sentinel.instance,
+                                                   vm_state)
+        else:
+            mock_set_state.assert_not_called()

@@ -245,6 +245,26 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.context, mock.sentinel.instance,
             mock.sentinel.image_id, mock.sentinel.update_task_state)
 
+    def test_volume_snapshot_create(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        self.driver.volume_snapshot_create(
+            self.context, mock_instance, mock.sentinel.volume_id,
+            mock.sentinel.create_info)
+
+        self.driver._volumeops.volume_snapshot_create.assert_called_once_with(
+            self.context, mock_instance, mock.sentinel.volume_id,
+            mock.sentinel.create_info)
+
+    def test_volume_snapshot_delete(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        self.driver.volume_snapshot_delete(
+            self.context, mock_instance, mock.sentinel.volume_id,
+            mock.sentinel.snapshot_id, mock.sentinel.delete_info)
+
+        self.driver._volumeops.volume_snapshot_delete.assert_called_once_with(
+            self.context, mock_instance, mock.sentinel.volume_id,
+            mock.sentinel.snapshot_id, mock.sentinel.delete_info)
+
     def test_pause(self):
         self.driver.pause(mock.sentinel.instance)
         self.driver._vmops.pause.assert_called_once_with(

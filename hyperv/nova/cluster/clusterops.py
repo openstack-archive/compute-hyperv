@@ -15,17 +15,19 @@
 
 """Management class for Cluster VM operations."""
 
+import functools
+
 from nova.compute import power_state
 from nova.compute import task_states
 from nova.compute import vm_states
 from nova import context
 from nova import network
 from nova import objects
+from nova import utils
 from nova.virt import block_device
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_log import log as logging
-from oslo_service import loopingcall
 
 from hyperv.i18n import _LI, _LE
 import hyperv.nova.conf
@@ -44,7 +46,6 @@ class ClusterOps(object):
         self._clustutils.check_cluster_state()
         self._instance_map = {}
 
-        self._daemon = None
         self._this_node = self._clustutils.get_node_name()
 
         self._context = context.get_admin_context()
@@ -79,17 +80,10 @@ class ClusterOps(object):
     def start_failover_listener_daemon(self):
         """Start the daemon failover listener."""
 
-        def _looper():
-            try:
-                self._clustutils.monitor_vm_failover(self._failover_migrate)
-            except Exception:
-                LOG.exception(_LE('Exception occured during failover '
-                                  'observation / migration.'))
+        listener = self._clustutils.get_vm_owner_change_listener()
+        cbk = functools.partial(utils.spawn_n, self._failover_migrate)
 
-        self._daemon = loopingcall.FixedIntervalLoopingCall(_looper)
-
-        self._daemon.start(
-            interval=CONF.hyperv.cluster_event_check_interval)
+        utils.spawn_n(listener, cbk)
 
     def reclaim_failovered_instances(self):
         # NOTE(claudiub): some instances might have failovered while the
@@ -105,8 +99,9 @@ class ClusterOps(object):
                           self._this_node.upper() != instance.host.upper()]
 
         for instance in nova_instances:
-            self._failover_migrate(instance.name, instance.host,
-                                   self._this_node)
+            utils.spawn_n(self._failover_migrate,
+                          instance.name, instance.host,
+                          self._this_node)
 
     def _failover_migrate(self, instance_name, old_host, new_host):
         """This method will check if the generated event is a legitimate

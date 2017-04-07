@@ -47,6 +47,9 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             self.livemigrops._clustutils.vm_exists.return_value, ret)
 
     def test_live_migration_in_cluster(self):
+        self.flags(instance_live_migration_timeout=mock.sentinel.migr_timeout,
+                   group='hyperv')
+
         mock_instance = fake_instance.fake_instance_obj(self._fake_context)
         self.livemigrops._clustutils.vm_exists.return_value = True
         post_method = mock.MagicMock()
@@ -63,7 +66,8 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
 
         clustutils = self.livemigrops._clustutils
         clustutils.live_migrate_vm.assert_called_once_with(
-            mock_instance.name, dest)
+            mock_instance.name, dest,
+            mock.sentinel.migr_timeout)
         post_method.assert_called_once_with(
             self._fake_context, mock_instance, dest,
             mock.sentinel.block_migration, mock.sentinel.migrate_data)

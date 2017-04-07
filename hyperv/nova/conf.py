@@ -30,6 +30,13 @@ hyperv_opts = [
                     'shutdown. By default, instances will be saved, which '
                     'adds a disk overhead. Changing this option will not '
                     'affect existing instances.'),
+    cfg.IntOpt('instance_live_migration_timeout',
+               default=300,
+               min=0,
+               help='Number of seconds to wait for an instance to be '
+                    'live migrated (Only applies to clustered instances '
+                    'for the moment).'),
+
 ]
 
 CONF = nova.conf.CONF

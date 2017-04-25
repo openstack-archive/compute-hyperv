@@ -76,6 +76,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._serial_console_ops = mock.MagicMock()
         self._vmops._block_dev_man = mock.MagicMock()
         self._vmops._vif_driver = mock.MagicMock()
+        self._pathutils = self._vmops._pathutils
 
     def test_list_instances(self):
         mock_instance = mock.MagicMock()
@@ -1139,15 +1140,27 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._pathutils.remove.assert_called_once_with(
             mock.sentinel.configdrive_path)
 
-    def test_delete_disk_files(self):
+    @ddt.data(None, mock.sentinel.instance_path)
+    def test_delete_disk_files(self, passed_instance_path):
         mock_instance = fake_instance.fake_instance_obj(self.context)
-        self._vmops._delete_disk_files(mock_instance.name)
+        self._vmops._delete_disk_files(mock_instance.name,
+                                       passed_instance_path)
 
         stop_console_handler = (
             self._vmops._serial_console_ops.stop_console_handler_unsync)
         stop_console_handler.assert_called_once_with(mock_instance.name)
-        self._vmops._pathutils.get_instance_dir.assert_called_once_with(
-            mock_instance.name, create_dir=False, remove_dir=True)
+
+        if passed_instance_path:
+            self.assertFalse(self._vmops._pathutils.get_instance_dir.called)
+        else:
+            self._pathutils.get_instance_dir.assert_called_once_with(
+                mock_instance.name)
+
+        exp_inst_path = (passed_instance_path or
+                         self._pathutils.get_instance_dir.return_value)
+
+        self._pathutils.check_remove_dir.assert_called_once_with(
+            exp_inst_path)
 
     @mock.patch('hyperv.nova.volumeops.VolumeOps.disconnect_volumes')
     @mock.patch('hyperv.nova.vmops.VMOps._delete_disk_files')
@@ -1162,6 +1175,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                             block_device_info=mock.sentinel.FAKE_BD_INFO,
                             network_info=mock.sentinel.fake_network_info)
 
+        self._pathutils.get_instance_dir.assert_called_once_with(
+            mock_instance.name,
+            create_dir=False)
         self._vmops._vmutils.vm_exists.assert_called_with(
             mock_instance.name)
         mock_power_off.assert_called_once_with(mock_instance)
@@ -1172,7 +1188,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_disconnect_volumes.assert_called_once_with(
             mock.sentinel.FAKE_BD_INFO)
         mock_delete_disk_files.assert_called_once_with(
-            mock_instance.name)
+            mock_instance.name,
+            self._pathutils.get_instance_dir.return_value)
 
     def test_destroy_inexistent_instance(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)

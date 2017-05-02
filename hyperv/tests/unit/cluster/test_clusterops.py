@@ -13,8 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import time
-
 import ddt
 import mock
 from nova.compute import power_state
@@ -46,6 +44,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.clusterops._network_api = mock.MagicMock()
         self.clusterops._vmops = mock.MagicMock()
         self.clusterops._serial_console_ops = mock.MagicMock()
+        self._clustutils = self.clusterops._clustutils
 
     def test_get_instance_host(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -100,21 +99,26 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
             self.clusterops._instance_map[mock_instance.name],
             mock_instance.uuid)
 
-    def test_start_failover_listener_daemon(self):
-        self.flags(cluster_event_check_interval=0, group='hyperv')
-        self.clusterops._clustutils.monitor_vm_failover.side_effect = (
-            os_win_exc.HyperVClusterException)
+    @mock.patch('nova.utils.spawn_n')
+    def test_start_failover_listener_daemon(self, mock_spawn):
         self.clusterops.start_failover_listener_daemon()
 
-        # wait for the daemon to do something.
-        time.sleep(0.5)
-        self.clusterops._clustutils.monitor_vm_failover.assert_called_with(
-            self.clusterops._failover_migrate)
+        spawn_args = mock_spawn.call_args_list[0][0]
+        self.assertEqual(
+            self._clustutils.get_vm_owner_change_listener.return_value,
+            spawn_args[0])
 
+        cbk = spawn_args[1]
+        cbk()
+
+        mock_spawn.assert_called_with(self.clusterops._failover_migrate)
+
+    @mock.patch('nova.utils.spawn_n')
     @mock.patch.object(clusterops.ClusterOps, '_failover_migrate')
     @mock.patch.object(clusterops.ClusterOps, '_get_nova_instances')
     def test_reclaim_failovered_instances(self, mock_get_instances,
-                                          mock_failover_migrate):
+                                          mock_failover_migrate,
+                                          mock_spawn):
         self.clusterops._this_node = 'fake_node'
         mock_instance1 = mock.MagicMock(host='other_host')
         mock_instance2 = mock.MagicMock(host=self.clusterops._this_node)
@@ -126,7 +130,8 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_instances.assert_called_once_with(
             ['id', 'uuid', 'name', 'host'],
             self.clusterops._vmops.list_instance_uuids.return_value)
-        mock_failover_migrate.assert_called_once_with(
+        mock_spawn.assert_called_once_with(
+            mock_failover_migrate,
             mock_instance1.name, mock_instance1.host,
             self.clusterops._this_node)
 

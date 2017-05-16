@@ -60,6 +60,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     _WIN_VERSION_10 = '10.0'
 
     ISO9660 = 'iso9660'
+    VFAT = 'vfat'
     _FAKE_CONFIGDRIVE_PATH = 'C:/fake_instance_dir/configdrive.vhd'
 
     def setUp(self):
@@ -1135,7 +1136,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                        rescue=True)
 
     def test_create_config_drive_other_drive_format(self):
-        self._test_create_config_drive(config_drive_format=mock.sentinel.OTHER,
+        self._test_create_config_drive(config_drive_format=self.VFAT,
                                        config_drive_cdrom=False,
                                        side_effect=None)
 

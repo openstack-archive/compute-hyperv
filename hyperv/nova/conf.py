@@ -24,12 +24,12 @@ hyperv_opts = [
                     'evacuated during host maintenance.'),
     cfg.IntOpt('cluster_event_check_interval',
                default=2),
-    cfg.StrOpt('instance_automatic_shutdown',
-               default=False,
-               help='Automatically shutdown instances when the host is '
-                    'shutdown. By default, instances will be saved, which '
-                    'adds a disk overhead. Changing this option will not '
-                    'affect existing instances.'),
+    cfg.BoolOpt('instance_automatic_shutdown',
+                default=False,
+                help='Automatically shutdown instances when the host is '
+                     'shutdown. By default, instances will be saved, which '
+                     'adds a disk overhead. Changing this option will not '
+                     'affect existing instances.'),
     cfg.IntOpt('instance_live_migration_timeout',
                default=300,
                min=0,

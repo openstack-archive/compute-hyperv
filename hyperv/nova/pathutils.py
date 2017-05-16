@@ -111,11 +111,11 @@ class PathUtils(pathutils.PathUtils):
                     "authenticate on a remote host.") % {'path': path})
             raise
 
-    def get_instance_migr_revert_dir(self, instance_name, create_dir=False,
+    def get_instance_migr_revert_dir(self, instance_path, create_dir=False,
                                      remove_dir=False):
-        dir_name = '%s_revert' % instance_name
-        return self._get_instances_sub_dir(dir_name, None, create_dir,
-                                           remove_dir)
+        dir_name = '%s_revert' % instance_path
+        self._check_dir(dir_name, create_dir, remove_dir)
+        return dir_name
 
     def get_instance_dir(self, instance_name, remote_server=None,
                          create_dir=True, remove_dir=False):

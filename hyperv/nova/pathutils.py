@@ -42,6 +42,8 @@ ERROR_INVALID_NAME = 123
 
 class PathUtils(pathutils.PathUtils):
 
+    _CSV_FOLDER = 'ClusterStorage\\'
+
     def __init__(self):
         super(PathUtils, self).__init__()
         self._vmutils = utilsfactory.get_vmutils()
@@ -79,23 +81,35 @@ class PathUtils(pathutils.PathUtils):
 
     def get_remote_path(self, remote_server, remote_path):
         if remote_path.startswith('\\\\'):
-            remote_unc_path = remote_path
-        else:
-            # Use an administrative share
-            remote_unc_path = ('\\\\%(remote_server)s\\%(path)s' %
-                               dict(remote_server=remote_server,
-                                    path=remote_path.replace(':', '$')))
+            return remote_path
+
+        # Use an administrative share
+        remote_unc_path = ('\\\\%(remote_server)s\\%(path)s' %
+                           dict(remote_server=remote_server,
+                                path=remote_path.replace(':', '$')))
+
+        csv_location = '\\'.join([os.getenv('SYSTEMDRIVE', 'C:'),
+                                  self._CSV_FOLDER])
+        if remote_path.lower().startswith(csv_location.lower()):
+            # the given remote_path is a CSV path.
+            # Return remote_path as the local path.
+            LOG.debug("Remote path %s is on a CSV. Returning as a local path.",
+                      remote_path)
+            return remote_path
+
+        LOG.debug('Returning UNC path %(unc_path)s for host %(host)s.',
+                  dict(unc_path=remote_unc_path, host=remote_server))
         return remote_unc_path
 
     def _get_instances_sub_dir(self, dir_name, remote_server=None,
                                create_dir=True, remove_dir=False):
         instances_path = self.get_instances_dir(remote_server)
         path = os.path.join(instances_path, dir_name)
-        self._check_dir(path, create_dir=create_dir, remove_dir=remove_dir)
+        self.check_dir(path, create_dir=create_dir, remove_dir=remove_dir)
 
         return path
 
-    def _check_dir(self, path, create_dir=False, remove_dir=False):
+    def check_dir(self, path, create_dir=False, remove_dir=False):
         try:
             if remove_dir:
                 self.check_remove_dir(path)
@@ -114,7 +128,7 @@ class PathUtils(pathutils.PathUtils):
     def get_instance_migr_revert_dir(self, instance_path, create_dir=False,
                                      remove_dir=False):
         dir_name = '%s_revert' % instance_path
-        self._check_dir(dir_name, create_dir, remove_dir)
+        self.check_dir(dir_name, create_dir, remove_dir)
         return dir_name
 
     def get_instance_dir(self, instance_name, remote_server=None,
@@ -139,9 +153,9 @@ class PathUtils(pathutils.PathUtils):
             except os_win_exc.HyperVVMNotFoundException:
                 pass
 
-        self._check_dir(instance_dir,
-                        create_dir=create_dir,
-                        remove_dir=remove_dir)
+        self.check_dir(instance_dir,
+                       create_dir=create_dir,
+                       remove_dir=remove_dir)
         return instance_dir
 
     def _lookup_vhd_path(self, instance_name, vhd_path_func,
@@ -205,8 +219,8 @@ class PathUtils(pathutils.PathUtils):
                                                  create_dir=create_dir)
 
         export_dir = os.path.join(instance_dir, 'export')
-        self._check_dir(export_dir, create_dir=create_dir,
-                        remove_dir=remove_dir)
+        self.check_dir(export_dir, create_dir=create_dir,
+                       remove_dir=remove_dir)
         return export_dir
 
     def get_vm_console_log_paths(self, instance_name, remote_server=None):

@@ -23,6 +23,7 @@ import nova.conf
 from nova import exception
 from nova.virt import configdrive
 from os_win import utilsfactory
+from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
@@ -38,8 +39,18 @@ from hyperv.nova import volumeops
 LOG = logging.getLogger(__name__)
 CONF = nova.conf.CONF
 
+hyperv_migration_opts = [
+    cfg.BoolOpt('move_disks_on_cold_migration',
+                default=True)
+]
+
+CONF.register_opts(hyperv_migration_opts, 'hyperv')
+
 
 class MigrationOps(object):
+
+    _ADMINISTRATIVE_SHARE_RE = re.compile(r'\\\\.*\\[a-zA-Z]\$\\.*')
+
     def __init__(self):
         self._vmutils = utilsfactory.get_vmutils()
         self._vhdutils = utilsfactory.get_vhdutils()
@@ -90,6 +101,9 @@ class MigrationOps(object):
         self._vmops.power_off(instance, timeout, retry_interval)
         instance_path = self._move_vm_files(instance)
 
+        instance.system_metadata['backup_location'] = instance_path
+        instance.save()
+
         self._vmops.destroy(instance, destroy_disks=True)
 
         # return the instance's path location.
@@ -97,18 +111,18 @@ class MigrationOps(object):
 
     def confirm_migration(self, context, migration, instance, network_info):
         LOG.debug("confirm_migration called", instance=instance)
+        revert_path = instance.system_metadata['backup_location']
+        export_path = self._pathutils.get_export_dir(instance_dir=revert_path)
+        self._pathutils.check_dir(export_path, remove_dir=True)
+        self._pathutils.check_dir(revert_path, remove_dir=True)
 
-        instance_path = self._pathutils.get_instance_dir(instance.name,
-                                                         create_dir=False)
-        self._pathutils.get_instance_migr_revert_dir(instance_path,
-                                                     remove_dir=True)
+    def _revert_migration_files(self, instance):
+        revert_path = instance.system_metadata['backup_location']
+        instance_path = revert_path.rstrip('_revert')
 
-    def _revert_migration_files(self, instance_name):
-        instance_path = self._pathutils.get_instance_dir(
-            instance_name, create_dir=False, remove_dir=True)
-
-        revert_path = self._pathutils.get_instance_migr_revert_dir(
-            instance_path)
+        # the instance dir might still exist, if the destination node kept
+        # the files on the original node.
+        self._pathutils.check_dir(instance_path, remove_dir=True)
         self._pathutils.rename(revert_path, instance_path)
         return instance_path
 
@@ -126,7 +140,7 @@ class MigrationOps(object):
     def finish_revert_migration(self, context, instance, network_info,
                                 block_device_info=None, power_on=True):
         LOG.debug("finish_revert_migration called", instance=instance)
-        instance_path = self._revert_migration_files(instance.name)
+        instance_path = self._revert_migration_files(instance)
 
         image_meta = self._imagecache.get_image_details(context, instance)
         self._import_and_setup_vm(context, instance, instance_path, image_meta,
@@ -210,8 +224,30 @@ class MigrationOps(object):
             migration.source_compute, source_inst_dir)
         source_export_path = self._pathutils.get_export_dir(
             instance_dir=source_inst_dir)
-        inst_dir = self._pathutils.get_instance_dir(
-            instance.name, create_dir=True, remove_dir=True)
+
+        if CONF.hyperv.move_disks_on_cold_migration:
+            # copy the files from the source node to this node's configured
+            # location.
+            inst_dir = self._pathutils.get_instance_dir(
+                instance.name, create_dir=True, remove_dir=True)
+        elif self._ADMINISTRATIVE_SHARE_RE.match(source_inst_dir):
+            # make sure that the source is not a remote local path.
+            # e.g.: \\win-srv\\C$\OpenStack\Instances\..
+            # CSVs, local paths, and shares are fine.
+            inst_dir = source_inst_dir.rstrip('_revert')
+            LOG.warning(_LW(
+                'Host is configured not to copy disks on cold migration, but '
+                'the instance will not be able to start with the remote path: '
+                '"%s". Only local, share, or CSV paths are acceptable.'),
+                inst_dir)
+            inst_dir = self._pathutils.get_instance_dir(
+                instance.name, create_dir=True, remove_dir=True)
+        else:
+            # make a copy on the source node's configured location.
+            # strip the _revert from the source backup dir.
+            inst_dir = source_inst_dir.rstrip('_revert')
+            self._pathutils.check_dir(inst_dir, create_dir=True)
+
         export_path = self._pathutils.get_export_dir(
             instance_dir=inst_dir)
 

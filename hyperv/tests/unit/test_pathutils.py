@@ -85,6 +85,18 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
                                                       fake_remote_path)
         self.assertEqual(fake_remote_path, actual_path)
 
+    @mock.patch.object(pathutils.os, 'getenv')
+    def test_get_remote_path_csv(self, mock_getenv):
+        mock_getenv.return_value = 'C:'
+        fake_server = 'fake_server'
+        fake_remote_path = 'C:\\ClusterStorage\\Volume1\\fake_dir'
+
+        actual_path = self._pathutils.get_remote_path(fake_server,
+                                                      fake_remote_path)
+
+        self.assertEqual(fake_remote_path, actual_path)
+        mock_getenv.assert_called_once_with('SYSTEMDRIVE', 'C:')
+
     def test_get_remote_path_normal(self):
         fake_server = 'fake_server'
         fake_remote_path = 'C:\\fake_path'
@@ -98,7 +110,7 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(expected_path, actual_path)
 
     @mock.patch.object(pathutils.PathUtils, 'get_instances_dir')
-    @mock.patch.object(pathutils.PathUtils, '_check_dir')
+    @mock.patch.object(pathutils.PathUtils, 'check_dir')
     def test_get_instances_sub_dir(self, mock_check_dir,
                                    mock_get_instances_dir):
         fake_instances_dir = 'fake_instances_dir'
@@ -129,7 +141,7 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(pathutils.PathUtils, 'check_remove_dir')
     def test_check_dir(self, mock_check_remove_dir, mock_check_create_dir,
                        create_dir, remove_dir):
-        self._pathutils._check_dir(
+        self._pathutils.check_dir(
             mock.sentinel.dir, create_dir=create_dir, remove_dir=remove_dir)
 
         if create_dir:
@@ -154,11 +166,11 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
         with mock.patch.object(builtins, 'WindowsError',
                                FakeWindowsError, create=True):
             self.assertRaises(exception.AdminRequired,
-                              self._pathutils._check_dir,
+                              self._pathutils.check_dir,
                               mock.sentinel.dir_name,
                               create_dir=True)
 
-    @mock.patch.object(pathutils.PathUtils, '_check_dir')
+    @mock.patch.object(pathutils.PathUtils, 'check_dir')
     def test_get_instance_migr_revert_dir(self, mock_check_dir):
         dir_name = 'fake_dir'
         expected_dir_name = '%s_revert' % dir_name
@@ -180,7 +192,7 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
     @ddt.unpack
     @mock.patch.object(pathutils.PathUtils, '_get_instances_sub_dir')
     @mock.patch.object(pathutils.PathUtils, 'get_remote_path')
-    @mock.patch.object(pathutils.PathUtils, '_check_dir')
+    @mock.patch.object(pathutils.PathUtils, 'check_dir')
     @mock.patch.object(pathutils.os.path, 'exists')
     @mock.patch('os_win.utilsfactory.get_vmutils')
     def test_get_instance_dir(self, mock_get_vmutils,
@@ -275,7 +287,7 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
             self.fake_instance_name)
         self.assertIsNone(configdrive_path)
 
-    @mock.patch.object(pathutils.PathUtils, '_check_dir')
+    @mock.patch.object(pathutils.PathUtils, 'check_dir')
     @mock.patch.object(pathutils.PathUtils, 'get_instance_dir')
     def test_export_dir(self, mock_get_instance_dir, mock_check_dir):
         mock_get_instance_dir.return_value = self.fake_instance_dir

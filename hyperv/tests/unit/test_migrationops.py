@@ -388,7 +388,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                                                  'configdrive.iso')
         ephemeral_disk = os.path.join(inst_dir, 'eph1.vhdx')
         expected_ephemeral_disk = os.path.join(expected_inst_dir, 'eph1.vhdx')
-        disk_files = [config_drive_iso, ephemeral_disk]
+        other_disk = '//some/path/to/vol-UUID.vhdx'
+        disk_files = [config_drive_iso, ephemeral_disk, other_disk]
 
         self._vmutils.get_vm_storage_paths.return_value = (
             disk_files, mock.sentinel.volume_drives)

@@ -30,6 +30,7 @@ from oslo_log import log as logging
 from oslo_service import loopingcall
 
 from hyperv.i18n import _LI, _LE
+from hyperv.nova import hostops
 from hyperv.nova import serialconsoleops
 from hyperv.nova import vmops
 
@@ -53,7 +54,7 @@ class ClusterOps(object):
         self._instance_map = {}
 
         self._daemon = None
-        self._this_node = self._clustutils.get_node_name()
+        self._this_node = hostops.HostOps.get_hostname()
 
         self._context = context.get_admin_context()
         self._network_api = network.API()

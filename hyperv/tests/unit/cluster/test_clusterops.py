@@ -169,7 +169,8 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
                                           mock.sentinel.old_host,
                                           mock.sentinel.new_host)
 
-        instance.host.upper.assert_called_with()
+        self.assertFalse(
+            self.clusterops._network_api.get_instance_nw_info.called)
 
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
     def test_failover_migrate_at_source_node(self, mock_get_instance_by_name):

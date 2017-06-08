@@ -31,6 +31,7 @@ from oslo_log import log as logging
 
 from hyperv.i18n import _LI, _LE
 import hyperv.nova.conf
+from hyperv.nova import hostops
 from hyperv.nova import serialconsoleops
 from hyperv.nova import vmops
 
@@ -46,7 +47,7 @@ class ClusterOps(object):
         self._clustutils.check_cluster_state()
         self._instance_map = {}
 
-        self._this_node = self._clustutils.get_node_name()
+        self._this_node = hostops.HostOps.get_hostname()
 
         self._context = context.get_admin_context()
         self._network_api = network.API()

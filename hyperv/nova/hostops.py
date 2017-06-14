@@ -150,6 +150,10 @@ class HostOps(object):
 
         return objects.NUMATopology(cells=cells)
 
+    @staticmethod
+    def get_hostname():
+        return platform.node()
+
     def get_available_resource(self):
         """Retrieve resource info.
 
@@ -182,7 +186,7 @@ class HostOps(object):
                'local_gb_used': used_hdd_gb,
                'hypervisor_type': "hyperv",
                'hypervisor_version': self._get_hypervisor_version(),
-               'hypervisor_hostname': platform.node(),
+               'hypervisor_hostname': self.get_hostname(),
                'vcpus_used': 0,
                'cpu_info': jsonutils.dumps(cpu_info),
                'supported_instances': [

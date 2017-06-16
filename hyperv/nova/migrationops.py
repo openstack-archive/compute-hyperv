@@ -325,11 +325,15 @@ class MigrationOps(object):
         pattern = re.compile('configdrive|eph|root')
         for disk_file in disk_files:
             disk_name = os.path.basename(disk_file)
+            if not pattern.match(disk_name):
+                # skip files that do not match the pattern.
+                continue
+
             expected_disk_path = os.path.join(instance_path, disk_name)
             if not os.path.exists(expected_disk_path):
                 raise exception.DiskNotFound(location=expected_disk_path)
 
-            if pattern.match(disk_name) and expected_disk_path != disk_file:
+            if expected_disk_path != disk_file:
                 LOG.debug("Updating VM disk location from %(src)s to %(dest)s",
                           {'src': disk_file, 'dest': expected_disk_path,
                            'instance': instance})

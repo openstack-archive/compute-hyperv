@@ -451,8 +451,13 @@ class VMOps(object):
 
         self._set_instance_disk_qos_specs(instance, is_resize)
         self._attach_pci_devices(instance, is_resize)
-        self._vmutils.set_nested_virtualization(instance.name,
-                                                state=nested_virt_enabled)
+        if nested_virt_enabled:
+            # NOTE(claudiub): We might not want to disable nested
+            # virtualization. If it was enabled, the guest will most probably
+            # have Hyper-V enabled + nested VMs, which will break if nested
+            # virtualization is disabled.
+            self._vmutils.set_nested_virtualization(instance.name,
+                                                    state=nested_virt_enabled)
 
     def _attach_pci_devices(self, instance, is_resize):
         if is_resize:

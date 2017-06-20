@@ -15,14 +15,29 @@
 
 """Management class for cluster live migration VM operations."""
 
+import nova.conf
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
+from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 
 from hyperv.nova import livemigrationops
 
 LOG = logging.getLogger(__name__)
+
+hyperv_opts = [
+    cfg.IntOpt('instance_live_migration_timeout',
+               default=300,
+               min=0,
+               help='Number of seconds to wait for an instance to be '
+                    'live migrated (Only applies to clustered instances '
+                    'for the moment).'),
+
+]
+
+CONF = nova.conf.CONF
+CONF.register_opts(hyperv_opts, 'hyperv')
 
 
 class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
@@ -62,7 +77,10 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
         # destination is in the same cluster.
         # perform a clustered live migration.
         try:
-            self._clustutils.live_migrate_vm(instance_name, dest)
+            self._clustutils.live_migrate_vm(
+                instance_name,
+                dest,
+                CONF.hyperv.instance_live_migration_timeout)
         except os_win_exc.HyperVVMNotFoundException:
             with excutils.save_and_reraise_exception():
                 LOG.debug("Calling live migration recover_method "

@@ -66,6 +66,19 @@ class HyperVClusterDriver(driver.HyperVDriver):
             context, instance, network_info, block_device_info, power_on)
         self._clops.add_to_cluster(instance)
 
+    def rollback_live_migration_at_destination(self, context, instance,
+                                               network_info,
+                                               block_device_info,
+                                               destroy_disks=True,
+                                               migrate_data=None):
+        if self._livemigrationops.is_instance_clustered(instance.name):
+            self.unplug_vifs(instance, network_info)
+        else:
+            super(HyperVClusterDriver,
+                  self).rollback_live_migration_at_destination(
+                    context, instance, network_info, block_device_info,
+                    destroy_disks, migrate_data)
+
     def post_live_migration_at_destination(self, context, instance,
                                            network_info,
                                            block_migration=False,

@@ -40,7 +40,7 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._clustutils = self.livemigrops._clustutils
 
     def test_is_instance_clustered(self):
-        ret = self.livemigrops._is_instance_clustered(
+        ret = self.livemigrops.is_instance_clustered(
             mock.sentinel.instance)
 
         self.assertEqual(

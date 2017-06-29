@@ -34,6 +34,7 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
 
         self.context = 'context'
         self.driver = driver.HyperVClusterDriver(mock.sentinel.virtapi)
+        self.driver._livemigrationops = mock.Mock()
 
     @mock.patch.object(base_driver.HyperVDriver, 'spawn')
     def test_spawn(self, mock_superclass_spawn):
@@ -117,6 +118,38 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.power_on)
         self.driver._clops.add_to_cluster.assert_called_once_with(
             mock.sentinel.fake_instance)
+
+    @mock.patch.object(driver.HyperVClusterDriver, 'unplug_vifs')
+    def test_rollback_live_migration_at_destination_clustered(
+            self, mock_unplug_vifs):
+        mock_is_clustered = self.driver._livemigrationops.is_instance_clustered
+        mock_instance = mock.Mock()
+        self.driver.rollback_live_migration_at_destination(
+            self.context, mock_instance, mock.sentinel.network_info,
+            mock.sentinel.block_dev_info, mock.sentinel.destroy_disks,
+            mock.sentinel.migrate_data)
+
+        mock_is_clustered.assert_called_once_with(mock_instance.name)
+        mock_unplug_vifs.assert_called_once_with(
+            mock_instance, mock.sentinel.network_info)
+
+    @mock.patch.object(base_driver.HyperVDriver,
+                       'rollback_live_migration_at_destination')
+    def test_rollback_live_migration_at_destination(self,
+                                                    mock_superclass_rollback):
+        mock_is_clustered = self.driver._livemigrationops.is_instance_clustered
+        mock_is_clustered.return_value = False
+        mock_instance = mock.Mock()
+        self.driver.rollback_live_migration_at_destination(
+            self.context, mock_instance, mock.sentinel.network_info,
+            mock.sentinel.block_dev_info, mock.sentinel.destroy_disks,
+            mock.sentinel.migrate_data)
+
+        mock_is_clustered.assert_called_once_with(mock_instance.name)
+        mock_superclass_rollback.assert_called_once_with(
+            self.context, mock_instance, mock.sentinel.network_info,
+            mock.sentinel.block_dev_info, mock.sentinel.destroy_disks,
+            mock.sentinel.migrate_data)
 
     @mock.patch.object(base_driver.HyperVDriver,
                        'post_live_migration_at_destination')

@@ -35,7 +35,7 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
         super(ClusterLiveMigrationOps, self).__init__()
         self._clustutils = utilsfactory.get_clusterutils()
 
-    def _is_instance_clustered(self, instance_name):
+    def is_instance_clustered(self, instance_name):
         return self._clustutils.vm_exists(instance_name)
 
     def live_migration(self, context, instance_ref, dest, post_method,
@@ -43,7 +43,7 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
                        migrate_data=None):
         LOG.debug("live_migration called.", instance=instance_ref)
         instance_name = instance_ref.name
-        clustered = self._is_instance_clustered(instance_name)
+        clustered = self.is_instance_clustered(instance_name)
         node_names = [node.upper() for node in
                       self._clustutils.get_cluster_node_names()]
 
@@ -111,7 +111,7 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
 
     def pre_live_migration(self, context, instance, block_device_info,
                            network_info):
-        if self._is_instance_clustered(instance.name):
+        if self.is_instance_clustered(instance.name):
             self._volumeops.connect_volumes(block_device_info)
         else:
             super(ClusterLiveMigrationOps, self).pre_live_migration(
@@ -119,6 +119,6 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
 
     def post_live_migration(self, context, instance, block_device_info,
                             migrate_data):
-        if not self._is_instance_clustered(instance.name):
+        if not self.is_instance_clustered(instance.name):
             super(ClusterLiveMigrationOps, self).post_live_migration(
                 context, instance, block_device_info, migrate_data)

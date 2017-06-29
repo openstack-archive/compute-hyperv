@@ -17,11 +17,13 @@
 Management class for live migration VM operations.
 """
 
+from nova import exception
 from nova.objects import migrate_data as migrate_data_obj
 from os_win import utilsfactory
 from oslo_log import log as logging
 from oslo_utils import excutils
 
+from hyperv.i18n import _
 from hyperv.nova import block_device_manager
 import hyperv.nova.conf
 from hyperv.nova import imagecache
@@ -133,9 +135,14 @@ class LiveMigrationOps(object):
                   instance=instance_ref)
 
         migrate_data = migrate_data_obj.HyperVLiveMigrateData()
-        migrate_data.is_shared_instance_path = (
-            self._pathutils.check_remote_instances_dir_shared(
-                instance_ref.host))
+        try:
+            migrate_data.is_shared_instance_path = (
+                self._pathutils.check_remote_instances_dir_shared(
+                    instance_ref.host))
+        except OSError as e:
+            reason = _('Unavailable instance location. Exception: %s') % e
+            raise exception.MigrationPreCheckError(reason=reason)
+
         return migrate_data
 
     def cleanup_live_migration_destination_check(self, ctxt, dest_check_data):

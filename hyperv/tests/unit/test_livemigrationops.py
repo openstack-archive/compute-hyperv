@@ -15,6 +15,7 @@
 
 import ddt
 import mock
+from nova import exception
 from nova.objects import migrate_data as migrate_data_obj
 from os_win import exceptions as os_win_exc
 
@@ -222,6 +223,18 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(mock_migr_data_cls.return_value, migr_data)
         self.assertEqual(mock_check_shared_inst_dir.return_value,
                          migr_data.is_shared_instance_path)
+
+    def test_check_can_live_migrate_destination_exception(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_check_shared_inst_dir = (
+            self._pathutils.check_remote_instances_dir_shared)
+        mock_check_shared_inst_dir.side_effect = OSError
+
+        self.assertRaises(
+            exception.MigrationPreCheckError,
+            self._livemigrops.check_can_live_migrate_destination,
+            mock.sentinel.context, mock_instance, mock.sentinel.src_comp_info,
+            mock.sentinel.dest_comp_info)
 
     @mock.patch.object(livemigrationops.vmops.VMOps, 'plug_vifs')
     def test_post_live_migration_at_destination(self, mock_plug_vifs):

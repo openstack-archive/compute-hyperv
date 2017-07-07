@@ -58,7 +58,9 @@ class ClusterOps(object):
 
     def add_to_cluster(self, instance):
         try:
-            self._clustutils.add_vm_to_cluster(instance.name)
+            self._clustutils.add_vm_to_cluster(
+                instance.name, CONF.hyperv.max_failover_count,
+                CONF.hyperv.failover_period, CONF.hyperv.auto_failback)
             self._instance_map[instance.name] = instance.uuid
         except os_win_exc.HyperVClusterException:
             LOG.exception('Adding instance to cluster failed.',

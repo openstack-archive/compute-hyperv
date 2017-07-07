@@ -22,8 +22,11 @@ from nova import objects
 from os_win import exceptions as os_win_exc
 
 from compute_hyperv.nova.cluster import clusterops
+import compute_hyperv.nova.conf
 from compute_hyperv.tests import fake_instance
 from compute_hyperv.tests.unit import test_base
+
+CONF = compute_hyperv.nova.conf.CONF
 
 
 @ddt.ddt
@@ -58,7 +61,9 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.clusterops.add_to_cluster(mock_instance)
 
         mock_add_vm = self.clusterops._clustutils.add_vm_to_cluster
-        mock_add_vm.assert_called_once_with(mock_instance.name)
+        mock_add_vm.assert_called_once_with(
+            mock_instance.name, CONF.hyperv.max_failover_count,
+            CONF.hyperv.failover_period, CONF.hyperv.auto_failback)
         self.assertEqual(mock_instance.uuid,
                          self.clusterops._instance_map[mock_instance.name])
 

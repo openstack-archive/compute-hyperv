@@ -17,7 +17,7 @@ import functools
 import os
 
 from nova import exception
-from nova.i18n import _, _LI, _LE, _LW  # noqa
+from nova.i18n import _
 from nova import utils
 from os_win import utilsfactory
 from oslo_log import log as logging
@@ -49,9 +49,9 @@ class SerialConsoleOps(object):
     @instance_synchronized
     def start_console_handler(self, instance_name):
         if self._vmutils.is_secure_vm(instance_name):
-            LOG.warning(_LW("Skipping starting serial console handler. "
-                            "Shielded/Encrypted VM %(instance_name)s "
-                            "doesn't support serial console."),
+            LOG.warning("Skipping starting serial console handler. "
+                        "Shielded/Encrypted VM %(instance_name)s "
+                        "doesn't support serial console.",
                         {'instance_name': instance_name})
             return
 
@@ -65,10 +65,9 @@ class SerialConsoleOps(object):
             handler.start()
             _console_handlers[instance_name] = handler
         except Exception as exc:
-            LOG.error(_LE('Instance %(instance_name)s serial console handler '
-                          'could not start. Exception %(exc)s'),
-                      {'instance_name': instance_name,
-                       'exc': exc})
+            LOG.error('Instance %(instance_name)s serial console handler '
+                      'could not start. Exception %(exc)s',
+                      {'instance_name': instance_name, 'exc': exc})
             if handler:
                 handler.stop()
 
@@ -79,8 +78,8 @@ class SerialConsoleOps(object):
     def stop_console_handler_unsync(self, instance_name):
         handler = _console_handlers.get(instance_name)
         if handler:
-            LOG.info(_LI("Stopping instance %(instance_name)s "
-                         "serial console handler."),
+            LOG.info("Stopping instance %(instance_name)s "
+                     "serial console handler.",
                      {'instance_name': instance_name})
             handler.stop()
             del _console_handlers[instance_name]

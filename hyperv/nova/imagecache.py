@@ -28,7 +28,7 @@ from oslo_utils import excutils
 from oslo_utils import units
 from oslo_utils import uuidutils
 
-from hyperv.i18n import _, _LI
+from hyperv.i18n import _
 import hyperv.nova.conf
 from hyperv.nova import pathutils
 
@@ -209,7 +209,7 @@ class ImageCache(imagecache.ImageCacheManager):
         for img in backing_files:
             age_seconds = self._pathutils.get_age_of_file(img)
             if age_seconds > max_age_seconds:
-                LOG.info(_LI("Removing old, unused image: %s"), img)
+                LOG.info("Removing old, unused image: %s", img)
                 self._remove_old_image(img)
 
     def _remove_old_image(self, image_path):

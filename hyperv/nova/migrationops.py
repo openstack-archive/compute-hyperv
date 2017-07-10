@@ -28,7 +28,7 @@ from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
 
-from hyperv.i18n import _, _LW
+from hyperv.i18n import _
 from hyperv.nova import block_device_manager
 from hyperv.nova import constants
 from hyperv.nova import imagecache
@@ -235,10 +235,10 @@ class MigrationOps(object):
             # e.g.: \\win-srv\\C$\OpenStack\Instances\..
             # CSVs, local paths, and shares are fine.
             inst_dir = source_inst_dir.rstrip('_revert')
-            LOG.warning(_LW(
+            LOG.warning(
                 'Host is configured not to copy disks on cold migration, but '
                 'the instance will not be able to start with the remote path: '
-                '"%s". Only local, share, or CSV paths are acceptable.'),
+                '"%s". Only local, share, or CSV paths are acceptable.',
                 inst_dir)
             inst_dir = self._pathutils.get_instance_dir(
                 instance.name, create_dir=True, remove_dir=True)
@@ -381,8 +381,8 @@ class MigrationOps(object):
         elif sum(eph['size'] for eph in ephemerals) != new_eph_gb:
             # New ephemeral size is different from the original ephemeral size
             # and there are multiple ephemerals.
-            LOG.warning(_LW("Cannot resize multiple ephemeral disks for "
-                            "instance."), instance=instance)
+            LOG.warning("Cannot resize multiple ephemeral disks for instance.",
+                        instance=instance)
 
         for index, eph in enumerate(ephemerals):
             eph_name = "eph%s" % index

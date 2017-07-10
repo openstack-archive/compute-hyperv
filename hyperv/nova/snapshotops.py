@@ -23,7 +23,6 @@ from nova.image import glance
 from os_win import utilsfactory
 from oslo_log import log as logging
 
-from hyperv.i18n import _LE
 from hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
@@ -113,7 +112,7 @@ class SnapshotOps(object):
                 LOG.debug("Removing snapshot %s", image_id)
                 self._vmutils.remove_vm_snapshot(snapshot_path)
             except Exception:
-                LOG.exception(_LE('Failed to remove snapshot for VM %s'),
+                LOG.exception('Failed to remove snapshot for VM %s',
                               instance_name, instance=instance)
             if export_dir:
                 LOG.debug('Removing directory: %s', export_dir)

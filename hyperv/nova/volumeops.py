@@ -36,7 +36,7 @@ from oslo_utils import excutils
 from oslo_utils import importutils
 from oslo_utils import strutils
 
-from hyperv.i18n import _, _LI, _LE, _LW
+from hyperv.i18n import _
 import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import pathutils
@@ -109,8 +109,8 @@ class VolumeOps(object):
                 tries_left -= 1
                 if not tries_left:
                     LOG.exception(
-                        _LE("Failed to attach volume %(connection_info)s "
-                            "to instance %(instance_name)s. "),
+                        "Failed to attach volume %(connection_info)s "
+                        "to instance %(instance_name)s. ",
                         {'connection_info': strutils.mask_dict_password(
                              connection_info),
                          'instance_name': instance_name})
@@ -121,9 +121,9 @@ class VolumeOps(object):
                         reason=ex)
                 else:
                     LOG.warning(
-                        _LW("Failed to attach volume %(connection_info)s "
-                            "to instance %(instance_name)s. "
-                            "Tries left: %(tries_left)s."),
+                        "Failed to attach volume %(connection_info)s "
+                        "to instance %(instance_name)s. "
+                        "Tries left: %(tries_left)s.",
                         {'connection_info': strutils.mask_dict_password(
                              connection_info),
                          'instance_name': instance_name,
@@ -230,12 +230,11 @@ class VolumeOps(object):
         unsupported_specs = set(qos_specs.keys()).difference(
             supported_qos_specs)
         if unsupported_specs:
-            msg = (_LW('Got unsupported QoS specs: '
-                       '%(unsupported_specs)s. '
-                       'Supported qos specs: %(supported_qos_specs)s') %
-                   {'unsupported_specs': unsupported_specs,
-                    'supported_qos_specs': supported_qos_specs})
-            LOG.warning(msg)
+            LOG.warning('Got unsupported QoS specs: '
+                        '%(unsupported_specs)s. '
+                        'Supported qos specs: %(supported_qos_specs)s',
+                        {'unsupported_specs': unsupported_specs,
+                         'supported_qos_specs': supported_qos_specs})
 
     @volume_snapshot_lock
     def volume_snapshot_create(self, context, instance, volume_id,
@@ -421,8 +420,8 @@ class BaseVolumeDriver(object):
         return ctrller_path, slot
 
     def set_disk_qos_specs(self, connection_info, disk_qos_specs):
-        LOG.info(_LI("The %(protocol)s Hyper-V volume driver "
-                     "does not support QoS. Ignoring QoS specs."),
+        LOG.info("The %(protocol)s Hyper-V volume driver "
+                 "does not support QoS. Ignoring QoS specs.",
                  dict(protocol=self._protocol))
 
     def create_snapshot(self, connection_info, instance, create_info):

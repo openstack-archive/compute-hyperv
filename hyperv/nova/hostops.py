@@ -32,7 +32,7 @@ from oslo_log import log as logging
 from oslo_serialization import jsonutils
 from oslo_utils import units
 
-from hyperv.i18n import _, _LE, _LI
+from hyperv.i18n import _
 import hyperv.nova.conf
 from hyperv.nova import constants
 from hyperv.nova import pathutils
@@ -268,7 +268,7 @@ class HostOps(object):
         if not mode:
             self._set_service_state(host=host, binary='nova-compute',
                                     is_disabled=False)
-            LOG.info(_LI('Host is no longer under maintenance.'))
+            LOG.info('Host is no longer under maintenance.')
             return 'off_maintenance'
 
         self._set_service_state(host=host, binary='nova-compute',
@@ -284,8 +284,8 @@ class HostOps(object):
         vms_uuid_after_migration = self._vmops.list_instance_uuids()
         remaining_vms = len(vms_uuid_after_migration)
         if remaining_vms == 0:
-            LOG.info(_LI('All vms have been migrated successfully.'
-                         'Host is down for maintenance'))
+            LOG.info('All vms have been migrated successfully.'
+                     'Host is down for maintenance')
             return 'on_maintenance'
         raise exception.MigrationError(
             reason=_('Not all vms have been migrated: %s remaining instances.')
@@ -303,8 +303,8 @@ class HostOps(object):
         try:
             instance_uuid = self._vmutils.get_instance_uuid(vm_name)
             if not instance_uuid:
-                LOG.info(_LI('VM "%s" running on this host was not created by '
-                             'nova. Skip migrating this vm to a new host.'),
+                LOG.info('VM "%s" running on this host was not created by '
+                         'nova. Skip migrating this vm to a new host.',
                          vm_name)
                 return
             instance = objects.Instance.get_by_uuid(ctxt, instance_uuid)
@@ -316,7 +316,7 @@ class HostOps(object):
                     clean_shutdown=True)
             self._wait_for_instance_pending_task(ctxt, instance_uuid)
         except Exception as e:
-            LOG.error(_LE('Migrating vm failed with error: %s '), e)
+            LOG.error('Migrating vm failed with error: %s ', e)
             raise exception.MigrationError(reason='Unable to migrate %s.'
                                            % vm_name)
 

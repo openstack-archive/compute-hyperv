@@ -57,13 +57,12 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
         self.driver.destroy(self.context, mock.sentinel.fake_instance,
                             mock.sentinel.network_info,
                             mock.sentinel.block_dev_info,
-                            mock.sentinel.destroy_disks,
-                            mock.sentinel.migrate_data)
+                            mock.sentinel.destroy_disks)
 
         mock_superclass_destroy.assert_called_once_with(
             self.context, mock.sentinel.fake_instance,
             mock.sentinel.network_info, mock.sentinel.block_dev_info,
-            mock.sentinel.destroy_disks, mock.sentinel.migrate_data)
+            mock.sentinel.destroy_disks)
 
     @mock.patch.object(base_driver.HyperVDriver, 'migrate_disk_and_power_off')
     def test_migrate_disk_and_power_off(self, mock_superclass_migrate):

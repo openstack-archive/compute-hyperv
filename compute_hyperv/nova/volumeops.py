@@ -370,6 +370,11 @@ class BaseVolumeDriver(object):
                 disk_number)
         else:
             disk_res_path = disk_path
+
+        if not disk_res_path:
+            err_msg = _("Could not find an attachable disk resource path "
+                        "for disk: %s") % disk_path
+            raise exception.DiskNotFound(err_msg)
         return disk_res_path
 
     def attach_volume(self, connection_info, instance_name,

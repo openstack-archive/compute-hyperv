@@ -445,6 +445,7 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
                  task_states.IMAGE_SNAPSHOT_PENDING])])
 
 
+@ddt.ddt
 class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for Hyper-V BaseVolumeDriver class."""
 
@@ -603,20 +604,29 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     def test_attach_volume_block_dev(self):
         self._test_attach_volume(is_block_dev=True)
 
+    @ddt.data(True, False)
     @mock.patch.object(volumeops.BaseVolumeDriver,
                        'get_disk_resource_path')
-    def test_detach_volume(self, mock_get_disk_resource_path):
+    def test_detach_volume(self, is_block_dev, mock_get_disk_resource_path):
         connection_info = get_fake_connection_info()
+        self._base_vol_driver._is_block_dev = is_block_dev
 
         self._base_vol_driver.detach_volume(connection_info,
                                             mock.sentinel.instance_name)
 
-        mock_get_disk_resource_path.assert_called_once_with(
-            connection_info)
+        if is_block_dev:
+            exp_disk_res_path = None
+            self.assertFalse(mock_get_disk_resource_path.called)
+        else:
+            exp_disk_res_path = mock_get_disk_resource_path.return_value
+            mock_get_disk_resource_path.assert_called_once_with(
+                connection_info)
+
         self._vmutils.detach_vm_disk.assert_called_once_with(
             mock.sentinel.instance_name,
-            mock_get_disk_resource_path.return_value,
-            is_physical=self._base_vol_driver._is_block_dev)
+            exp_disk_res_path,
+            is_physical=is_block_dev,
+            serial=connection_info['serial'])
 
     def test_get_disk_ctrl_and_slot_ide(self):
         ctrl, slot = self._base_vol_driver._get_disk_ctrl_and_slot(

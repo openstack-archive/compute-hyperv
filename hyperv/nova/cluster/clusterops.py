@@ -29,7 +29,6 @@ from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_log import log as logging
 
-from hyperv.i18n import _LI, _LE
 import hyperv.nova.conf
 from hyperv.nova import hostops
 from hyperv.nova import serialconsoleops
@@ -62,7 +61,7 @@ class ClusterOps(object):
             self._clustutils.add_vm_to_cluster(instance.name)
             self._instance_map[instance.name] = instance.uuid
         except os_win_exc.HyperVClusterException:
-            LOG.exception(_LE('Adding instance to cluster failed.'),
+            LOG.exception('Adding instance to cluster failed.',
                           instance=instance)
 
     def remove_from_cluster(self, instance):
@@ -71,7 +70,7 @@ class ClusterOps(object):
                 self._clustutils.delete(instance.name)
             self._instance_map.pop(instance.name, None)
         except os_win_exc.HyperVClusterException:
-            LOG.exception(_LE('Removing instance from cluster failed.'),
+            LOG.exception('Removing instance from cluster failed.',
                           instance=instance)
 
     def post_migration(self, instance):
@@ -110,8 +109,8 @@ class ClusterOps(object):
         failovered VM if necessary and update the owner of the compute vm in
         nova and ports in neutron.
         """
-        LOG.info(_LI('Checking instance failover %(instance)s to %(new_host)s '
-                     'from host %(old_host)s.'),
+        LOG.info('Checking instance failover %(instance)s to %(new_host)s '
+                 'from host %(old_host)s.',
                  {'instance': instance_name,
                   'new_host': new_host,
                   'old_host': old_host})
@@ -143,7 +142,7 @@ class ClusterOps(object):
                       instance_name)
             return
 
-        LOG.info(_LI('Instance %(instance)s  failover to %(host)s.'),
+        LOG.info('Instance %(instance)s  failover to %(host)s.',
                  {'instance': instance_name,
                   'host': new_host})
 

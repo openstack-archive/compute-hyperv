@@ -24,7 +24,7 @@ from os_win import utilsfactory
 from oslo_log import log as logging
 from oslo_utils import uuidutils
 
-from hyperv.i18n import _, _LI
+from hyperv.i18n import _
 import hyperv.nova.conf
 from hyperv.nova import constants
 
@@ -148,7 +148,7 @@ class PathUtils(pathutils.PathUtils):
                 if remote_server:
                     instance_dir = self.get_remote_path(remote_server,
                                                         instance_dir)
-                LOG.info(_LI("Found instance dir at non-default location: %s"),
+                LOG.info("Found instance dir at non-default location: %s",
                          instance_dir)
             except os_win_exc.HyperVVMNotFoundException:
                 pass

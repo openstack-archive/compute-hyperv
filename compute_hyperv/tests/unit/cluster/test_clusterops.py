@@ -166,18 +166,6 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
             'Instance %s is live migrating.', mock.sentinel.instance_name)
 
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
-    def test_failover_migrate_same_host(self, mock_get_instance_by_name):
-        instance = mock_get_instance_by_name.return_value
-        instance.host = self.clusterops._this_node
-
-        self.clusterops._failover_migrate(mock.sentinel.instance_name,
-                                          mock.sentinel.old_host,
-                                          mock.sentinel.new_host)
-
-        self.assertFalse(
-            self.clusterops._network_api.get_instance_nw_info.called)
-
-    @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
     def test_failover_migrate_at_source_node(self, mock_get_instance_by_name):
         instance = mock_get_instance_by_name.return_value
         old_host = 'old_host'

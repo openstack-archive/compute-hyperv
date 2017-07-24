@@ -128,8 +128,6 @@ class ClusterOps(object):
             # to treat it as a failover.
             LOG.debug('Instance %s is live migrating.', instance_name)
             return
-        if instance.host.upper() == self._this_node.upper():
-            return
 
         nw_info = self._network_api.get_instance_nw_info(self._context,
                                                          instance)

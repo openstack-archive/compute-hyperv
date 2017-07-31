@@ -12,3 +12,6 @@ oslosphinx>=4.7.0 # Apache-2.0
 oslotest>=1.10.0 # Apache-2.0
 testrepository>=0.0.18 # Apache-2.0/BSD
 testtools>=1.4.0 # MIT
+
+# placement functional tests
+wsgi-intercept>=1.4.1 # MIT License

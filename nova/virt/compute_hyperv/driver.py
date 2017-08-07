@@ -16,7 +16,7 @@
 A Hyper-V Nova Compute driver.
 """
 
-from hyperv.nova import driver
+from compute_hyperv.nova import driver
 
 # NOTE: nova changed the way it imports drivers. All drivers must belong
 # in the nova.virt namespace.

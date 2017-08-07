@@ -1,4 +1,6 @@
-# Copyright (c) 2016 Cloudbase Solutions Srl
+# Copyright 2014 Cloudbase Solutions Srl
+#
+# All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,11 +14,16 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-"""A Hyper-V Cluster Nova Compute driver."""
+import mock
+from os_win import utilsfactory
 
-from compute_hyperv.nova.cluster import driver
+from compute_hyperv.tests import test
 
-# NOTE: nova changed the way it imports drivers. All drivers must belong
-# in the nova.virt namespace.
 
-HyperVClusterDriver = driver.HyperVClusterDriver
+class HyperVBaseTestCase(test.NoDBTestCase):
+    def setUp(self):
+        super(HyperVBaseTestCase, self).setUp()
+
+        utilsfactory_patcher = mock.patch.object(utilsfactory, '_get_class')
+        utilsfactory_patcher.start()
+        self.addCleanup(utilsfactory_patcher.stop)

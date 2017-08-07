@@ -1,7 +1,7 @@
 [run]
 branch = True
-source = hyperv
-omit = hyperv/tests/*
+source = compute_hyperv
+omit = compute_hyperv/tests/*
 
 [report]
 ignore_errors = True

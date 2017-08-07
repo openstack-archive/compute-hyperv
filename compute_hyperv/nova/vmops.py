@@ -1355,3 +1355,15 @@ class VMOps(object):
         finally:
             if set_previous_state:
                 self._set_vm_state(instance, curr_state)
+
+    def get_instance_uuid(self, instance_name, expect_existing=False):
+        # Fetch the instance UUID from the VM notes attribute.
+        try:
+            instance_uuid = self._vmutils.get_instance_uuid(instance_name)
+            return instance_uuid
+        except os_win_exc.HyperVVMNotFoundException:
+            with excutils.save_and_reraise_exception() as ctxt:
+                LOG.debug("Could not find instance %s while retrieving "
+                          "its uuid. It may have been deleted meanwhile.",
+                          instance_name)
+                ctxt.reraise = expect_existing

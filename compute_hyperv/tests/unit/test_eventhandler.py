@@ -16,10 +16,10 @@
 import mock
 from nova import utils
 from os_win import constants
-from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 
 from compute_hyperv.nova import eventhandler
+from compute_hyperv.nova import vmops
 from compute_hyperv.tests.unit import test_base
 
 
@@ -43,8 +43,7 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
             self._state_change_callback)
         self._event_handler._serial_console_ops = mock.Mock()
 
-    @mock.patch.object(eventhandler.InstanceEventHandler,
-                       '_get_instance_uuid')
+    @mock.patch.object(vmops.VMOps, 'get_instance_uuid')
     @mock.patch.object(eventhandler.InstanceEventHandler, '_emit_event')
     def _test_event_callback(self, mock_emit_event, mock_get_uuid,
                              missing_uuid=False):
@@ -99,33 +98,6 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
         serialops = self._event_handler._serial_console_ops
         serialops.stop_console_handler.assert_called_once_with(
             mock.sentinel.instance_name)
-
-    def _test_get_instance_uuid(self, instance_found=True,
-                                missing_uuid=False):
-        if instance_found:
-            side_effect = (mock.sentinel.instance_uuid
-                           if not missing_uuid else None, )
-        else:
-            side_effect = os_win_exc.HyperVVMNotFoundException(
-                vm_name=mock.sentinel.instance_name)
-        mock_get_uuid = self._event_handler._vmutils.get_instance_uuid
-        mock_get_uuid.side_effect = side_effect
-
-        instance_uuid = self._event_handler._get_instance_uuid(
-            mock.sentinel.instance_name)
-
-        expected_uuid = (mock.sentinel.instance_uuid
-                         if instance_found and not missing_uuid else None)
-        self.assertEqual(expected_uuid, instance_uuid)
-
-    def test_get_nova_created_instance_uuid(self):
-        self._test_get_instance_uuid()
-
-    def test_get_deleted_instance_uuid(self):
-        self._test_get_instance_uuid(instance_found=False)
-
-    def test_get_instance_uuid_missing_notes(self):
-        self._test_get_instance_uuid(missing_uuid=True)
 
     @mock.patch('nova.virt.event.LifecycleEvent')
     def test_get_virt_event(self, mock_lifecycle_event):

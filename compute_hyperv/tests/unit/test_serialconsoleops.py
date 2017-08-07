@@ -19,6 +19,7 @@ from six.moves import builtins
 
 from compute_hyperv.nova import serialconsolehandler
 from compute_hyperv.nova import serialconsoleops
+from compute_hyperv.nova import vmops
 from compute_hyperv.tests.unit import test_base
 
 
@@ -29,6 +30,8 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
         self._serialops = serialconsoleops.SerialConsoleOps()
         self._serialops._pathutils = mock.MagicMock()
         self._serialops._vmutils = mock.MagicMock()
+
+        self._vmutils = self._serialops._vmutils
 
     def _setup_console_handler_mock(self):
         mock_console_handler = mock.Mock()
@@ -119,15 +122,19 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
                           self._serialops.get_console_output,
                           mock.sentinel.instance_name)
 
-    @mock.patch('os.path.exists')
+    @mock.patch.object(vmops.VMOps, 'get_instance_uuid')
     @mock.patch.object(serialconsoleops.SerialConsoleOps,
                        'start_console_handler')
-    def test_start_console_handlers(self, mock_get_instance_dir, mock_exists):
-        self._serialops._pathutils.get_instance_dir.return_value = [
-            mock.sentinel.nova_instance_name,
-            mock.sentinel.other_instance_name]
-        mock_exists.side_effect = [True, False]
+    def test_start_console_handlers(self, mock_start_handler, mock_get_uuid):
+        fake_inst_names = [mock.sentinel.other_instance,
+                           mock.sentinel.instance_name]
+
+        self._vmutils.get_active_instances.return_value = fake_inst_names
+        mock_get_uuid.side_effect = [None, mock.sentinel.instance_id]
 
         self._serialops.start_console_handlers()
 
         self._serialops._vmutils.get_active_instances.assert_called_once_with()
+        mock_start_handler.assert_called_once_with(mock.sentinel.instance_name)
+        mock_get_uuid.assert_has_calls(
+            [mock.call(instance_name) for instance_name in fake_inst_names])

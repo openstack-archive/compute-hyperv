@@ -2224,3 +2224,35 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                                    vm_state)
         else:
             mock_set_state.assert_not_called()
+
+    @ddt.data({},
+              {'instance_found': False},
+              {'uuid_found': True})
+    def test_get_instance_uuid(self, instance_found=True, uuid_found=True):
+        if instance_found:
+            side_effect = (mock.sentinel.instance_uuid
+                           if uuid_found else None, )
+        else:
+            side_effect = os_win_exc.HyperVVMNotFoundException(
+                vm_name=mock.sentinel.instance_name)
+
+        self._vmutils.get_instance_uuid.side_effect = side_effect
+
+        instance_uuid = self._vmops.get_instance_uuid(
+            mock.sentinel.instance_name)
+
+        self._vmutils.get_instance_uuid.assert_called_once_with(
+            mock.sentinel.instance_name)
+        expected_uuid = (mock.sentinel.instance_uuid
+                         if instance_found and uuid_found else None)
+        self.assertEqual(expected_uuid, instance_uuid)
+
+    def test_get_instance_uuid_missing_but_expected(self):
+        self._vmutils.get_instance_uuid.side_effect = (
+            os_win_exc.HyperVVMNotFoundException(
+                vm_name=mock.sentinel.instance_name))
+
+        self.assertRaises(os_win_exc.HyperVVMNotFoundException,
+                          self._vmops.get_instance_uuid,
+                          mock.sentinel.instance_name,
+                          expect_existing=True)

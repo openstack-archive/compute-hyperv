@@ -396,14 +396,27 @@ class BaseVolumeDriver(object):
                                        slot)
 
     def detach_volume(self, connection_info, instance_name):
-        disk_path = self.get_disk_resource_path(connection_info)
+        # Retrieving the disk path can be a time consuming operation in
+        # case of passthrough disks. As such disks attachments will be
+        # tagged using the volume id, we'll just use that instead.
+        #
+        # Note that Hyper-V does not allow us to attach the same passthrough
+        # disk to multiple instances, which means that we're safe to rely
+        # on this tag.
+        if not self._is_block_dev:
+            disk_path = self.get_disk_resource_path(connection_info)
+        else:
+            disk_path = None
 
-        LOG.debug("Detaching disk %(disk_path)s "
-                  "from instance: %(instance_name)s",
+        serial = connection_info['serial']
+        LOG.debug("Detaching disk from instance: %(instance_name)s. "
+                  "Disk path: %(disk_path)s. Disk serial tag: %(serial)s.",
                   dict(disk_path=disk_path,
+                       serial=serial,
                        instance_name=instance_name))
         self._vmutils.detach_vm_disk(instance_name, disk_path,
-                                     is_physical=self._is_block_dev)
+                                     is_physical=self._is_block_dev,
+                                     serial=serial)
 
     def _get_disk_ctrl_and_slot(self, instance_name, disk_bus):
         if disk_bus == constants.CTRL_TYPE_IDE:

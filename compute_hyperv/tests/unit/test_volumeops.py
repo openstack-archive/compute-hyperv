@@ -545,6 +545,15 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
 
         self.assertEqual(mock.sentinel.disk_path, disk_path)
 
+    def test_get_block_dev_res_path_missing(self):
+        self._base_vol_driver._is_block_dev = True
+
+        self._vmutils.get_mounted_disk_by_drive_number.return_value = None
+
+        self.assertRaises(exception.DiskNotFound,
+                          self._base_vol_driver._get_disk_res_path,
+                          mock.sentinel.dev_name)
+
     def test_get_virt_disk_res_path(self):
         # For virtual disk images, we expect the resource path to be the
         # actual image path, as opposed to passthrough disks, in which case we

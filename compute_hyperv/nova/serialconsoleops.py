@@ -21,6 +21,7 @@ from nova.i18n import _
 from nova import utils
 from os_win import utilsfactory
 from oslo_log import log as logging
+from oslo_utils import importutils
 import six
 
 from compute_hyperv.nova import pathutils
@@ -43,8 +44,18 @@ def instance_synchronized(func):
 
 class SerialConsoleOps(object):
     def __init__(self):
+        self._vmops_prop = None
+
         self._vmutils = utilsfactory.get_vmutils()
         self._pathutils = pathutils.PathUtils()
+
+    @property
+    def _vmops(self):
+        # We have to avoid a circular dependency.
+        if not self._vmops_prop:
+            self._vmops_prop = importutils.import_class(
+                'compute_hyperv.nova.vmops.VMOps')()
+        return self._vmops_prop
 
     @instance_synchronized
     def start_console_handler(self, instance_name):
@@ -115,10 +126,11 @@ class SerialConsoleOps(object):
     def start_console_handlers(self):
         active_instances = self._vmutils.get_active_instances()
         for instance_name in active_instances:
-            instance_path = self._pathutils.get_instance_dir(instance_name)
+            instance_uuid = self._vmops.get_instance_uuid(instance_name)
 
-            # Skip instances that are not created by Nova
-            if not os.path.exists(instance_path):
-                continue
-
-            self.start_console_handler(instance_name)
+            if instance_uuid:
+                self.start_console_handler(instance_name)
+            else:
+                LOG.debug("Instance uuid could not be retrieved for "
+                          "instance %s. Its serial console output will not "
+                          "be handled.", instance_name)

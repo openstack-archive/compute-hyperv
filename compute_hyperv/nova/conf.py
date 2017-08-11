@@ -36,7 +36,22 @@ hyperv_opts = [
                help='Number of seconds to wait for an instance to be '
                     'live migrated (Only applies to clustered instances '
                     'for the moment).'),
-
+    cfg.IntOpt('max_failover_count',
+               default=1,
+               min=1,
+               help="The maximum number of failovers that can occur in the "
+                    "failover_period timeframe per VM. Once a VM's number "
+                    "failover reaches this number, the VM will simply end up "
+                    "in a Failed state."),
+    cfg.IntOpt('failover_period',
+               default=6,
+               min=1,
+               help="The number of hours in which the max_failover_count "
+                    "number of failovers can occur."),
+    cfg.BoolOpt('auto_failback',
+                default=True,
+                help="Allow the VM the failback to its original host once it "
+                     "is available."),
 ]
 
 CONF = nova.conf.CONF

@@ -624,9 +624,11 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
                                             mock.sentinel.instance_name)
 
         if is_block_dev:
+            exp_serial = connection_info['serial']
             exp_disk_res_path = None
             self.assertFalse(mock_get_disk_resource_path.called)
         else:
+            exp_serial = None
             exp_disk_res_path = mock_get_disk_resource_path.return_value
             mock_get_disk_resource_path.assert_called_once_with(
                 connection_info)
@@ -635,7 +637,7 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.instance_name,
             exp_disk_res_path,
             is_physical=is_block_dev,
-            serial=connection_info['serial'])
+            serial=exp_serial)
 
     def test_get_disk_ctrl_and_slot_ide(self):
         ctrl, slot = self._base_vol_driver._get_disk_ctrl_and_slot(

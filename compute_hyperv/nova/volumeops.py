@@ -410,10 +410,13 @@ class BaseVolumeDriver(object):
         # on this tag.
         if not self._is_block_dev:
             disk_path = self.get_disk_resource_path(connection_info)
+            # In this case, we're not tagging the disks, so we want os-win
+            # to use the disk path to identify the attachment.
+            serial = None
         else:
             disk_path = None
+            serial = connection_info['serial']
 
-        serial = connection_info['serial']
         LOG.debug("Detaching disk from instance: %(instance_name)s. "
                   "Disk path: %(disk_path)s. Disk serial tag: %(serial)s.",
                   dict(disk_path=disk_path,

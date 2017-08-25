@@ -401,6 +401,10 @@ class BaseVolumeDriver(object):
                                        slot)
 
     def detach_volume(self, connection_info, instance_name):
+        if self._vmutils.planned_vm_exists(instance_name):
+            LOG.warning("Instance %s is a Planned VM, cannot detach "
+                        "volumes from it.", instance_name)
+            return
         # Retrieving the disk path can be a time consuming operation in
         # case of passthrough disks. As such disks attachments will be
         # tagged using the volume id, we'll just use that instead.

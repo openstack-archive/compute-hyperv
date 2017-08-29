@@ -329,6 +329,7 @@ class BaseVolumeDriver(object):
         self._conn = None
         self._diskutils = utilsfactory.get_diskutils()
         self._vmutils = utilsfactory.get_vmutils()
+        self._migrutils = utilsfactory.get_migrationutils()
 
     @property
     def _connector(self):
@@ -401,7 +402,7 @@ class BaseVolumeDriver(object):
                                        slot)
 
     def detach_volume(self, connection_info, instance_name):
-        if self._vmutils.planned_vm_exists(instance_name):
+        if self._migrutils.planned_vm_exists(instance_name):
             LOG.warning("Instance %s is a Planned VM, cannot detach "
                         "volumes from it.", instance_name)
             return

@@ -125,7 +125,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
 
         disk_info = self._migrationops.migrate_disk_and_power_off(
             self.context, instance, mock.sentinel.FAKE_DEST, flavor,
-            network_info, None, self._FAKE_TIMEOUT, self._FAKE_RETRY_INTERVAL)
+            network_info, mock.sentinel.bdi,
+            self._FAKE_TIMEOUT, self._FAKE_RETRY_INTERVAL)
 
         self.assertEqual(mock_move_vm_files.return_value, disk_info)
         mock_check_flavor.assert_called_once_with(instance, flavor)
@@ -136,7 +137,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                          instance.system_metadata['backup_location'])
         instance.save.assert_called_once_with()
         self._migrationops._vmops.destroy.assert_called_once_with(
-            instance, network_info, destroy_disks=True)
+            instance, network_info, mock.sentinel.bdi, destroy_disks=True)
 
     def test_confirm_migration(self):
         mock_instance = fake_instance.fake_instance_obj(

@@ -104,7 +104,8 @@ class MigrationOps(object):
         instance.system_metadata['backup_location'] = instance_path
         instance.save()
 
-        self._vmops.destroy(instance, network_info, destroy_disks=True)
+        self._vmops.destroy(instance, network_info,
+                            block_device_info, destroy_disks=True)
 
         # return the instance's path location.
         return instance_path

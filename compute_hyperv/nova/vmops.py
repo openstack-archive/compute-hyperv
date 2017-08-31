@@ -328,7 +328,7 @@ class VMOps(object):
                           should_plug_vifs=False)
         except Exception:
             with excutils.save_and_reraise_exception():
-                self.destroy(instance)
+                self.destroy(instance, network_info, block_device_info)
 
     @contextlib.contextmanager
     def wait_vif_plug_events(self, instance, network_info):
@@ -805,7 +805,7 @@ class VMOps(object):
 
         self._pathutils.check_remove_dir(instance_path)
 
-    def destroy(self, instance, network_info=None, block_device_info=None,
+    def destroy(self, instance, network_info, block_device_info,
                 destroy_disks=True):
         instance_name = instance.name
         LOG.info("Got request to destroy instance", instance=instance)

@@ -823,7 +823,7 @@ class VMOps(object):
                 self.power_off(instance)
                 self._vmutils.destroy_vm(instance_name)
             elif self._migrutils.planned_vm_exists(instance_name):
-                self._migrutils.destroy_planned_vm(instance_name)
+                self._migrutils.destroy_existing_planned_vm(instance_name)
             else:
                 LOG.debug("Instance not found", instance=instance)
 

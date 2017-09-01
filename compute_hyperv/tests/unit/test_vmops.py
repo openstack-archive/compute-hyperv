@@ -1256,11 +1256,14 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         elif planned_vm_exists:
             self._vmops._migrutils.planned_vm_exists.assert_called_once_with(
                 mock_instance.name)
-            self._vmops._migrutils.destroy_planned_vm.assert_called_once_with(
+            destroy_planned_vm = (
+                self._vmops._migrutils.destroy_existing_planned_vm)
+            destroy_planned_vm.assert_called_once_with(
                 mock_instance.name)
             self.assertFalse(self._vmops._vmutils.destroy_vm.called)
         else:
-            self.assertFalse(self._vmops._migrutils.destroy_planned_vm.called)
+            self.assertFalse(
+                self._vmops._migrutils.destroy_existing_planned_vm.called)
 
         mock_unplug_vifs.assert_called_once_with(
             mock_instance, mock.sentinel.fake_network_info)

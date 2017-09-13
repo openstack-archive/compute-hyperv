@@ -235,7 +235,9 @@ class MigrationOps(object):
             # make sure that the source is not a remote local path.
             # e.g.: \\win-srv\\C$\OpenStack\Instances\..
             # CSVs, local paths, and shares are fine.
-            inst_dir = source_inst_dir.rstrip('_revert')
+            # NOTE(claudiub): get rid of the final _revert part of the path.
+            # rstrip can remove more than _revert, which is not desired.
+            inst_dir = source_inst_dir.rsplit('_revert', 1)[0]
             LOG.warning(
                 'Host is configured not to copy disks on cold migration, but '
                 'the instance will not be able to start with the remote path: '
@@ -246,7 +248,7 @@ class MigrationOps(object):
         else:
             # make a copy on the source node's configured location.
             # strip the _revert from the source backup dir.
-            inst_dir = source_inst_dir.rstrip('_revert')
+            inst_dir = source_inst_dir.rsplit('_revert', 1)[0]
             self._pathutils.check_dir(inst_dir, create_dir=True)
 
         export_path = self._pathutils.get_export_dir(

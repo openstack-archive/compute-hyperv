@@ -276,9 +276,9 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         recon_parent_vhd.assert_called_once_with(
             mock.sentinel.diff_vhd_path, fake_base_vhd)
 
-    @ddt.data((False, '\\\\fake-srv\\C$\\inst_dir_revert', True),
-              (False, '\\\\fake-srv\\share_path\\inst_dir_revert'),
-              (True, 'C:\\fake_inst_dir_revert'))
+    @ddt.data((False, '\\\\fake-srv\\C$\\inst_dir_0000000e_revert', True),
+              (False, '\\\\fake-srv\\share_path\\inst_dir_0000000e_revert'),
+              (True, 'C:\\fake_inst_dir_0000000e_revert'))
     @ddt.unpack
     def test_migrate_disks_from_source(self, move_disks_on_migration,
                                        source_inst_dir, is_remote_path=False):
@@ -305,7 +305,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                 mock_instance.name, create_dir=True, remove_dir=True)
             expected_inst_dir = mock_get_inst_dir.return_value
         else:
-            expected_inst_dir = source_inst_dir.rstrip('_revert')
+            expected_inst_dir = source_inst_dir[0: - len('_revert')]
             self._migrationops._pathutils.check_dir.assert_called_once_with(
                 expected_inst_dir, create_dir=True)
 

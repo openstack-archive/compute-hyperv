@@ -362,6 +362,10 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         get_image_vm_gen.assert_called_once_with(mock_instance.uuid,
                                                  mock.sentinel.image_meta)
         mock_import_vm.assert_called_once_with(mock.sentinel.instance_dir)
+        self._migrationops._vmops.update_vm_resources.assert_called_once_with(
+            mock_instance, get_image_vm_gen.return_value,
+            mock.sentinel.image_meta, mock.sentinel.instance_dir,
+            mock.sentinel.resize_instance)
         self._migrationops._volumeops.connect_volumes.assert_called_once_with(
             mock.sentinel.block_device_info)
         mock_update_disk_image_paths.assert_called_once_with(
@@ -372,10 +376,6 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             resize_instance=mock.sentinel.resize_instance)
         self._volumeops.fix_instance_volume_disk_paths.assert_called_once_with(
             mock_instance.name, mock.sentinel.block_device_info)
-        self._migrationops._vmops.update_vm_resources.assert_called_once_with(
-            mock_instance, get_image_vm_gen.return_value,
-            mock.sentinel.image_meta, mock.sentinel.instance_dir,
-            mock.sentinel.resize_instance)
         self._migrationops._migrationutils.realize_vm.assert_called_once_with(
             mock_instance.name)
         self._migrationops._vmops.configure_remotefx.assert_called_once_with(

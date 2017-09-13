@@ -281,17 +281,16 @@ class MigrationOps(object):
                              block_device_info, resize_instance=False):
         vm_gen = self._vmops.get_image_vm_generation(instance.uuid, image_meta)
         self._import_vm(instance_dir)
-        self._volumeops.connect_volumes(block_device_info)
+        self._vmops.update_vm_resources(instance, vm_gen, image_meta,
+                                        instance_dir, resize_instance)
 
+        self._volumeops.connect_volumes(block_device_info)
         self._update_disk_image_paths(instance, instance_dir)
         self._check_and_update_disks(context, instance, vm_gen, image_meta,
                                      block_device_info,
                                      resize_instance=resize_instance)
         self._volumeops.fix_instance_volume_disk_paths(
             instance.name, block_device_info)
-
-        self._vmops.update_vm_resources(instance, vm_gen, image_meta,
-                                        instance_dir, resize_instance)
 
         self._migrationutils.realize_vm(instance.name)
 

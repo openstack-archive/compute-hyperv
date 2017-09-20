@@ -82,7 +82,7 @@ class PDKTestCase(test_base.HyperVBaseTestCase):
                           mock_instance, image_meta)
 
     @mock.patch('barbicanclient.client.Client')
-    @mock.patch('keystoneclient.session.Session')
+    @mock.patch('keystoneauth1.session.Session')
     def test_get_pdk_container(self, mock_session, mock_barbican_client):
         instance = mock.MagicMock()
         context = mock.MagicMock()
@@ -100,7 +100,7 @@ class PDKTestCase(test_base.HyperVBaseTestCase):
         mock_barbican_client.assert_called_once_with(session=sess)
 
     @mock.patch('barbicanclient.client.Client')
-    @mock.patch('keystoneclient.session.Session')
+    @mock.patch('keystoneauth1.session.Session')
     def test_get_pdk_container_exception(self, mock_session,
                                          mock_barbican_client):
         instance = mock.MagicMock()

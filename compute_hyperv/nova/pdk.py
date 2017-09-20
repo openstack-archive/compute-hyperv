@@ -14,7 +14,7 @@
 #    under the License.
 
 from barbicanclient import client as barbican_client
-from keystoneclient import session
+from keystoneauth1 import session
 from nova import exception
 from os_win._i18n import _
 

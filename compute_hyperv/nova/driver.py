@@ -21,6 +21,7 @@ import functools
 import platform
 import sys
 
+from nova import context as nova_context
 from nova import exception
 from nova import image
 from nova.virt import driver
@@ -100,6 +101,8 @@ class HyperVDriver(driver.ComputeDriver):
         "supports_migrate_to_same_host": False,
         "supports_attach_interface": True,
         "supports_device_tagging": True,
+        "supports_tagged_attach_interface": True,
+        "supports_tagged_attach_volume": True,
     }
 
     def __init__(self, virtapi):
@@ -180,13 +183,20 @@ class HyperVDriver(driver.ComputeDriver):
 
     def attach_volume(self, context, connection_info, instance, mountpoint,
                       disk_bus=None, device_type=None, encryption=None):
-        return self._volumeops.attach_volume(connection_info,
-                                             instance.name)
+        self._volumeops.attach_volume(context,
+                                      connection_info,
+                                      instance,
+                                      update_device_metadata=True)
 
     def detach_volume(self, connection_info, instance, mountpoint,
                       encryption=None):
-        return self._volumeops.detach_volume(connection_info,
-                                             instance.name)
+        context = nova_context.get_admin_context()
+        # The nova compute manager only updates the device metadata in
+        # case of tagged devices. We're including untagged devices as well.
+        self._volumeops.detach_volume(context,
+                                      connection_info,
+                                      instance,
+                                      update_device_metadata=True)
 
     def get_volume_connector(self, instance):
         return self._volumeops.get_volume_connector()
@@ -367,9 +377,10 @@ class HyperVDriver(driver.ComputeDriver):
         self._imagecache.update(context, all_instances)
 
     def attach_interface(self, context, instance, image_meta, vif):
-        return self._vmops.attach_interface(instance, vif)
+        self._vmops.attach_interface(context, instance, vif)
 
     def detach_interface(self, context, instance, vif):
+        # The device metadata gets updated outside the driver.
         return self._vmops.detach_interface(instance, vif)
 
     def rescue(self, context, instance, network_info, image_meta,

@@ -207,9 +207,13 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.device_type, mock.sentinel.encryption)
 
         self.driver._volumeops.attach_volume.assert_called_once_with(
+            mock.sentinel.context,
             mock.sentinel.connection_info,
-            mock_instance.name)
+            mock_instance,
+            update_device_metadata=True)
 
+    @mock.patch('nova.context.get_admin_context',
+                lambda: mock.sentinel.admin_context)
     def test_detach_volume(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self.driver.detach_volume(
@@ -217,8 +221,10 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.mountpoint, mock.sentinel.encryption)
 
         self.driver._volumeops.detach_volume.assert_called_once_with(
+            mock.sentinel.admin_context,
             mock.sentinel.connection_info,
-            mock_instance.name)
+            mock_instance,
+            update_device_metadata=True)
 
     def test_get_volume_connector(self):
         self.driver.get_volume_connector(mock.sentinel.instance)
@@ -527,6 +533,15 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
                                        mock.sentinel.all_instances)
         self.driver._imagecache.update.assert_called_once_with(
             mock.sentinel.context, mock.sentinel.all_instances)
+
+    def test_attach_interface(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        self.driver.attach_interface(
+            self.context, mock_instance, mock.sentinel.image_meta,
+            mock.sentinel.vif)
+
+        self.driver._vmops.attach_interface.assert_called_once_with(
+            self.context, mock_instance, mock.sentinel.vif)
 
     def _check_recreate_image_meta(self, mock_image_meta, image_ref='',
                                    instance_img_ref=''):

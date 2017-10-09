@@ -12,81 +12,276 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import os
+
+import ddt
 import mock
+from nova import block_device
 from nova import exception
+from nova import objects
+from nova.virt import block_device as driver_block_device
 from os_win import constants as os_win_const
+from os_win import exceptions as os_win_exc
+from oslo_serialization import jsonutils
 
 from compute_hyperv.nova import block_device_manager
 from compute_hyperv.nova import constants
 from compute_hyperv.tests.unit import test_base
 
 
+@ddt.ddt
 class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V BlockDeviceInfoManager class."""
+
+    _FAKE_CONN_INFO = {
+        'serial': 'fake_volume_id'
+    }
+
+    _FAKE_ATTACH_INFO = {
+        'controller_type': constants.CTRL_TYPE_SCSI,
+        'controller_addr': 0,
+        'controller_slot': 1
+    }
 
     def setUp(self):
         super(BlockDeviceManagerTestCase, self).setUp()
         self._bdman = block_device_manager.BlockDeviceInfoManager()
+        self._bdman._volops = mock.Mock()
+        self._bdman._vmutils = mock.Mock()
+        self._bdman._pathutils = mock.Mock()
 
-    def test_get_device_bus_scsi(self):
-        bdm = {'disk_bus': constants.CTRL_TYPE_SCSI,
-               'drive_addr': 0, 'ctrl_disk_addr': 2}
+        self._volops = self._bdman._volops
+        self._pathutils = self._bdman._pathutils
 
-        bus = self._bdman._get_device_bus(bdm)
-        self.assertEqual('0:0:0:2', bus.address)
+    @ddt.data(constants.CTRL_TYPE_SCSI, constants.CTRL_TYPE_IDE)
+    def test_get_device_bus(self, controller_type):
+        fake_ctrl_addr = self._FAKE_ATTACH_INFO['controller_addr']
+        fake_ctrl_slot = self._FAKE_ATTACH_INFO['controller_slot']
 
-    def test_get_device_bus_ide(self):
-        bdm = {'disk_bus': constants.CTRL_TYPE_IDE,
-               'drive_addr': 0, 'ctrl_disk_addr': 1}
+        bus = self._bdman._get_device_bus(
+            controller_type, fake_ctrl_addr, fake_ctrl_slot)
 
-        bus = self._bdman._get_device_bus(bdm)
-        self.assertEqual('0:1', bus.address)
+        if controller_type == constants.CTRL_TYPE_SCSI:
+            exp_addr = '0:0:%s:%s' % (fake_ctrl_addr, fake_ctrl_slot)
+            exp_cls = objects.SCSIDeviceBus
+        else:
+            exp_addr = '%s:%s' % (fake_ctrl_addr, fake_ctrl_slot)
+            exp_cls = objects.IDEDeviceBus
 
-    @staticmethod
-    def _bdm_mock(**kwargs):
-        bdm = mock.MagicMock(**kwargs)
-        bdm.__contains__.side_effect = (
-            lambda attr: getattr(bdm, attr, None) is not None)
-        return bdm
+        self.assertIsInstance(bus, exp_cls)
+        self.assertEqual(exp_addr, bus.address)
 
-    @mock.patch.object(block_device_manager.objects, 'DiskMetadata')
+    @ddt.data({},
+              {'bdm_is_vol': False},
+              {'conn_info_set': False})
+    @ddt.unpack
+    @mock.patch.object(driver_block_device, 'convert_volume')
+    def test_get_vol_bdm_att_info(self, mock_convert_vol,
+                                  bdm_is_vol=True,
+                                  conn_info_set=True):
+        mock_drv_bdm = (dict(connection_info=self._FAKE_CONN_INFO)
+                        if conn_info_set else {})
+        mock_convert_vol.return_value = (mock_drv_bdm
+                                         if bdm_is_vol
+                                         else None)
+
+        self._volops.get_disk_attachment_info.return_value = (
+            self._FAKE_ATTACH_INFO.copy())
+
+        attach_info = self._bdman._get_vol_bdm_attachment_info(
+            mock.sentinel.bdm)
+
+        mock_convert_vol.assert_called_once_with(
+            mock.sentinel.bdm)
+
+        if bdm_is_vol and conn_info_set:
+            exp_attach_info = self._FAKE_ATTACH_INFO.copy()
+            exp_attach_info['serial'] = self._FAKE_CONN_INFO['serial']
+
+            self._volops.get_disk_attachment_info.assert_called_once_with(
+                self._FAKE_CONN_INFO)
+        else:
+            exp_attach_info = None
+
+            self._volops.get_disk_attachment_info.assert_not_called()
+
+        self.assertEqual(exp_attach_info, attach_info)
+
+    @ddt.data({},
+              {'eph_name_set': False},
+              {'eph_disk_exists': False})
+    @ddt.unpack
+    @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
+                       'get_bdm_connection_info')
+    @mock.patch('os.path.exists')
+    def test_get_eph_bdm_attachment_info(self, mock_exists,
+                                         mock_get_bdm_conn_info,
+                                         eph_name_set=True,
+                                         eph_disk_exists=True):
+        fake_instance_dir = 'fake_instance_dir'
+        fake_eph_name = 'eph0.vhdx'
+        mock_instance = mock.Mock()
+
+        fake_conn_info = self._FAKE_CONN_INFO.copy()
+        if eph_name_set:
+            fake_conn_info['eph_filename'] = fake_eph_name
+
+        mock_get_bdm_conn_info.return_value = fake_conn_info
+        mock_exists.return_value = eph_disk_exists
+        mock_get_attach_info = self._bdman._vmutils.get_disk_attachment_info
+
+        self._pathutils.get_instance_dir.return_value = fake_instance_dir
+
+        attach_info = self._bdman._get_eph_bdm_attachment_info(
+            mock_instance, mock.sentinel.bdm)
+
+        if eph_name_set and eph_disk_exists:
+            exp_attach_info = mock_get_attach_info.return_value
+            exp_eph_path = os.path.join(fake_instance_dir, fake_eph_name)
+
+            mock_exists.assert_called_once_with(exp_eph_path)
+            mock_get_attach_info.assert_called_once_with(
+                exp_eph_path,
+                is_physical=False)
+        else:
+            exp_attach_info = None
+
+            mock_get_attach_info.assert_not_called()
+
+        self.assertEqual(exp_attach_info, attach_info)
+
+        mock_get_bdm_conn_info.assert_called_once_with(
+            mock.sentinel.bdm)
+
+    @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
+                       '_get_vol_bdm_attachment_info')
+    @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
+                       '_get_eph_bdm_attachment_info')
     @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
                        '_get_device_bus')
-    @mock.patch.object(block_device_manager.objects.BlockDeviceMappingList,
+    @mock.patch.object(block_device, 'new_format_is_ephemeral')
+    @mock.patch.object(objects, 'DiskMetadata')
+    def test_get_disk_metadata(self, mock_diskmetadata_cls,
+                               mock_is_eph,
+                               mock_get_device_bus,
+                               mock_get_vol_attach_info,
+                               mock_get_eph_attach_info,
+                               bdm_is_eph=False,
+                               bdm_is_vol=False,
+                               attach_info_retrieved=True):
+        mock_instance = mock.Mock()
+        mock_bdm = mock.Mock()
+        mock_bdm.is_volume = bdm_is_vol
+
+        if attach_info_retrieved:
+            attach_info = self._FAKE_ATTACH_INFO.copy()
+            attach_info['serial'] = mock.sentinel.serial
+        else:
+            attach_info = None
+
+        mock_get_eph_attach_info.return_value = attach_info
+        mock_get_vol_attach_info.return_value = attach_info
+        mock_is_eph.return_value = bdm_is_eph
+
+        disk_metadata = self._bdman._get_disk_metadata(
+            mock_instance, mock_bdm)
+
+        if (bdm_is_vol or bdm_is_eph) and attach_info_retrieved:
+            exp_disk_meta = mock_diskmetadata_cls.return_value
+
+            mock_get_device_bus.assert_called_once_with(
+                self._FAKE_ATTACH_INFO['controller_type'],
+                self._FAKE_ATTACH_INFO['controller_addr'],
+                self._FAKE_ATTACH_INFO['controller_slot'])
+            mock_diskmetadata_cls.assert_called_once_with(
+                bus=mock_get_device_bus.return_value,
+                tags=[mock_bdm.tag],
+                serial=mock.sentinel.serial)
+        else:
+            exp_disk_meta = None
+
+            mock_get_device_bus.assert_not_called()
+
+        self.assertEqual(exp_disk_meta, disk_metadata)
+
+        if bdm_is_vol:
+            mock_get_vol_attach_info.assert_called_once_with(mock_bdm)
+        elif bdm_is_eph:
+            mock_get_eph_attach_info.assert_called_once_with(mock_instance,
+                                                             mock_bdm)
+
+    @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
+                       '_get_disk_metadata')
+    @mock.patch.object(objects.BlockDeviceMappingList,
                        'get_by_instance_uuid')
-    def test_get_bdm_metadata(self, mock_get_by_inst_uuid, mock_get_device_bus,
-                              mock_DiskMetadata):
-        mock_instance = mock.MagicMock()
-        root_disk = {'mount_device': mock.sentinel.dev0}
-        ephemeral = {'device_name': mock.sentinel.dev1}
-        block_device_info = {
-            'root_disk': root_disk,
-            'block_device_mapping': [
-                {'mount_device': mock.sentinel.dev2},
-                {'mount_device': mock.sentinel.dev3},
-            ],
-            'ephemerals': [ephemeral],
-        }
+    def test_get_bdm_metadata(self, mock_get_bdm_list,
+                              mock_get_disk_meta):
+        bdms = [mock.Mock()] * 4
+        disk_meta = mock.Mock()
+        mock_instance = mock.Mock()
 
-        bdm = self._bdm_mock(device_name=mock.sentinel.dev0, tag='taggy')
-        eph = self._bdm_mock(device_name=mock.sentinel.dev1, tag='ephy')
-        mock_get_by_inst_uuid.return_value = [
-            bdm, eph, self._bdm_mock(device_name=mock.sentinel.dev2, tag=None),
-        ]
+        mock_get_bdm_list.return_value = bdms
+        mock_get_disk_meta.side_effect = [
+            None,
+            exception.DiskNotFound(message='fake_err'),
+            os_win_exc.DiskNotFound(message='fake_err'),
+            disk_meta]
 
-        bdm_metadata = self._bdman.get_bdm_metadata(mock.sentinel.context,
-                                                    mock_instance,
-                                                    block_device_info)
+        bdm_meta = self._bdman.get_bdm_metadata(mock.sentinel.context,
+                                                mock_instance)
 
-        mock_get_by_inst_uuid.assert_called_once_with(mock.sentinel.context,
-                                                      mock_instance.uuid)
-        mock_get_device_bus.assert_has_calls(
-          [mock.call(root_disk), mock.call(ephemeral)], any_order=True)
-        mock_DiskMetadata.assert_has_calls(
-            [mock.call(bus=mock_get_device_bus.return_value, tags=[bdm.tag]),
-             mock.call(bus=mock_get_device_bus.return_value, tags=[eph.tag])],
-            any_order=True)
-        self.assertEqual([mock_DiskMetadata.return_value] * 2, bdm_metadata)
+        self.assertEqual([disk_meta], bdm_meta)
+
+        mock_get_bdm_list.assert_called_once_with(mock.sentinel.context,
+                                                  mock_instance.uuid)
+        mock_get_disk_meta.assert_has_calls(
+            [mock.call(mock_instance, bdm) for bdm in bdms])
+
+    @mock.patch.object(objects.BlockDeviceMapping,
+                       'get_by_volume_and_instance')
+    def test_set_vol_bdm_conn_info(self, mock_get_bdm):
+        mock_instance = mock.Mock()
+        mock_bdm = mock_get_bdm.return_value
+
+        self._bdman.set_volume_bdm_connection_info(
+            mock.sentinel.context, mock_instance, self._FAKE_CONN_INFO)
+
+        mock_get_bdm.assert_called_once_with(
+            mock.sentinel.context,
+            self._FAKE_CONN_INFO['serial'],
+            mock_instance.uuid)
+
+        self.assertEqual(self._FAKE_CONN_INFO,
+                         jsonutils.loads(mock_bdm.connection_info))
+        mock_bdm.save.assert_called_once_with()
+
+    def test_get_bdm_connection_info(self):
+        bdm = mock.Mock(connection_info=None)
+        self.assertEqual({}, self._bdman.get_bdm_connection_info(bdm))
+
+        bdm = mock.Mock()
+        bdm.connection_info = jsonutils.dumps(self._FAKE_CONN_INFO)
+        self.assertEqual(self._FAKE_CONN_INFO,
+                         self._bdman.get_bdm_connection_info(bdm))
+
+    def test_update_bdm_conn_info(self):
+        connection_info = self._FAKE_CONN_INFO.copy()
+
+        mock_bdm = mock.Mock()
+        mock_bdm.connection_info = jsonutils.dumps(connection_info)
+
+        updates = dict(some_key='some_val',
+                       some_other_key='some_other_val')
+
+        self._bdman.update_bdm_connection_info(
+            mock_bdm, **updates)
+
+        exp_connection_info = connection_info.copy()
+        exp_connection_info.update(**updates)
+
+        self.assertEqual(exp_connection_info,
+                         jsonutils.loads(mock_bdm.connection_info))
+        mock_bdm.save.assert_called_once_with()
 
     @mock.patch('nova.virt.configdrive.required_by')
     def test_init_controller_slot_counter_gen1_no_configdrive(

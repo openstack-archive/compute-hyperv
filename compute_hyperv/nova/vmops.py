@@ -252,20 +252,19 @@ class VMOps(object):
 
         return vif_metadata
 
-    def _save_device_metadata(self, context, instance, block_device_info):
+    def update_device_metadata(self, context, instance):
         """Builds a metadata object for instance devices, that maps the user
            provided tag to the hypervisor assigned device address.
         """
         metadata = []
 
         metadata.extend(self._get_vif_metadata(context, instance.uuid))
-        if block_device_info:
-            metadata.extend(self._block_dev_man.get_bdm_metadata(
-                context, instance, block_device_info))
+        metadata.extend(self._block_dev_man.get_bdm_metadata(context,
+                                                             instance))
 
-        if metadata:
-            instance.device_metadata = objects.InstanceDeviceMetadata(
-                devices=metadata)
+        instance.device_metadata = objects.InstanceDeviceMetadata(
+            devices=metadata)
+        instance.save()
 
     def set_boot_order(self, instance_name, vm_gen, block_device_info):
         boot_order = self._block_dev_man.get_boot_order(
@@ -305,7 +304,7 @@ class VMOps(object):
                 # This is supported starting from OVS version 2.5
                 self.plug_vifs(instance, network_info)
 
-            self._save_device_metadata(context, instance, block_device_info)
+            self.update_device_metadata(context, instance)
 
             if configdrive.required_by(instance):
                 configdrive_path = self._create_config_drive(context,
@@ -382,10 +381,10 @@ class VMOps(object):
         self.configure_remotefx(instance, vm_gen)
 
         self._vmutils.create_scsi_controller(instance_name)
-        self._attach_root_device(instance_name, root_device)
+        self._attach_root_device(context, instance, root_device)
         self.attach_ephemerals(instance_name, block_device_info['ephemerals'])
         self._volumeops.attach_volumes(
-            block_device_info['block_device_mapping'], instance_name)
+            context, block_device_info['block_device_mapping'], instance)
 
         serial_ports = self._get_image_serial_port_settings(image_meta)
         self._create_vm_com_port_pipes(instance, serial_ports)
@@ -588,13 +587,14 @@ class VMOps(object):
             remotefx_max_resolution,
             vram_bytes)
 
-    def _attach_root_device(self, instance_name, root_dev_info):
+    def _attach_root_device(self, context, instance, root_dev_info):
         if root_dev_info['type'] == constants.VOLUME:
-            self._volumeops.attach_volume(root_dev_info['connection_info'],
-                                          instance_name,
+            self._volumeops.attach_volume(context,
+                                          root_dev_info['connection_info'],
+                                          instance,
                                           disk_bus=root_dev_info['disk_bus'])
         else:
-            self._attach_drive(instance_name, root_dev_info['path'],
+            self._attach_drive(instance.name, root_dev_info['path'],
                                root_dev_info['drive_addr'],
                                root_dev_info['ctrl_disk_addr'],
                                root_dev_info['disk_bus'],
@@ -610,6 +610,10 @@ class VMOps(object):
                     eph['ctrl_disk_addr'], eph['disk_bus'],
                     constants.BDI_DEVICE_TYPE_TO_DRIVE_TYPE[
                         eph['device_type']])
+
+                filename = os.path.basename(eph['path'])
+                self._block_dev_man.update_bdm_connection_info(
+                    eph._bdm_obj, eph_filename=filename)
 
     def _attach_drive(self, instance_name, path, drive_addr, ctrl_disk_addr,
                       controller_type, drive_type=constants.DISK):
@@ -1073,13 +1077,15 @@ class VMOps(object):
 
         return True
 
-    def attach_interface(self, instance, vif):
+    def attach_interface(self, context, instance, vif):
         if not self._check_hotplug_available(instance):
             raise exception.InterfaceAttachFailed(instance_uuid=instance.uuid)
 
         LOG.debug('Attaching vif: %s', vif['id'], instance=instance)
         self._vmutils.create_nic(instance.name, vif['id'], vif['address'])
         self._vif_driver.plug(instance, vif)
+
+        self.update_device_metadata(context, instance)
 
     def detach_interface(self, instance, vif):
         try:

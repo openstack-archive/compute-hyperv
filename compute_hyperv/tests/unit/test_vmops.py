@@ -382,20 +382,19 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     @mock.patch.object(vmops.objects, 'InstanceDeviceMetadata')
     @mock.patch.object(vmops.VMOps, '_get_vif_metadata')
-    def test_save_device_metadata(self, mock_get_vif_metadata,
-                                  mock_InstanceDeviceMetadata):
+    def test_update_device_metadata(self, mock_get_vif_metadata,
+                                    mock_InstanceDeviceMetadata):
         mock_instance = mock.MagicMock()
         mock_get_vif_metadata.return_value = [mock.sentinel.vif_metadata]
         self._vmops._block_dev_man.get_bdm_metadata.return_value = [
             mock.sentinel.bdm_metadata]
 
-        self._vmops._save_device_metadata(self.context, mock_instance,
-                                          mock.sentinel.block_device_info)
+        self._vmops.update_device_metadata(self.context, mock_instance)
 
         mock_get_vif_metadata.assert_called_once_with(self.context,
                                                       mock_instance.uuid)
         self._vmops._block_dev_man.get_bdm_metadata.assert_called_once_with(
-            self.context, mock_instance, mock.sentinel.block_device_info)
+            self.context, mock_instance)
 
         expected_metadata = [mock.sentinel.vif_metadata,
                              mock.sentinel.bdm_metadata]
@@ -422,7 +421,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('compute_hyperv.nova.vmops.VMOps.attach_config_drive')
     @mock.patch('compute_hyperv.nova.vmops.VMOps._create_config_drive')
     @mock.patch('nova.virt.configdrive.required_by')
-    @mock.patch('compute_hyperv.nova.vmops.VMOps._save_device_metadata')
+    @mock.patch('compute_hyperv.nova.vmops.VMOps.update_device_metadata')
     @mock.patch('compute_hyperv.nova.vmops.VMOps.create_instance')
     @mock.patch('compute_hyperv.nova.vmops.VMOps.get_image_vm_generation')
     @mock.patch('compute_hyperv.nova.vmops.VMOps._create_ephemerals')
@@ -437,7 +436,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     mock_delete_disk_files,
                     mock_create_root_device,
                     mock_create_ephemerals, mock_get_image_vm_gen,
-                    mock_create_instance, mock_save_device_metadata,
+                    mock_create_instance, mock_update_device_metadata,
                     mock_configdrive_required,
                     mock_create_config_drive, mock_attach_config_drive,
                     mock_set_boot_order,
@@ -494,8 +493,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                 block_device_info, fake_vm_gen, mock_image_meta)
             mock_plug_vifs.assert_called_once_with(mock_instance,
                                                    mock.sentinel.network_info)
-            mock_save_device_metadata.assert_called_once_with(
-                self.context, mock_instance, block_device_info)
+            mock_update_device_metadata.assert_called_once_with(
+                self.context, mock_instance)
             mock_configdrive_required.assert_called_once_with(mock_instance)
             if configdrive_required:
                 mock_create_config_drive.assert_called_once_with(
@@ -634,12 +633,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_create_scsi_ctrl = self._vmops._vmutils.create_scsi_controller
         mock_create_scsi_ctrl.assert_called_once_with(mock_instance.name)
 
-        mock_attach_root_device.assert_called_once_with(mock_instance.name,
-            root_device_info)
+        mock_attach_root_device.assert_called_once_with(
+            self.context, mock_instance, root_device_info)
         mock_attach_ephemerals.assert_called_once_with(mock_instance.name,
             block_device_info['ephemerals'])
         mock_attach_volumes.assert_called_once_with(
-            block_device_info['block_device_mapping'], mock_instance.name)
+            self.context, block_device_info['block_device_mapping'],
+            mock_instance)
 
         mock_get_port_settings.assert_called_with(mock.sentinel.image_meta)
         mock_create_pipes.assert_called_once_with(
@@ -822,10 +822,12 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                             'connection_info': mock.sentinel.CONN_INFO,
                             'disk_bus': constants.CTRL_TYPE_IDE}
 
-        self._vmops._attach_root_device(mock_instance.name, root_device_info)
+        self._vmops._attach_root_device(self.context,
+                                        mock_instance, root_device_info)
 
         mock_attach_volume.assert_called_once_with(
-            root_device_info['connection_info'], mock_instance.name,
+            self.context,
+            root_device_info['connection_info'], mock_instance,
             disk_bus=root_device_info['disk_bus'])
 
     @mock.patch.object(vmops.VMOps, '_attach_drive')
@@ -838,7 +840,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                             'drive_addr': 0,
                             'ctrl_disk_addr': 1}
 
-        self._vmops._attach_root_device(mock_instance.name, root_device_info)
+        self._vmops._attach_root_device(
+            self.context, mock_instance, root_device_info)
 
         mock_attach_drive.assert_called_once_with(
             mock_instance.name, root_device_info['path'],
@@ -849,28 +852,38 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_attach_ephemerals(self, mock_attach_drive):
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
-        ephemerals = [{'path': mock.sentinel.PATH1,
+        class FakeBDM(dict):
+            _bdm_obj = mock.sentinel.bdm_obj
+
+        ephemerals = [{'path': os.path.join('eph_dir', 'eph0_path'),
                        'boot_index': 1,
                        'disk_bus': constants.CTRL_TYPE_IDE,
                        'device_type': 'disk',
                        'drive_addr': 0,
                        'ctrl_disk_addr': 1},
-                      {'path': mock.sentinel.PATH2,
+                      {'path': os.path.join('eph_dir', 'eph1_path'),
                        'boot_index': 2,
                        'disk_bus': constants.CTRL_TYPE_SCSI,
                        'device_type': 'disk',
                        'drive_addr': 0,
                        'ctrl_disk_addr': 0},
                       {'path': None}]
+        ephemerals = [FakeBDM(eph) for eph in ephemerals]
 
         self._vmops.attach_ephemerals(mock_instance.name, ephemerals)
 
         mock_attach_drive.assert_has_calls(
-            [mock.call(mock_instance.name, mock.sentinel.PATH1, 0,
+            [mock.call(mock_instance.name, ephemerals[0]['path'], 0,
                        1, constants.CTRL_TYPE_IDE, constants.DISK),
-             mock.call(mock_instance.name, mock.sentinel.PATH2, 0,
+             mock.call(mock_instance.name, ephemerals[1]['path'], 0,
                        0, constants.CTRL_TYPE_SCSI, constants.DISK)
         ])
+        mock_update_conn = (
+            self._vmops._block_dev_man.update_bdm_connection_info)
+        mock_update_conn.assert_has_calls(
+            [mock.call(mock.sentinel.bdm_obj,
+                       eph_filename=os.path.basename(eph['path']))
+             for eph in ephemerals if eph.get('path')])
 
     def test_attach_drive_vm_to_scsi(self):
         self._vmops._attach_drive(
@@ -1717,25 +1730,31 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._test_check_hotplug_available(
             expected_result=False, windows_version=self._WIN_VERSION_6_3)
 
+    @mock.patch.object(vmops.VMOps, 'update_device_metadata')
     @mock.patch.object(vmops.VMOps, '_check_hotplug_available')
-    def test_attach_interface(self, mock_check_hotplug_available):
+    def test_attach_interface(self, mock_check_hotplug_available,
+                              mock_update_dev_meta):
         mock_check_hotplug_available.return_value = True
         fake_vm = fake_instance.fake_instance_obj(self.context)
         fake_vif = test_virtual_interface.fake_vif
 
-        self._vmops.attach_interface(fake_vm, fake_vif)
+        self._vmops.attach_interface(
+            mock.sentinel.context, fake_vm, fake_vif)
 
         mock_check_hotplug_available.assert_called_once_with(fake_vm)
         self._vmops._vif_driver.plug.assert_called_once_with(
             fake_vm, fake_vif)
         self._vmops._vmutils.create_nic.assert_called_once_with(
             fake_vm.name, fake_vif['id'], fake_vif['address'])
+        mock_update_dev_meta.assert_called_once_with(
+            mock.sentinel.context, fake_vm)
 
     @mock.patch.object(vmops.VMOps, '_check_hotplug_available')
     def test_attach_interface_failed(self, mock_check_hotplug_available):
         mock_check_hotplug_available.return_value = False
         self.assertRaises(exception.InterfaceAttachFailed,
                           self._vmops.attach_interface,
+                          mock.sentinel.context,
                           mock.MagicMock(), mock.sentinel.fake_vif)
 
     @mock.patch.object(vmops.VMOps, '_check_hotplug_available')

@@ -151,7 +151,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver.spawn(
             mock.sentinel.context, mock.sentinel.instance,
             mock.sentinel.image_meta, mock.sentinel.injected_files,
-            mock.sentinel.admin_password, mock.sentinel.network_info,
+            mock.sentinel.admin_password, mock.sentinel.allocations,
+            mock.sentinel.network_info,
             mock.sentinel.block_device_info)
 
         mock_recreate_img_meta.assert_called_once_with(

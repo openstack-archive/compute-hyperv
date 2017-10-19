@@ -155,7 +155,8 @@ class HyperVDriver(driver.ComputeDriver):
         return self._vmops.estimate_instance_overhead(instance_info)
 
     def spawn(self, context, instance, image_meta, injected_files,
-              admin_password, network_info=None, block_device_info=None):
+              admin_password, allocations, network_info=None,
+              block_device_info=None):
         image_meta = self._recreate_image_meta(context, instance, image_meta)
         self._vmops.spawn(context, instance, image_meta, injected_files,
                           admin_password, network_info, block_device_info)

@@ -62,7 +62,7 @@ def fake_db_instance(**updates):
     return db_instance
 
 
-def fake_instance_obj(context, **updates):
+def fake_instance_obj(context='fake-context', **updates):
     expected_attrs = updates.pop('expected_attrs', None)
     flavor = objects.Flavor(id=1, name='flavor1',
                             memory_mb=256, vcpus=1,

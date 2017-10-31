@@ -27,10 +27,12 @@ from os_brick.initiator import connector
 from os_win import constants as os_win_const
 from oslo_utils import units
 
+from compute_hyperv.nova import block_device_manager
 import compute_hyperv.nova.conf
 from compute_hyperv.nova import constants
 from compute_hyperv.nova import vmops
 from compute_hyperv.nova import volumeops
+from compute_hyperv.tests import fake_instance
 from compute_hyperv.tests.unit import test_base
 
 CONF = compute_hyperv.nova.conf.CONF
@@ -56,6 +58,7 @@ def get_fake_connection_info(**kwargs):
             'serial': mock.sentinel.serial}
 
 
+@ddt.ddt
 class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for VolumeOps class."""
 
@@ -87,12 +90,14 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
         block_device_info = get_fake_block_dev_info()
 
         self._volumeops.attach_volumes(
+            mock.sentinel.context,
             block_device_info['block_device_mapping'],
-            mock.sentinel.instance_name)
+            mock.sentinel.instance)
 
         mock_attach_volume.assert_called_once_with(
+            mock.sentinel.context,
             block_device_info['block_device_mapping'][0]['connection_info'],
-            mock.sentinel.instance_name)
+            mock.sentinel.instance)
 
     def test_fix_instance_volume_disk_paths_empty_bdm(self):
         self._volumeops.fix_instance_volume_disk_paths(
@@ -152,10 +157,24 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
         fake_volume_driver.disconnect_volume.assert_called_once_with(
             block_device_mapping[0]['connection_info'])
 
+    @ddt.data({},
+              {'attach_failed': True},
+              {'update_device_metadata': True})
+    @ddt.unpack
     @mock.patch('time.sleep')
+    @mock.patch.object(volumeops.VolumeOps, 'detach_volume')
     @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
-    def _test_attach_volume(self, mock_get_volume_driver, mock_sleep,
-                            attach_failed):
+    @mock.patch.object(vmops.VMOps, 'update_device_metadata')
+    @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
+                       'set_volume_bdm_connection_info')
+    def test_attach_volume(self, mock_set_bdm_conn_info,
+                           mock_update_dev_meta,
+                           mock_get_volume_driver,
+                           mock_detach,
+                           mock_sleep,
+                           attach_failed=False,
+                           update_device_metadata=False):
+        mock_instance = fake_instance.fake_instance_obj()
         fake_conn_info = get_fake_connection_info(
             qos_specs=mock.sentinel.qos_specs)
         fake_volume_driver = mock_get_volume_driver.return_value
@@ -169,39 +188,52 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
 
             self.assertRaises(exception.VolumeAttachFailed,
                               self._volumeops.attach_volume,
+                              mock.sentinel.context,
                               fake_conn_info,
-                              mock.sentinel.inst_name,
-                              mock.sentinel.disk_bus)
+                              mock_instance,
+                              mock.sentinel.disk_bus,
+                              update_device_metadata)
         else:
             self._volumeops.attach_volume(
+                mock.sentinel.context,
                 fake_conn_info,
-                mock.sentinel.inst_name,
-                mock.sentinel.disk_bus)
+                mock_instance,
+                mock.sentinel.disk_bus,
+                update_device_metadata)
 
         mock_get_volume_driver.assert_any_call(
             fake_conn_info)
         fake_volume_driver.attach_volume.assert_has_calls(
             [mock.call(fake_conn_info,
-                       mock.sentinel.inst_name,
+                       mock_instance.name,
                        mock.sentinel.disk_bus)] * expected_try_count)
         fake_volume_driver.set_disk_qos_specs.assert_has_calls(
             [mock.call(fake_conn_info,
                        mock.sentinel.qos_specs)] * expected_try_count)
 
+        if update_device_metadata:
+            mock_set_bdm_conn_info.assert_has_calls(
+                [mock.call(mock.sentinel.context,
+                           mock_instance,
+                           fake_conn_info)] * expected_try_count)
+            mock_update_dev_meta.assert_has_calls(
+                [mock.call(mock.sentinel.context,
+                           mock_instance)] * expected_try_count)
+        else:
+            mock_set_bdm_conn_info.assert_not_called()
+            mock_update_dev_meta.assert_not_called()
+
         if attach_failed:
-            fake_volume_driver.disconnect_volume.assert_called_once_with(
-                fake_conn_info)
+            mock_detach.assert_called_once_with(
+                mock.sentinel.context,
+                fake_conn_info,
+                mock_instance,
+                update_device_metadata)
             mock_sleep.assert_has_calls(
                 [mock.call(CONF.hyperv.volume_attach_retry_interval)] *
                     CONF.hyperv.volume_attach_retry_count)
         else:
             mock_sleep.assert_not_called()
-
-    def test_attach_volume(self):
-        self._test_attach_volume(attach_failed=False)
-
-    def test_attach_volume_exc(self):
-        self._test_attach_volume(attach_failed=True)
 
     @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
     def test_disconnect_volume(self, mock_get_volume_driver):
@@ -214,20 +246,33 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
         fake_volume_driver.disconnect_volume.assert_called_once_with(
             mock.sentinel.conn_info)
 
+    @ddt.data(True, False)
     @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
-    def test_detach_volume(self, mock_get_volume_driver):
+    @mock.patch.object(vmops.VMOps, 'update_device_metadata')
+    def test_detach_volume(self, update_device_metadata,
+                           mock_update_dev_meta,
+                           mock_get_volume_driver):
+        mock_instance = fake_instance.fake_instance_obj()
         fake_volume_driver = mock_get_volume_driver.return_value
         fake_conn_info = {'data': 'fake_conn_info_data'}
 
-        self._volumeops.detach_volume(fake_conn_info,
-                                      mock.sentinel.inst_name)
+        self._volumeops.detach_volume(mock.sentinel.context,
+                                      fake_conn_info,
+                                      mock_instance,
+                                      update_device_metadata)
 
         mock_get_volume_driver.assert_called_once_with(
             fake_conn_info)
         fake_volume_driver.detach_volume.assert_called_once_with(
-            fake_conn_info, mock.sentinel.inst_name)
+            fake_conn_info, mock_instance.name)
         fake_volume_driver.disconnect_volume.assert_called_once_with(
             fake_conn_info)
+
+        if update_device_metadata:
+            mock_update_dev_meta.assert_called_once_with(
+                mock.sentinel.context, mock_instance)
+        else:
+            mock_update_dev_meta.assert_not_called()
 
     @mock.patch.object(connector, 'get_connector_properties')
     def test_get_volume_connector(self, mock_get_connector):
@@ -443,6 +488,19 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
             [mock.call(expected_task_state=[None]),
              mock.call(expected_task_state=[
                  task_states.IMAGE_SNAPSHOT_PENDING])])
+
+    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
+    def test_get_disk_attachment_info(self, mock_get_volume_driver):
+        fake_conn_info = get_fake_connection_info()
+        ret_val = self._volumeops.get_disk_attachment_info(fake_conn_info)
+
+        mock_vol_driver = mock_get_volume_driver.return_value
+        mock_vol_driver.get_disk_attachment_info.assert_called_once_with(
+            fake_conn_info)
+
+        self.assertEqual(
+            mock_vol_driver.get_disk_attachment_info.return_value,
+            ret_val)
 
 
 @ddt.ddt
@@ -683,6 +741,31 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         # it doesn't error out.
         self._base_vol_driver.set_disk_qos_specs(
             mock.sentinel.conn_info, mock.sentinel.disk_qos_spes)
+
+    @ddt.data(True, False)
+    @mock.patch.object(volumeops.BaseVolumeDriver,
+                       'get_disk_resource_path')
+    def test_get_disk_attachment_info(self, is_block_dev,
+                                      mock_get_disk_resource_path):
+        connection_info = get_fake_connection_info()
+        self._base_vol_driver._is_block_dev = is_block_dev
+
+        self._base_vol_driver.get_disk_attachment_info(connection_info)
+
+        if is_block_dev:
+            exp_serial = connection_info['serial']
+            exp_disk_res_path = None
+            self.assertFalse(mock_get_disk_resource_path.called)
+        else:
+            exp_serial = None
+            exp_disk_res_path = mock_get_disk_resource_path.return_value
+            mock_get_disk_resource_path.assert_called_once_with(
+                connection_info)
+
+        self._vmutils.get_disk_attachment_info.assert_called_once_with(
+            exp_disk_res_path,
+            is_physical=is_block_dev,
+            serial=exp_serial)
 
 
 class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):

@@ -18,18 +18,26 @@ Handling of block device information and mapping
 Module contains helper methods for dealing with block device information
 """
 
-import itertools
+import os
 
 from nova import block_device
 from nova import exception
 from nova import objects
+from nova.virt import block_device as driver_block_device
 from nova.virt import configdrive
 from nova.virt import driver
 from os_win import constants as os_win_const
+from os_win import exceptions as os_win_exc
+from os_win import utilsfactory
+from oslo_log import log as logging
+from oslo_serialization import jsonutils
 
 from compute_hyperv.i18n import _
 from compute_hyperv.nova import constants
+from compute_hyperv.nova import pathutils
 from compute_hyperv.nova import volumeops
+
+LOG = logging.getLogger(__name__)
 
 
 class BlockDeviceInfoManager(object):
@@ -48,47 +56,132 @@ class BlockDeviceInfoManager(object):
 
     def __init__(self):
         self._volops = volumeops.VolumeOps()
+        self._pathutils = pathutils.PathUtils()
+
+        self._vmutils = utilsfactory.get_vmutils()
 
     @staticmethod
-    def _get_device_bus(bdm):
+    def _get_device_bus(ctrl_type, ctrl_addr, ctrl_slot):
         """Determines the device bus and it's hypervisor assigned address.
         """
-        if bdm['disk_bus'] == constants.CTRL_TYPE_SCSI:
-            address = ':'.join(['0', '0', str(bdm['drive_addr']),
-                                str(bdm['ctrl_disk_addr'])])
+        if ctrl_type == constants.CTRL_TYPE_SCSI:
+            address = ':'.join(map(str, [0, 0, ctrl_addr, ctrl_slot]))
             return objects.SCSIDeviceBus(address=address)
-        elif bdm['disk_bus'] == constants.CTRL_TYPE_IDE:
-            address = ':'.join([str(bdm['drive_addr']),
-                                str(bdm['ctrl_disk_addr'])])
+        elif ctrl_type == constants.CTRL_TYPE_IDE:
+            address = ':'.join(map(str, [ctrl_addr, ctrl_slot]))
             return objects.IDEDeviceBus(address=address)
 
-    def get_bdm_metadata(self, context, instance, block_device_info):
+    def _get_vol_bdm_attachment_info(self, bdm):
+        drv_vol_bdm = driver_block_device.convert_volume(bdm)
+        if not drv_vol_bdm:
+            return
+
+        connection_info = drv_vol_bdm['connection_info']
+        if not connection_info:
+            LOG.warning("Missing connection info for volume %s.",
+                        bdm.volume_id)
+            return
+
+        attachment_info = self._volops.get_disk_attachment_info(
+            connection_info)
+        attachment_info['serial'] = connection_info['serial']
+        return attachment_info
+
+    def _get_eph_bdm_attachment_info(self, instance, bdm):
+        # When attaching ephemeral disks, we're setting this field so that
+        # we can map them with bdm objects.
+        connection_info = self.get_bdm_connection_info(bdm)
+        eph_filename = connection_info.get("eph_filename")
+        if not eph_filename:
+            LOG.warning("Missing ephemeral disk filename in "
+                        "BDM connection info. BDM: %s", bdm)
+            return
+
+        eph_path = os.path.join(
+            self._pathutils.get_instance_dir(instance.name), eph_filename)
+        if not os.path.exists(eph_path):
+            LOG.warning("Could not find ephemeral disk %s.", eph_path)
+            return
+
+        return self._vmutils.get_disk_attachment_info(eph_path,
+                                                      is_physical=False)
+
+    def _get_disk_metadata(self, instance, bdm):
+        attachment_info = None
+        if bdm.is_volume:
+            attachment_info = self._get_vol_bdm_attachment_info(bdm)
+        elif block_device.new_format_is_ephemeral(bdm):
+            attachment_info = self._get_eph_bdm_attachment_info(
+                instance, bdm)
+
+        if not attachment_info:
+            LOG.debug("No attachment info retrieved for bdm %s.", bdm)
+            return
+
+        tags = [bdm.tag] if bdm.tag else []
+        bus = self._get_device_bus(
+            attachment_info['controller_type'],
+            attachment_info['controller_addr'],
+            attachment_info['controller_slot'])
+        serial = attachment_info.get('serial')
+
+        return objects.DiskMetadata(bus=bus,
+                                    tags=tags,
+                                    serial=serial)
+
+    def get_bdm_metadata(self, context, instance):
         """Builds a metadata object for instance devices, that maps the user
            provided tag to the hypervisor assigned device address.
         """
-        # block_device_info does not contain tags information.
-        bdm_obj_list = objects.BlockDeviceMappingList.get_by_instance_uuid(
+        bdms = objects.BlockDeviceMappingList.get_by_instance_uuid(
             context, instance.uuid)
 
-        # create a map between BDM object and its device name.
-        bdm_obj_map = {bdm.device_name: bdm for bdm in bdm_obj_list}
-
         bdm_metadata = []
-        for bdm in itertools.chain(block_device_info['block_device_mapping'],
-                                   block_device_info['ephemerals'],
-                                   [block_device_info['root_disk']]):
-            # NOTE(claudiub): ephemerals have device_name instead of
-            # mount_device.
-            device_name = bdm.get('mount_device') or bdm.get('device_name')
-            bdm_obj = bdm_obj_map.get(device_name)
-
-            if bdm_obj and 'tag' in bdm_obj and bdm_obj.tag:
-                bus = self._get_device_bus(bdm)
-                device = objects.DiskMetadata(bus=bus,
-                                              tags=[bdm_obj.tag])
-                bdm_metadata.append(device)
+        for bdm in bdms:
+            try:
+                device_metadata = self._get_disk_metadata(instance, bdm)
+                if device_metadata:
+                    bdm_metadata.append(device_metadata)
+            except (exception.DiskNotFound, os_win_exc.DiskNotFound):
+                LOG.debug("Could not find disk attachment while "
+                          "updating device metadata. It may have been "
+                          "detached. BDM: %s", bdm)
 
         return bdm_metadata
+
+    def set_volume_bdm_connection_info(self, context, instance,
+                                       connection_info):
+        # When attaching volumes to already existing instances, the connection
+        # info passed to the driver is not saved yet within the BDM table.
+        #
+        # Nova sets the volume id within the connection info using the
+        # 'serial' key.
+        volume_id = connection_info['serial']
+        bdm = objects.BlockDeviceMapping.get_by_volume_and_instance(
+            context, volume_id, instance.uuid)
+        bdm.connection_info = jsonutils.dumps(connection_info)
+        bdm.save()
+
+    @staticmethod
+    def get_bdm_connection_info(bdm):
+        # We're using the BDM 'connection_info' field to store ephemeral
+        # image information so that we can map them. In order to do so,
+        # we're using this helper.
+        # The ephemeral bdm object wrapper does not currently expose this
+        # field.
+        try:
+            conn_info = jsonutils.loads(bdm.connection_info)
+        except TypeError:
+            conn_info = {}
+
+        return conn_info
+
+    @staticmethod
+    def update_bdm_connection_info(bdm, **kwargs):
+        conn_info = BlockDeviceInfoManager.get_bdm_connection_info(bdm)
+        conn_info.update(**kwargs)
+        bdm.connection_info = jsonutils.dumps(conn_info)
+        bdm.save()
 
     def _initialize_controller_slot_counter(self, instance, vm_gen):
         # we have 2 IDE controllers, for a total of 4 slots

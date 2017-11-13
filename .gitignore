@@ -42,6 +42,8 @@ output/*/index.html
 
 # Sphinx
 doc/build
+doc/source/_static/compute-hyperv.conf.sample
+etc/compute-hyperv.conf.sample
 
 # pbr generates these
 AUTHORS

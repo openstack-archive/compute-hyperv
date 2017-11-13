@@ -56,3 +56,7 @@ hyperv_opts = [
 
 CONF = nova.conf.CONF
 CONF.register_opts(hyperv_opts, 'hyperv')
+
+
+def list_opts():
+    return [('hyperv', hyperv_opts)]

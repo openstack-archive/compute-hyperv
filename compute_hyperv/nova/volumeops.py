@@ -364,6 +364,10 @@ class VolumeOps(object):
         volume_driver = self._get_volume_driver(connection_info)
         return volume_driver.get_disk_attachment_info(connection_info)
 
+    def extend_volume(self, connection_info):
+        volume_driver = self._get_volume_driver(connection_info)
+        return volume_driver.extend_volume(connection_info)
+
 
 class BaseVolumeDriver(object):
     _is_block_dev = True
@@ -513,6 +517,11 @@ class BaseVolumeDriver(object):
             disk_path,
             is_physical=self._is_block_dev,
             serial=serial)
+
+    def extend_volume(self, connection_info):
+        # We're not actually extending the volume, we're just
+        # refreshing cached information about an already extended volume.
+        self._connector.extend_volume(connection_info['data'])
 
 
 class ISCSIVolumeDriver(BaseVolumeDriver):

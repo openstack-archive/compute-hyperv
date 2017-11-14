@@ -17,6 +17,9 @@
 
 import mock
 
+from nova import safe_utils
+from nova.virt import driver as nova_base_driver
+
 from compute_hyperv.nova.cluster import clusterops
 from compute_hyperv.nova.cluster import driver
 from compute_hyperv.nova import driver as base_driver
@@ -36,20 +39,37 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
         self.driver = driver.HyperVClusterDriver(mock.sentinel.virtapi)
         self.driver._livemigrationops = mock.Mock()
 
+    def test_public_api_signatures(self):
+        driver_methods = dict(driver.HyperVClusterDriver.__dict__,
+                              **base_driver.HyperVDriver.__dict__)
+
+        for attr in driver_methods:
+            class_member = getattr(driver.HyperVClusterDriver, attr)
+            if callable(class_member):
+                mocked_method = mock.patch.object(
+                    driver.HyperVClusterDriver, attr,
+                    safe_utils.get_wrapped_function(class_member))
+                mocked_method.start()
+                self.addCleanup(mocked_method.stop)
+
+        self.assertPublicAPISignatures(nova_base_driver.ComputeDriver,
+                                       driver.HyperVClusterDriver)
+
     @mock.patch.object(base_driver.HyperVDriver, 'spawn')
     def test_spawn(self, mock_superclass_spawn):
         self.driver.spawn(self.context, mock.sentinel.fake_instance,
                           mock.sentinel.image_meta,
                           mock.sentinel.injected_files,
                           mock.sentinel.admin_pass,
+                          mock.sentinel.allocations,
                           mock.sentinel.network_info,
                           mock.sentinel.block_dev_info)
 
         mock_superclass_spawn.assert_called_once_with(
             self.context, mock.sentinel.fake_instance,
             mock.sentinel.image_meta, mock.sentinel.injected_files,
-            mock.sentinel.admin_pass, mock.sentinel.network_info,
-            mock.sentinel.block_dev_info)
+            mock.sentinel.admin_pass, mock.sentinel.allocations,
+            mock.sentinel.network_info, mock.sentinel.block_dev_info)
         self.driver._clops.add_to_cluster.assert_called_once_with(
             mock.sentinel.fake_instance)
 

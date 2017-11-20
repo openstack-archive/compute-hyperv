@@ -85,6 +85,20 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
                           self._volumeops._get_volume_driver,
                           connection_info=fake_conn_info)
 
+    def test_validate_host_configuration(self):
+        self._volumeops.volume_drivers = {
+            constants.STORAGE_PROTOCOL_SMBFS: mock.Mock(
+                side_effect=exception.ValidationError),
+            constants.STORAGE_PROTOCOL_ISCSI: mock.Mock(
+                side_effect=exception.ValidationError),
+            constants.STORAGE_PROTOCOL_FC: mock.Mock()
+        }
+
+        self._volumeops.validate_host_configuration()
+
+        for volume_drv in self._volumeops.volume_drivers.values():
+            volume_drv.validate_host_configuration.assert_called_once_with()
+
     @mock.patch.object(volumeops.VolumeOps, 'attach_volume')
     def test_attach_volumes(self, mock_attach_volume):
         block_device_info = get_fake_block_dev_info()
@@ -625,11 +639,43 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(mock.sentinel.disk_path, path)
 
     @mock.patch.object(volumeops.BaseVolumeDriver,
+        '_check_san_policy')
+    @ddt.data(True, False)
+    def test_validate_host_configuration(self, is_block_dev,
+                                         fake_check_san_policy):
+        self._base_vol_driver._is_block_dev = is_block_dev
+
+        self._base_vol_driver.validate_host_configuration()
+
+        if is_block_dev:
+            fake_check_san_policy.assert_called_once_with()
+        else:
+            fake_check_san_policy.assert_not_called()
+
+    @ddt.data(os_win_const.DISK_POLICY_OFFLINE_ALL,
+              os_win_const.DISK_POLICY_ONLINE_ALL)
+    def test_check_san_policy(self, disk_policy):
+        self._diskutils.get_new_disk_policy.return_value = disk_policy
+
+        accepted_policies = [os_win_const.DISK_POLICY_OFFLINE_SHARED,
+                             os_win_const.DISK_POLICY_OFFLINE_ALL]
+
+        if disk_policy not in accepted_policies:
+            self.assertRaises(
+                exception.ValidationError,
+                self._base_vol_driver._check_san_policy)
+        else:
+            self._base_vol_driver._check_san_policy()
+
+    @mock.patch.object(volumeops.BaseVolumeDriver,
                        '_get_disk_res_path')
     @mock.patch.object(volumeops.BaseVolumeDriver, '_get_disk_ctrl_and_slot')
     @mock.patch.object(volumeops.BaseVolumeDriver,
                        'connect_volume')
-    def _test_attach_volume(self, mock_connect_volume,
+    @mock.patch.object(volumeops.BaseVolumeDriver,
+                       'validate_host_configuration')
+    def _test_attach_volume(self, mock_validate_host_config,
+                            mock_connect_volume,
                             mock_get_disk_ctrl_and_slot,
                             mock_get_disk_res_path,
                             is_block_dev=True):
@@ -666,6 +712,7 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.raw_path)
         mock_get_disk_ctrl_and_slot.assert_called_once_with(
             mock.sentinel.instance_name, mock.sentinel.disk_bus)
+        mock_validate_host_config.assert_called_once_with()
 
     def test_attach_volume_image_file(self):
         self._test_attach_volume(is_block_dev=False)

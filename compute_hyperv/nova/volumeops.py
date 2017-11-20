@@ -104,6 +104,17 @@ class VolumeOps(object):
             raise exception.VolumeDriverNotFound(driver_type=driver_type)
         return self.volume_drivers[driver_type]
 
+    def validate_host_configuration(self):
+        for protocol, volume_driver in self.volume_drivers.items():
+            try:
+                volume_driver.validate_host_configuration()
+            except exception.ValidationError as ex:
+                LOG.warning(
+                    "Volume driver %(protocol)s reported a validation "
+                    "error. Attaching such volumes will probably fail. "
+                    "Error message: %(err_msg)s.",
+                    dict(protocol=protocol, err_msg=ex.message))
+
     def attach_volumes(self, context, volumes, instance):
         for vol in volumes:
             self.attach_volume(context, vol['connection_info'], instance)
@@ -406,6 +417,10 @@ class BaseVolumeDriver(object):
 
         return self._get_disk_res_path(disk_paths[0])
 
+    def validate_host_configuration(self):
+        if self._is_block_dev:
+            self._check_san_policy()
+
     def _get_disk_res_path(self, disk_path):
         if self._is_block_dev:
             # We need the Msvm_DiskDrive resource path as this
@@ -423,8 +438,22 @@ class BaseVolumeDriver(object):
             raise exception.DiskNotFound(err_msg)
         return disk_res_path
 
+    def _check_san_policy(self):
+        disk_policy = self._diskutils.get_new_disk_policy()
+
+        accepted_policies = [os_win_const.DISK_POLICY_OFFLINE_SHARED,
+                             os_win_const.DISK_POLICY_OFFLINE_ALL]
+
+        if disk_policy not in accepted_policies:
+            err_msg = _("Invalid SAN policy. The SAN policy "
+                        "must be set to 'Offline Shared' or 'Offline All' "
+                        "in order to attach passthrough disks to instances.")
+            raise exception.ValidationError(message=err_msg)
+
     def attach_volume(self, connection_info, instance_name,
                       disk_bus=constants.CTRL_TYPE_SCSI):
+        self.validate_host_configuration()
+
         dev_info = self.connect_volume(connection_info)
 
         serial = connection_info['serial']

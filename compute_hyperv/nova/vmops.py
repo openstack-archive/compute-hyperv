@@ -1063,15 +1063,13 @@ class VMOps(object):
             return True
 
         if not self._hostutils.check_min_windows_version(10, 0):
-            # TODO(claudiub): add set log level to error after string freeze.
-            LOG.debug("vNIC hot plugging is supported only in newer "
+            LOG.error("vNIC hot plugging is supported only in newer "
                       "versions than Windows Hyper-V / Server 2012 R2.")
             return False
 
         if (self._vmutils.get_vm_generation(instance.name) ==
                 constants.VM_GEN_1):
-            # TODO(claudiub): add set log level to error after string freeze.
-            LOG.debug("Cannot hot plug vNIC to a first generation VM.",
+            LOG.error("Cannot hot plug vNIC to a first generation VM.",
                       instance=instance)
             return False
 
@@ -1097,8 +1095,7 @@ class VMOps(object):
             self._vif_driver.unplug(instance, vif)
             self._vmutils.destroy_nic(instance.name, vif['id'])
         except os_win_exc.HyperVVMNotFoundException:
-            # TODO(claudiub): add set log level to error after string freeze.
-            LOG.debug("Instance not found during detach interface. It "
+            LOG.error("Instance not found during detach interface. It "
                       "might have been destroyed beforehand.",
                       instance=instance)
             raise exception.InterfaceDetachFailed(instance_uuid=instance.uuid)

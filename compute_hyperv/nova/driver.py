@@ -103,6 +103,7 @@ class HyperVDriver(driver.ComputeDriver):
         "supports_device_tagging": True,
         "supports_tagged_attach_interface": True,
         "supports_tagged_attach_volume": True,
+        "supports_extend_volume": True,
     }
 
     def __init__(self, virtapi):
@@ -197,6 +198,9 @@ class HyperVDriver(driver.ComputeDriver):
                                       connection_info,
                                       instance,
                                       update_device_metadata=True)
+
+    def extend_volume(self, connection_info, instance):
+        self._volumeops.extend_volume(connection_info)
 
     def get_volume_connector(self, instance):
         return self._volumeops.get_volume_connector()

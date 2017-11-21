@@ -516,6 +516,15 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
             mock_vol_driver.get_disk_attachment_info.return_value,
             ret_val)
 
+    @mock.patch.object(volumeops.VolumeOps, '_get_volume_driver')
+    def test_extend_volume(self, mock_get_volume_driver):
+        fake_conn_info = get_fake_connection_info()
+        self._volumeops.extend_volume(fake_conn_info)
+
+        mock_vol_driver = mock_get_volume_driver.return_value
+        mock_vol_driver.extend_volume.assert_called_once_with(
+            fake_conn_info)
+
 
 @ddt.ddt
 class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
@@ -813,6 +822,14 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
             exp_disk_res_path,
             is_physical=is_block_dev,
             serial=exp_serial)
+
+    def test_extend_volume(self):
+        conn_info = get_fake_connection_info()
+
+        self._base_vol_driver.extend_volume(conn_info)
+
+        self._conn.extend_volume.assert_called_once_with(
+            conn_info['data'])
 
 
 class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):

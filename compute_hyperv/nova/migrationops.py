@@ -19,9 +19,11 @@ Management class for migration / resize operations.
 import os
 import re
 
+from nova import block_device
 import nova.conf
 from nova import exception
 from nova.virt import configdrive
+from nova.virt import driver
 from os_win import utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
@@ -77,11 +79,21 @@ class MigrationOps(object):
 
         return revert_path
 
-    def _check_target_flavor(self, instance, flavor):
+    def _check_target_flavor(self, instance, flavor, block_device_info):
+        ephemerals = driver.block_device_info_get_ephemerals(block_device_info)
+        eph_size = (block_device.get_bdm_ephemeral_disk_size(ephemerals) or
+                    instance.flavor.ephemeral_gb)
+
         new_root_gb = flavor.root_gb
         curr_root_gb = instance.flavor.root_gb
+        new_eph_size = flavor.ephemeral_gb
 
-        if new_root_gb < curr_root_gb:
+        root_down = new_root_gb < curr_root_gb
+        ephemeral_down = new_eph_size < eph_size
+        booted_from_volume = self._block_dev_man.is_boot_from_volume(
+            block_device_info)
+
+        if root_down and not booted_from_volume:
             raise exception.InstanceFaultRollback(
                 exception.CannotResizeDisk(
                     reason=_("Cannot resize the root disk to a smaller size. "
@@ -89,6 +101,16 @@ class MigrationOps(object):
                              "size: %(new_root_gb)s GB.") % {
                                  'curr_root_gb': curr_root_gb,
                                  'new_root_gb': new_root_gb}))
+        # We allow having a new flavor with no ephemeral storage, in which
+        # case we'll just remove all the ephemeral disks.
+        elif ephemeral_down and new_eph_size:
+            reason = (_("The new flavor ephemeral size (%(flavor_eph)s) is "
+                       "smaller than the current total ephemeral disk size: "
+                       "%(current_eph)s.") %
+                      dict(flavor_eph=flavor.ephemeral_gb,
+                           current_eph=eph_size))
+            raise exception.InstanceFaultRollback(
+                exception.CannotResizeDisk(reason=reason))
 
     def migrate_disk_and_power_off(self, context, instance, dest,
                                    flavor, network_info,
@@ -96,7 +118,7 @@ class MigrationOps(object):
                                    retry_interval=0):
         LOG.debug("migrate_disk_and_power_off called", instance=instance)
 
-        self._check_target_flavor(instance, flavor)
+        self._check_target_flavor(instance, flavor, block_device_info)
 
         self._vmops.power_off(instance, timeout, retry_interval)
         instance_path = self._move_vm_files(instance)
@@ -294,6 +316,13 @@ class MigrationOps(object):
 
         self._migrationutils.realize_vm(instance.name)
 
+        # During a resize, ephemeral disks may be removed. We cannot remove
+        # disks from a planned vm, for which reason we have to do this after
+        # *realizing* it. At the same time, we cannot realize a VM before
+        # updating disks to use the destination paths.
+        ephemerals = block_device_info['ephemerals']
+        self._check_ephemeral_disks(instance, ephemerals, resize_instance)
+
         self._vmops.configure_remotefx(instance, vm_gen, resize_instance)
         if CONF.hyperv.enable_instance_metrics_collection:
             self._metricsutils.enable_vm_metrics_collection(instance.name)
@@ -366,13 +395,20 @@ class MigrationOps(object):
                 new_size = instance.flavor.root_gb * units.Gi
                 self._check_resize_vhd(root_vhd_path, root_vhd_info, new_size)
 
-        ephemerals = block_device_info['ephemerals']
-        self._check_ephemeral_disks(instance, ephemerals, resize_instance)
-
     def _check_ephemeral_disks(self, instance, ephemerals,
                                resize_instance=False):
         instance_name = instance.name
         new_eph_gb = instance.get('ephemeral_gb', 0)
+        ephemerals_to_remove = set()
+
+        if not ephemerals and new_eph_gb:
+            # No explicit ephemeral disk bdm was retrieved, yet the flavor
+            # provides ephemeral storage, for which reason we're adding a
+            # default ephemeral disk.
+            eph = dict(device_type='disk',
+                       drive_addr=0,
+                       size=new_eph_gb)
+            ephemerals.append(eph)
 
         if len(ephemerals) == 1:
             # NOTE(claudiub): Resize only if there is one ephemeral. If there
@@ -380,7 +416,8 @@ class MigrationOps(object):
             # also exists in the libvirt driver and it has to be addressed in
             # the future.
             ephemerals[0]['size'] = new_eph_gb
-        elif sum(eph['size'] for eph in ephemerals) != new_eph_gb:
+        elif new_eph_gb and sum(
+                eph['size'] for eph in ephemerals) != new_eph_gb:
             # New ephemeral size is different from the original ephemeral size
             # and there are multiple ephemerals.
             LOG.warning("Cannot resize multiple ephemeral disks for instance.",
@@ -391,7 +428,7 @@ class MigrationOps(object):
             existing_eph_path = self._pathutils.lookup_ephemeral_vhd_path(
                 instance_name, eph_name)
 
-            if not existing_eph_path:
+            if not existing_eph_path and eph['size']:
                 eph['format'] = self._vhdutils.get_best_supported_vhd_format()
                 eph['path'] = self._pathutils.get_ephemeral_vhd_path(
                     instance_name, eph['format'], eph_name)
@@ -399,10 +436,24 @@ class MigrationOps(object):
                     # ephemerals should have existed.
                     raise exception.DiskNotFound(location=eph['path'])
 
-                if eph['size']:
-                    # create ephemerals
-                    self._vmops.create_ephemeral_disk(instance.name, eph)
-                    self._vmops.attach_ephemerals(instance_name, [eph])
+                # We cannot rely on the BlockDeviceInfoManager class to
+                # provide us a disk slot as it's only usable when creating
+                # new instances (it's not aware of the current disk address
+                # layout).
+                # There's no way in which IDE may be requested for new
+                # ephemeral disks (after a resize), so we'll just enforce
+                # SCSI for now. os-win does not currently allow retrieving
+                # free IDE slots.
+                ctrller_path = self._vmutils.get_vm_scsi_controller(
+                    instance.name)
+                ctrl_addr = self._vmutils.get_free_controller_slot(
+                    ctrller_path)
+                eph['disk_bus'] = constants.CTRL_TYPE_SCSI
+                eph['ctrl_disk_addr'] = ctrl_addr
+
+                # create ephemerals
+                self._vmops.create_ephemeral_disk(instance.name, eph)
+                self._vmops.attach_ephemerals(instance_name, [eph])
             elif eph['size'] > 0:
                 # ephemerals exist. resize them.
                 eph['path'] = existing_eph_path
@@ -410,6 +461,18 @@ class MigrationOps(object):
                 self._check_resize_vhd(
                     eph['path'], eph_vhd_info, eph['size'] * units.Gi)
             else:
-                # ephemeral new size is 0, remove it.
-                self._pathutils.remove(existing_eph_path)
                 eph['path'] = None
+                # ephemeral new size is 0, remove it.
+                ephemerals_to_remove.add(existing_eph_path)
+
+        if not new_eph_gb:
+            # The new flavor does not provide any ephemeral storage. We'll
+            # remove any existing ephemeral disk (default ones included).
+            attached_ephemerals = self._vmops.get_attached_ephemeral_disks(
+                instance.name)
+            ephemerals_to_remove |= set(attached_ephemerals)
+
+        for eph_path in ephemerals_to_remove:
+            self._vmutils.detach_vm_disk(instance_name, eph_path,
+                                         is_physical=False)
+            self._pathutils.remove(eph_path)

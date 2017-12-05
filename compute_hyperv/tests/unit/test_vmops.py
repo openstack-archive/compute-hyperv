@@ -478,7 +478,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             self._vmops._vmutils.vm_exists.assert_called_once_with(
                 mock_instance.name)
             mock_delete_disk_files.assert_called_once_with(
-                mock_instance.name)
+                mock_instance)
             mock_validate_and_update_bdi = (
                 self._vmops._block_dev_man.validate_and_update_bdi)
             mock_validate_and_update_bdi.assert_called_once_with(
@@ -1201,11 +1201,17 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._pathutils.remove.assert_called_once_with(
             mock.sentinel.configdrive_path)
 
-    @ddt.data(None, mock.sentinel.instance_path)
-    def test_delete_disk_files(self, passed_instance_path):
-        mock_instance = fake_instance.fake_instance_obj(self.context)
-        self._vmops._delete_disk_files(mock_instance.name,
-                                       passed_instance_path)
+    @ddt.data({'passed_instance_path': True},
+              {'cleanup_migr_files': True})
+    @ddt.unpack
+    def test_delete_disk_files(self, passed_instance_path=None,
+                               cleanup_migr_files=False):
+        mock_instance = mock.Mock(
+            system_metadata=dict(
+                backup_location=mock.sentinel.backup_location))
+        self._vmops._delete_disk_files(mock_instance,
+                                       passed_instance_path,
+                                       cleanup_migr_files)
 
         stop_console_handler = (
             self._vmops._serial_console_ops.stop_console_handler_unsync)
@@ -1220,8 +1226,17 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         exp_inst_path = (passed_instance_path or
                          self._pathutils.get_instance_dir.return_value)
 
-        self._pathutils.check_remove_dir.assert_called_once_with(
-            exp_inst_path)
+        exp_check_remove_dir_calls = [mock.call(exp_inst_path)]
+
+        mock_get_migr_dir = self._pathutils.get_instance_migr_revert_dir
+        if cleanup_migr_files:
+            mock_get_migr_dir.assert_called_once_with(
+                exp_inst_path, remove_dir=True)
+            exp_check_remove_dir_calls.append(
+                mock.call(mock.sentinel.backup_location))
+
+        self._pathutils.check_remove_dir.assert_has_calls(
+            exp_check_remove_dir_calls)
 
     @ddt.data({},
               {'vm_exists': False, 'planned_vm_exists': False},
@@ -1240,9 +1255,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._migrutils.planned_vm_exists.return_value = (
             planned_vm_exists)
 
-        self._vmops.destroy(instance=mock_instance,
-                            block_device_info=mock.sentinel.FAKE_BD_INFO,
-                            network_info=mock.sentinel.fake_network_info)
+        self._vmops.destroy(
+            instance=mock_instance,
+            block_device_info=mock.sentinel.FAKE_BD_INFO,
+            network_info=mock.sentinel.fake_network_info,
+            cleanup_migration_files=mock.sentinel.cleanup_migr_files)
 
         self._vmops._vmutils.vm_exists.assert_called_with(
             mock_instance.name)
@@ -1270,8 +1287,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_disconnect_volumes.assert_called_once_with(
             mock.sentinel.FAKE_BD_INFO)
         mock_delete_disk_files.assert_called_once_with(
-            mock_instance.name,
-            self._pathutils.get_instance_dir.return_value)
+            mock_instance,
+            self._pathutils.get_instance_dir.return_value,
+            mock.sentinel.cleanup_migr_files)
 
     @mock.patch('compute_hyperv.nova.vmops.VMOps.power_off')
     def test_destroy_exception(self, mock_power_off):

@@ -127,7 +127,8 @@ class MigrationOps(object):
         instance.save()
 
         self._vmops.destroy(instance, network_info,
-                            block_device_info, destroy_disks=True)
+                            block_device_info, destroy_disks=True,
+                            cleanup_migration_files=False)
 
         # return the instance's path location.
         return instance_path

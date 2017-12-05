@@ -292,7 +292,7 @@ class VMOps(object):
             raise exception.InstanceExists(name=instance_name)
 
         # Make sure we're starting with a clean slate.
-        self._delete_disk_files(instance_name)
+        self._delete_disk_files(instance)
 
         vm_gen = self.get_image_vm_generation(instance.uuid, image_meta)
 
@@ -800,23 +800,32 @@ class VMOps(object):
                 self._pathutils.remove(configdrive_path)
 
     @serialconsoleops.instance_synchronized
-    def _delete_disk_files(self, instance_name, instance_path=None):
+    def _delete_disk_files(self, instance, instance_path=None,
+                           cleanup_migration_files=True):
         # We want to avoid the situation in which serial console workers
         # are started while we perform this operation, preventing us from
         # deleting the instance log files (bug #1556189). This can happen
         # due to delayed instance lifecycle events.
         #
         # The unsynchronized method is being used to avoid a deadlock.
-        self._serial_console_ops.stop_console_handler_unsync(instance_name)
+        self._serial_console_ops.stop_console_handler_unsync(instance.name)
 
         # This may be a 'non-default' location.
         if not instance_path:
-            instance_path = self._pathutils.get_instance_dir(instance_name)
+            instance_path = self._pathutils.get_instance_dir(instance.name)
 
         self._pathutils.check_remove_dir(instance_path)
 
+        if cleanup_migration_files:
+            self._pathutils.get_instance_migr_revert_dir(
+                instance_path, remove_dir=True)
+
+            backup_location = instance.system_metadata.get('backup_location')
+            if backup_location:
+                self._pathutils.check_remove_dir(backup_location)
+
     def destroy(self, instance, network_info, block_device_info,
-                destroy_disks=True):
+                destroy_disks=True, cleanup_migration_files=True):
         instance_name = instance.name
         LOG.info("Got request to destroy instance", instance=instance)
 
@@ -844,7 +853,8 @@ class VMOps(object):
             self._volumeops.disconnect_volumes(block_device_info)
 
             if destroy_disks:
-                self._delete_disk_files(instance_name, instance_path)
+                self._delete_disk_files(instance, instance_path,
+                                        cleanup_migration_files)
         except Exception:
             with excutils.save_and_reraise_exception():
                 LOG.exception('Failed to destroy instance: %s', instance_name)

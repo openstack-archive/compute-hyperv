@@ -1611,6 +1611,18 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               network_info=mock_network_info)
         self._vmops._vif_driver.plug.assert_has_calls(calls)
 
+    def test_plug_vifs_failed(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+        fake_vif1 = {'id': mock.sentinel.ID1,
+                     'type': mock.sentinel.vif_type1}
+        mock_network_info = [fake_vif1]
+
+        self._vmops._vif_driver.plug.side_effect = exception.NovaException
+
+        self.assertRaises(exception.VirtualInterfacePlugException,
+                          self._vmops.plug_vifs,
+                          mock_instance, mock_network_info)
+
     def test_unplug_vifs(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         fake_vif1 = {'id': mock.sentinel.ID1,

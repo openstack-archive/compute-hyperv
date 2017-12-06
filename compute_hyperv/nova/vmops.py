@@ -1021,7 +1021,12 @@ class VMOps(object):
     def plug_vifs(self, instance, network_info):
         if network_info:
             for vif in network_info:
-                self._vif_driver.plug(instance, vif)
+                try:
+                    self._vif_driver.plug(instance, vif)
+                except Exception as exc:
+                    LOG.exception("Failed to plug vif: '%s'.",
+                                  vif, instance=instance)
+                    raise exception.VirtualInterfacePlugException(exc)
 
     def unplug_vifs(self, instance, network_info):
         if network_info:

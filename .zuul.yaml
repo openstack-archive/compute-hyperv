@@ -1,0 +1,10 @@
+- project:
+    name: openstack/compute-hyperv
+    check:
+      jobs:
+        - build-openstack-releasenotes
+        - build-openstack-sphinx-docs
+    gate:
+      jobs:
+        - build-openstack-releasenotes
+        - build-openstack-sphinx-docs

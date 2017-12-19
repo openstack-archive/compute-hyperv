@@ -22,6 +22,7 @@ from os_win import exceptions as os_win_exc
 from os_win.utils import pathutils
 from os_win import utilsfactory
 from oslo_log import log as logging
+from oslo_utils import fileutils
 from oslo_utils import uuidutils
 
 from compute_hyperv.i18n import _
@@ -274,6 +275,25 @@ class PathUtils(pathutils.PathUtils):
         remote_inst_dir = self.get_instances_dir(dest)
         return self.check_dirs_shared_storage(local_inst_dir,
                                               remote_inst_dir)
+
+    def check_instance_shared_storage_local(self, instance):
+        instance_dir = self.get_instance_dir(instance.name)
+
+        fd, tmp_file = tempfile.mkstemp(dir=instance_dir)
+        LOG.debug("Creating tmpfile %s to verify with other "
+                  "compute node that the instance is on "
+                  "the same shared storage.",
+                  tmp_file, instance=instance)
+        os.close(fd)
+        # We're sticking with the same dict key as the libvirt driver.
+        # At some point, this may become a versioned object.
+        return {"filename": tmp_file}
+
+    def check_instance_shared_storage_remote(self, data):
+        return os.path.exists(data['filename'])
+
+    def check_instance_shared_storage_cleanup(self, data):
+        fileutils.delete_if_exists(data["filename"])
 
     def get_instance_snapshot_dir(self, instance_name=None, instance_dir=None):
         if instance_name:

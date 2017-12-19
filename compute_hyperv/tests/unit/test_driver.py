@@ -589,3 +589,33 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             'nova_object.data': {}}
 
         self._check_recreate_image_meta(mock_image_meta)
+
+    def test_check_instance_shared_storage_local(self):
+        check_local = (
+            self.driver._pathutils.check_instance_shared_storage_local)
+
+        ret_val = self.driver.check_instance_shared_storage_local(
+            mock.sentinel.context, mock.sentinel.instance)
+
+        self.assertEqual(check_local.return_value, ret_val)
+        check_local.assert_called_once_with(mock.sentinel.instance)
+
+    def test_check_instance_shared_storage_remote(self):
+        check_remote = (
+            self.driver._pathutils.check_instance_shared_storage_remote)
+
+        ret_val = self.driver.check_instance_shared_storage_remote(
+            mock.sentinel.context, mock.sentinel.data)
+
+        self.assertEqual(check_remote.return_value, ret_val)
+        check_remote.assert_called_once_with(mock.sentinel.data)
+
+    def test_check_instance_shared_storage_cleanup(self):
+        check_cleanup = (
+            self.driver._pathutils.check_instance_shared_storage_cleanup)
+
+        ret_val = self.driver.check_instance_shared_storage_cleanup(
+            mock.sentinel.context, mock.sentinel.data)
+
+        self.assertEqual(check_cleanup.return_value, ret_val)
+        check_cleanup.assert_called_once_with(mock.sentinel.data)

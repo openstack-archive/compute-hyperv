@@ -416,3 +416,21 @@ class HyperVDriver(driver.ComputeDriver):
                                         in instance.system_metadata.items()}
         image_meta["id"] = image_ref
         return image_meta
+
+    def check_instance_shared_storage_local(self, context, instance):
+        """Check if instance files located on shared storage.
+
+        This runs check on the destination host, and then calls
+        back to the source host to check the results.
+
+        :param context: security context
+        :param instance: nova.objects.instance.Instance object
+        :returns: A dict containing the tempfile info.
+        """
+        return self._pathutils.check_instance_shared_storage_local(instance)
+
+    def check_instance_shared_storage_remote(self, context, data):
+        return self._pathutils.check_instance_shared_storage_remote(data)
+
+    def check_instance_shared_storage_cleanup(self, context, data):
+        return self._pathutils.check_instance_shared_storage_cleanup(data)

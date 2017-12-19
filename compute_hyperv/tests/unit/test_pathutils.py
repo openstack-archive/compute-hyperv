@@ -19,6 +19,7 @@ import ddt
 import mock
 from nova import exception
 from os_win import exceptions as os_win_exc
+from oslo_utils import fileutils
 from six.moves import builtins
 
 from compute_hyperv.nova import constants
@@ -399,6 +400,41 @@ class PathUtilsTestCase(test_base.HyperVBaseTestCase):
             [mock.call(), mock.call(mock.sentinel.dest)])
         mock_check_dirs_shared_storage.assert_called_once_with(
             mock.sentinel.local_inst_dir, mock.sentinel.remote_inst_dir)
+
+    @mock.patch.object(os, 'close')
+    @mock.patch('tempfile.mkstemp')
+    @mock.patch.object(pathutils.PathUtils, 'get_instance_dir')
+    def test_check_instance_shared_storage_local(self, mock_get_instance_dir,
+                                                 mock_mkstemp, mock_close):
+        mock_instance = mock.Mock()
+        mock_mkstemp.return_value = (mock.sentinel.tmp_fd,
+                                     mock.sentinel.tmp_file)
+
+        ret_val = self._pathutils.check_instance_shared_storage_local(
+            mock_instance)
+        exp_ret_val = {'filename': mock.sentinel.tmp_file}
+
+        self.assertEqual(exp_ret_val, ret_val)
+        mock_get_instance_dir.assert_called_once_with(mock_instance.name)
+        mock_mkstemp.assert_called_once_with(
+            dir=mock_get_instance_dir.return_value)
+        mock_close.assert_called_once_with(mock.sentinel.tmp_fd)
+
+    @mock.patch.object(os.path, 'exists')
+    def test_check_instance_shared_storage_remote(self, mock_exists):
+        check_data = dict(filename=mock.sentinel.filename)
+        ret_val = self._pathutils.check_instance_shared_storage_remote(
+            check_data)
+
+        self.assertEqual(mock_exists.return_value, ret_val)
+
+    @mock.patch.object(fileutils, 'delete_if_exists')
+    def test_check_instance_shared_storage_cleanup(self,
+                                                   mock_delete_if_exists):
+        check_data = dict(filename=mock.sentinel.filename)
+        self._pathutils.check_instance_shared_storage_cleanup(check_data)
+
+        mock_delete_if_exists.assert_called_once_with(mock.sentinel.filename)
 
     @mock.patch.object(pathutils.PathUtils, 'get_instance_dir')
     def test_get_instance_snapshot_dir(self, mock_get_instance_dir):

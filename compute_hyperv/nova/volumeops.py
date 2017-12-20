@@ -298,6 +298,7 @@ class VolumeOps(object):
                    "create_info": create_info})
         snapshot_id = create_info['snapshot_id']
 
+        snapshot_failed = False
         try:
             instance.task_state = task_states.IMAGE_SNAPSHOT_PENDING
             instance.save(expected_task_state=[None])
@@ -314,21 +315,22 @@ class VolumeOps(object):
             # The volume driver is expected to
             # update the connection info.
             driver_bdm.save()
-
-            self._volume_api.update_snapshot_status(
-                context, snapshot_id, 'creating')
         except Exception:
             with excutils.save_and_reraise_exception():
+                snapshot_failed = True
+
                 err_msg = ('Error occurred while snapshotting volume. '
                            'sending error status to Cinder.')
                 LOG.exception(err_msg,
                               instance=instance)
-                self._volume_api.update_snapshot_status(
-                    context, snapshot_id, 'error')
         finally:
             instance.task_state = None
             instance.save(
                 expected_task_state=[task_states.IMAGE_SNAPSHOT_PENDING])
+
+            snapshot_status = 'error' if snapshot_failed else 'creating'
+            self._volume_api.update_snapshot_status(
+                context, snapshot_id, snapshot_status)
 
     @volume_snapshot_lock
     def volume_snapshot_delete(self, context, instance, volume_id,
@@ -339,6 +341,7 @@ class VolumeOps(object):
                    "instance_name": instance.name,
                    "delete_info": delete_info})
 
+        snapshot_delete_failed = False
         try:
             instance.task_state = task_states.IMAGE_SNAPSHOT_PENDING
             instance.save(expected_task_state=[None])
@@ -355,21 +358,23 @@ class VolumeOps(object):
             # The volume driver is expected to
             # update the connection info.
             driver_bdm.save()
-
-            self._volume_api.update_snapshot_status(
-                context, snapshot_id, 'deleting')
         except Exception:
             with excutils.save_and_reraise_exception():
+                snapshot_delete_failed = True
+
                 err_msg = ('Error occurred while deleting volume '
                            'snapshot. Sending error status to Cinder.')
                 LOG.exception(err_msg,
                               instance=instance)
-                self._volume_api.update_snapshot_status(
-                    context, snapshot_id, 'error_deleting')
         finally:
             instance.task_state = None
             instance.save(
                 expected_task_state=[task_states.IMAGE_SNAPSHOT_PENDING])
+
+            snapshot_status = ('error_deleting'
+                               if snapshot_delete_failed else 'deleting')
+            self._volume_api.update_snapshot_status(
+                context, snapshot_id, snapshot_status)
 
     def get_disk_attachment_info(self, connection_info):
         volume_driver = self._get_volume_driver(connection_info)

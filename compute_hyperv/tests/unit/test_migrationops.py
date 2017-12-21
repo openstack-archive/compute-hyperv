@@ -170,7 +170,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                          instance.system_metadata['backup_location'])
         instance.save.assert_called_once_with()
         self._migrationops._vmops.destroy.assert_called_once_with(
-            instance, network_info, mock.sentinel.bdi, destroy_disks=True)
+            instance, network_info, mock.sentinel.bdi, destroy_disks=True,
+            cleanup_migration_files=False)
 
     def test_confirm_migration(self):
         mock_instance = fake_instance.fake_instance_obj(

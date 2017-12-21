@@ -356,6 +356,22 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_create_dynamic_vhd.assert_called_once_with('fake_eph_path',
                                                         10 * units.Gi)
 
+    def test_get_attached_ephemeral_disks(self):
+        ephemeral_disks = [os.path.join('image_dir', img_name)
+                           for img_name in ['eph0.vhdx', 'eph1.vhdx']]
+        image_disks = ephemeral_disks + [
+            os.path.join('image_dir', 'root.vhdx')]
+
+        self._vmutils.get_vm_storage_paths.return_value = (
+            image_disks, mock.sentinel.passthrough_disks)
+
+        ret_val = self._vmops.get_attached_ephemeral_disks(
+            mock.sentinel.instance_name)
+
+        self.assertEqual(ephemeral_disks, ret_val)
+        self._vmutils.get_vm_storage_paths.assert_called_once_with(
+            mock.sentinel.instance_name)
+
     @mock.patch.object(vmops.objects, 'PCIDeviceBus')
     @mock.patch.object(vmops.objects, 'NetworkInterfaceMetadata')
     @mock.patch.object(vmops.objects.VirtualInterfaceList,
@@ -868,7 +884,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                        'drive_addr': 0,
                        'ctrl_disk_addr': 0},
                       {'path': None}]
-        ephemerals = [FakeBDM(eph) for eph in ephemerals]
+        ephemerals = [FakeBDM(ephemerals[0]),
+                      ephemerals[1],
+                      FakeBDM(ephemerals[2])]
 
         self._vmops.attach_ephemerals(mock_instance.name, ephemerals)
 
@@ -880,10 +898,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         ])
         mock_update_conn = (
             self._vmops._block_dev_man.update_bdm_connection_info)
-        mock_update_conn.assert_has_calls(
-            [mock.call(mock.sentinel.bdm_obj,
-                       eph_filename=os.path.basename(eph['path']))
-             for eph in ephemerals if eph.get('path')])
+        mock_update_conn.assert_called_once_with(
+            mock.sentinel.bdm_obj,
+            eph_filename=os.path.basename(ephemerals[0]['path']))
 
     def test_attach_drive_vm_to_scsi(self):
         self._vmops._attach_drive(

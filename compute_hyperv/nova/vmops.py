@@ -237,6 +237,12 @@ class VMOps(object):
         self._vhdutils.create_dynamic_vhd(eph_info['path'],
                                           eph_info['size'] * units.Gi)
 
+    def get_attached_ephemeral_disks(self, instance_name):
+        vm_image_disks = self._vmutils.get_vm_storage_paths(
+                instance_name)[0]
+        return [image_path for image_path in vm_image_disks
+                if os.path.basename(image_path).lower().startswith('eph')]
+
     @staticmethod
     def _get_vif_metadata(context, instance_id):
         vifs = objects.VirtualInterfaceList.get_by_instance_uuid(context,
@@ -611,9 +617,13 @@ class VMOps(object):
                     constants.BDI_DEVICE_TYPE_TO_DRIVE_TYPE[
                         eph['device_type']])
 
-                filename = os.path.basename(eph['path'])
-                self._block_dev_man.update_bdm_connection_info(
-                    eph._bdm_obj, eph_filename=filename)
+                # This may be an ephemeral added by default by us, in which
+                # case there won't be a bdm object.
+                bdm_obj = getattr(eph, '_bdm_obj', None)
+                if bdm_obj:
+                    filename = os.path.basename(eph['path'])
+                    self._block_dev_man.update_bdm_connection_info(
+                        eph._bdm_obj, eph_filename=filename)
 
     def _attach_drive(self, instance_name, path, drive_addr, ctrl_disk_addr,
                       controller_type, drive_type=constants.DISK):

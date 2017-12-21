@@ -16,7 +16,9 @@ import os
 
 import ddt
 import mock
+from nova import block_device
 from nova import exception
+from nova.virt import driver
 from os_win import exceptions as os_win_exc
 from oslo_utils import units
 
@@ -82,13 +84,43 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance.name, mock_get_export_dir.return_value)
         self.assertEqual(mock_get_revert_dir.return_value, vm_files_path)
 
-    def test_check_target_flavor(self):
+    @ddt.data({},
+              {'ephemerals_size': 2},
+              {'ephemerals_size': 3, 'flavor_eph_size': 0},
+              {'ephemerals_size': 3, 'expect_invalid_flavor': True},
+              {'current_root_gb': 3, 'expect_invalid_flavor': True},
+              {'current_root_gb': 3, 'boot_from_vol': True})
+    @ddt.unpack
+    @mock.patch.object(driver, 'block_device_info_get_ephemerals')
+    @mock.patch.object(block_device, 'get_bdm_ephemeral_disk_size')
+    def test_check_target_flavor(self, mock_get_eph_size, mock_get_eph,
+                                 ephemerals_size=0,
+                                 flavor_eph_size=2,
+                                 flavor_root_gb=2,
+                                 current_root_gb=1,
+                                 boot_from_vol=False,
+                                 expect_invalid_flavor=False):
         mock_instance = fake_instance.fake_instance_obj(self.context)
-        mock_instance.flavor.root_gb = 1
-        mock_flavor = mock.MagicMock(root_gb=0)
-        self.assertRaises(exception.InstanceFaultRollback,
-                          self._migrationops._check_target_flavor,
-                          mock_instance, mock_flavor)
+        mock_instance.flavor.root_gb = current_root_gb
+        mock_flavor = mock.MagicMock(root_gb=flavor_root_gb,
+                                     ephemeral_gb=flavor_eph_size)
+
+        mock_get_eph_size.return_value = ephemerals_size
+        self._block_dev_man.is_boot_from_volume.return_value = boot_from_vol
+
+        if expect_invalid_flavor:
+            self.assertRaises(exception.InstanceFaultRollback,
+                              self._migrationops._check_target_flavor,
+                              mock_instance, mock_flavor,
+                              mock.sentinel.block_device_info)
+        else:
+            self._migrationops._check_target_flavor(
+                mock_instance, mock_flavor, mock.sentinel.block_device_info)
+
+        mock_get_eph.assert_called_once_with(mock.sentinel.block_device_info)
+        mock_get_eph_size.assert_called_once_with(mock_get_eph.return_value)
+        self._block_dev_man.is_boot_from_volume.assert_called_once_with(
+            mock.sentinel.block_device_info)
 
     def test_check_and_attach_config_drive(self):
         mock_instance = fake_instance.fake_instance_obj(
@@ -129,7 +161,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             self._FAKE_TIMEOUT, self._FAKE_RETRY_INTERVAL)
 
         self.assertEqual(mock_move_vm_files.return_value, disk_info)
-        mock_check_flavor.assert_called_once_with(instance, flavor)
+        mock_check_flavor.assert_called_once_with(
+            instance, flavor, mock.sentinel.bdi)
         self._migrationops._vmops.power_off.assert_called_once_with(
             instance, self._FAKE_TIMEOUT, self._FAKE_RETRY_INTERVAL)
         mock_move_vm_files.assert_called_once_with(instance)
@@ -343,19 +376,22 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops.power_on.assert_called_once_with(
             mock_instance, network_info=mock.sentinel.network_info)
 
+    @mock.patch.object(migrationops.MigrationOps, '_check_ephemeral_disks')
     @mock.patch.object(migrationops.MigrationOps, '_check_and_update_disks')
     @mock.patch.object(migrationops.MigrationOps, '_update_disk_image_paths')
     @mock.patch.object(migrationops.MigrationOps, '_import_vm')
     def test_import_and_setup_vm(self, mock_import_vm,
                                  mock_update_disk_image_paths,
-                                 mock_check_and_update_disks):
+                                 mock_check_and_update_disks,
+                                 mock_check_eph_disks):
         self.flags(enable_instance_metrics_collection=True,
                    group='hyperv')
+        block_device_info = {'ephemerals': mock.sentinel.ephemerals}
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
         self._migrationops._import_and_setup_vm(
             self.context, mock_instance, mock.sentinel.instance_dir,
-            mock.sentinel.image_meta, mock.sentinel.block_device_info,
+            mock.sentinel.image_meta, block_device_info,
             resize_instance=mock.sentinel.resize_instance)
 
         get_image_vm_gen = self._vmops.get_image_vm_generation
@@ -367,17 +403,20 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.image_meta, mock.sentinel.instance_dir,
             mock.sentinel.resize_instance)
         self._migrationops._volumeops.connect_volumes.assert_called_once_with(
-            mock.sentinel.block_device_info)
+            block_device_info)
         mock_update_disk_image_paths.assert_called_once_with(
             mock_instance, mock.sentinel.instance_dir)
         mock_check_and_update_disks.assert_called_once_with(
             self.context, mock_instance, get_image_vm_gen.return_value,
-            mock.sentinel.image_meta, mock.sentinel.block_device_info,
+            mock.sentinel.image_meta, block_device_info,
             resize_instance=mock.sentinel.resize_instance)
         self._volumeops.fix_instance_volume_disk_paths.assert_called_once_with(
-            mock_instance.name, mock.sentinel.block_device_info)
+            mock_instance.name, block_device_info)
         self._migrationops._migrationutils.realize_vm.assert_called_once_with(
             mock_instance.name)
+        mock_check_eph_disks.assert_called_once_with(
+            mock_instance, mock.sentinel.ephemerals,
+            mock.sentinel.resize_instance)
         self._migrationops._vmops.configure_remotefx.assert_called_once_with(
             mock_instance, get_image_vm_gen.return_value,
             mock.sentinel.resize_instance)
@@ -453,9 +492,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
     @ddt.data(constants.DISK, mock.sentinel.root_type)
     @mock.patch.object(migrationops.MigrationOps, '_check_base_disk')
     @mock.patch.object(migrationops.MigrationOps, '_check_resize_vhd')
-    @mock.patch.object(migrationops.MigrationOps, '_check_ephemeral_disks')
     def test_check_and_update_disks(self, root_type,
-                                    mock_check_eph_disks,
                                     mock_check_resize_vhd,
                                     mock_check_base_disk):
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -492,8 +529,6 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                           mock_instance.flavor.root_gb * units.Gi))
         else:
             self.assertFalse(self._pathutils.lookup_root_vhd.called)
-        mock_check_eph_disks.assert_called_once_with(
-            mock_instance, mock.sentinel.ephemerals, True)
 
         mock_check_resize_vhd.assert_has_calls(expected_check_resize)
         self._vhdutils.get_vhd_info.assert_has_calls(
@@ -532,8 +567,9 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
             instance=mock_instance)
 
     def test_check_ephemeral_disks_exception(self):
-        mock_instance = fake_instance.fake_instance_obj(self.context)
-        mock_ephemerals = [dict()]
+        mock_instance = fake_instance.fake_instance_obj(self.context,
+                                                        ephemeral_gb=1)
+        mock_ephemerals = [dict(size=1)]
 
         lookup_eph_path = (
             self._migrationops._pathutils.lookup_ephemeral_vhd_path)
@@ -543,13 +579,22 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                           self._migrationops._check_ephemeral_disks,
                           mock_instance, mock_ephemerals)
 
+    @ddt.data({},
+              {'existing_eph_path': mock.sentinel.eph_path},
+              {'existing_eph_path': mock.sentinel.eph_path,
+               'new_eph_size': 0},
+              {'use_default_eph': True})
+    @ddt.unpack
     @mock.patch.object(migrationops.MigrationOps, '_check_resize_vhd')
-    def _test_check_ephemeral_disks(self, mock_check_resize_vhd,
-                                    existing_eph_path=None, new_eph_size=42):
+    def test_check_ephemeral_disks(self, mock_check_resize_vhd,
+                                   existing_eph_path=None, new_eph_size=42,
+                                   use_default_eph=False):
+        mock_vmops = self._migrationops._vmops
+
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_instance.ephemeral_gb = new_eph_size
         eph = {}
-        mock_ephemerals = [eph]
+        mock_ephemerals = [eph] if not use_default_eph else []
 
         mock_pathutils = self._migrationops._pathutils
         lookup_eph_path = mock_pathutils.lookup_ephemeral_vhd_path
@@ -561,17 +606,36 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_vhd_format = mock_vhdutils.get_best_supported_vhd_format
         mock_get_vhd_format.return_value = mock.sentinel.vhd_format
 
+        self._vmutils.get_free_controller_slot.return_value = (
+            mock.sentinel.ctrl_slot)
+
+        attached_eph_paths = [mock.sentinel.eph_path,
+                              mock.sentinel.default_eph_path]
+        mock_vmops.get_attached_ephemeral_disks.return_value = (
+            attached_eph_paths)
+
         self._migrationops._check_ephemeral_disks(mock_instance,
                                                   mock_ephemerals,
                                                   True)
 
-        self.assertEqual(mock_instance.ephemeral_gb, eph['size'])
+        if not use_default_eph:
+            self.assertEqual(mock_instance.ephemeral_gb, eph['size'])
         if not existing_eph_path:
-            mock_vmops = self._migrationops._vmops
             mock_vmops.create_ephemeral_disk.assert_called_once_with(
-                mock_instance.name, eph)
-            self.assertEqual(mock.sentinel.vhd_format, eph['format'])
-            self.assertEqual(mock.sentinel.get_path, eph['path'])
+                mock_instance.name, mock.ANY)
+            self._vmutils.get_vm_scsi_controller.assert_called_once_with(
+                mock_instance.name)
+            self._vmutils.get_free_controller_slot.assert_called_once_with(
+                self._vmutils.get_vm_scsi_controller.return_value)
+
+            create_eph_args = mock_vmops.create_ephemeral_disk.call_args_list
+            created_eph = create_eph_args[0][0][1]
+            self.assertEqual(mock.sentinel.vhd_format, created_eph['format'])
+            self.assertEqual(mock.sentinel.get_path, created_eph['path'])
+            self.assertEqual(constants.CTRL_TYPE_SCSI,
+                             created_eph['disk_bus'])
+            self.assertEqual(mock.sentinel.ctrl_slot,
+                             created_eph['ctrl_disk_addr'])
         elif new_eph_size:
             mock_check_resize_vhd.assert_called_once_with(
                 existing_eph_path,
@@ -579,15 +643,11 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                 mock_instance.ephemeral_gb * units.Gi)
             self.assertEqual(existing_eph_path, eph['path'])
         else:
-            self._migrationops._pathutils.remove.assert_called_once_with(
-                existing_eph_path)
-
-    def test_check_ephemeral_disks_create(self):
-        self._test_check_ephemeral_disks()
-
-    def test_check_ephemeral_disks_resize(self):
-        self._test_check_ephemeral_disks(existing_eph_path=mock.sentinel.path)
-
-    def test_check_ephemeral_disks_remove(self):
-        self._test_check_ephemeral_disks(existing_eph_path=mock.sentinel.path,
-                                         new_eph_size=0)
+            self._vmutils.detach_vm_disk.assert_has_calls(
+                [mock.call(mock_instance.name, eph_path,
+                          is_physical=False)
+                 for eph_path in attached_eph_paths],
+                any_order=True)
+            self._migrationops._pathutils.remove.assert_has_calls(
+                [mock.call(eph_path) for eph_path in attached_eph_paths],
+                any_order=True)

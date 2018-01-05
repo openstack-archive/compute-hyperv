@@ -111,6 +111,10 @@ class SerialConsoleOps(object):
         console_log_paths = self._pathutils.get_vm_console_log_paths(
             instance_name)
 
+        handler = _console_handlers.get(instance_name)
+        if handler:
+            handler.flush_console_log()
+
         try:
             log = b''
             # Start with the oldest console log file.

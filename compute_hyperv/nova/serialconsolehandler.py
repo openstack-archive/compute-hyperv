@@ -49,6 +49,7 @@ class SerialConsoleHandler(object):
 
         self._serial_proxy = None
         self._workers = []
+        self._log_handler = None
 
     def start(self):
         self._setup_handlers()
@@ -117,6 +118,9 @@ class SerialConsoleHandler(object):
                 enable_logging=enable_logging)
             self._workers.append(handler)
 
+            if enable_logging:
+                self._log_handler = handler
+
     def _get_named_pipe_handler(self, pipe_path, pipe_type,
                                 enable_logging):
         kwargs = {}
@@ -161,3 +165,9 @@ class SerialConsoleHandler(object):
             raise exception.ConsoleTypeUnavailable(console_type='serial')
         return ctype.ConsoleSerial(host=self._listen_host,
                                    port=self._listen_port)
+
+    def flush_console_log(self):
+        if self._log_handler:
+            LOG.debug("Flushing instance %s console log.",
+                      self._instance_name)
+            self._log_handler.flush_log_file()

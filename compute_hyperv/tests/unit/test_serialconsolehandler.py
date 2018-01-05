@@ -131,7 +131,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
 
         return mock_get_pipe_handler
 
-    def test_setup_ro_pipe_handler(self):
+    def test_setup_rw_pipe_handler(self):
         serial_port_mapping = {
             constants.SERIAL_PORT_TYPE_RW: mock.sentinel.pipe_path
         }
@@ -143,6 +143,8 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.pipe_path,
             pipe_type=constants.SERIAL_PORT_TYPE_RW,
             enable_logging=True)
+        self.assertEqual(mock_get_handler.return_value,
+                         self._consolehandler._log_handler)
 
     def test_setup_pipe_handlers(self):
         serial_port_mapping = {
@@ -247,3 +249,12 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
         self.flags(enabled=False, group='serial_console')
         self.assertRaises(exception.ConsoleTypeUnavailable,
                           self._consolehandler.get_serial_console)
+
+    def test_flush_console_log(self):
+        self._consolehandler._log_handler = None
+        self._consolehandler.flush_console_log()
+
+        mock_handler = mock.Mock()
+        self._consolehandler._log_handler = mock_handler
+        self._consolehandler.flush_console_log()
+        mock_handler.flush_log_file.assert_called_once_with()

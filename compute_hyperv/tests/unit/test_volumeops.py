@@ -69,8 +69,6 @@ class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(VolumeOpsTestCase, self).setUp()
         self._volumeops = volumeops.VolumeOps()
-        self._volumeops._volutils = mock.MagicMock()
-        self._volumeops._vmutils = mock.Mock()
         self._volume_api = self._volumeops._volume_api
 
     def test_get_volume_driver(self):
@@ -537,10 +535,6 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         super(BaseVolumeDriverTestCase, self).setUp()
 
         self._base_vol_driver = volumeops.BaseVolumeDriver()
-
-        self._base_vol_driver._diskutils = mock.Mock()
-        self._base_vol_driver._vmutils = mock.Mock()
-        self._base_vol_driver._migrutils = mock.Mock()
         self._base_vol_driver._conn = mock.Mock()
         self._vmutils = self._base_vol_driver._vmutils
         self._migrutils = self._base_vol_driver._migrutils
@@ -868,8 +862,6 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         super(SMBFSVolumeDriverTestCase, self).setUp()
         self._volume_driver = volumeops.SMBFSVolumeDriver()
         self._volume_driver._conn = mock.Mock()
-        self._volume_driver._vmutils = mock.Mock()
-        self._volume_driver._vhdutils = mock.Mock()
         self._conn = self._volume_driver._conn
         self._vmutils = self._volume_driver._vmutils
         self._pathutils = self._volume_driver._pathutils

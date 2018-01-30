@@ -45,7 +45,6 @@ class HyperVVIFDriverTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(HyperVVIFDriverTestCase, self).setUp()
         self.vif_driver = vif.HyperVVIFDriver()
-        self.vif_driver._netutils = mock.MagicMock()
         self.vif_driver._vif_plugin = mock.MagicMock()
 
     @mock.patch.object(vif.nova.network, 'is_neutron')

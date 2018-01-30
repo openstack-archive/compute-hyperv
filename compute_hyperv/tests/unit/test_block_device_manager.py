@@ -51,7 +51,6 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(BlockDeviceManagerTestCase, self).setUp()
         self._bdman = block_device_manager.BlockDeviceInfoManager()
-        self._bdman._vmutils = mock.Mock()
 
         self._volops = self._bdman._volops
         self._pathutils = self._bdman._pathutils

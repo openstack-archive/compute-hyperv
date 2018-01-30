@@ -35,8 +35,6 @@ class SnapshotOpsTestCase(test_base.HyperVBaseTestCase):
 
         self.context = 'fake_context'
         self._snapshotops = snapshotops.SnapshotOps()
-        self._snapshotops._vmutils = mock.MagicMock()
-        self._snapshotops._vhdutils = mock.MagicMock()
 
     @mock.patch('nova.image.glance.get_remote_image_service')
     def test_save_glance_image(self, mock_get_remote_image_service):

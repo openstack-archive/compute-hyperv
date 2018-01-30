@@ -16,6 +16,7 @@
 
 import mock
 from os_win import utilsfactory
+from oslo_utils import importutils
 
 from compute_hyperv.tests import test
 
@@ -26,11 +27,20 @@ class HyperVBaseTestCase(test.NoDBTestCase):
     def setUp(self):
         super(HyperVBaseTestCase, self).setUp()
 
-        utilsfactory_patcher = mock.patch.object(utilsfactory, '_get_class')
+        utilsfactory_patcher = mock.patch.object(
+            utilsfactory, '_get_class', HyperVBaseTestCase._mock_get_class)
         utilsfactory_patcher.start()
 
         self._patch_autospec_classes()
         self.addCleanup(mock.patch.stopall)
+
+    @staticmethod
+    def _mock_get_class(class_type, *args, **kwargs):
+        existing_classes = utilsfactory.utils_map[class_type]
+        class_info = list(existing_classes.values())[0]
+        imported_class = importutils.import_class(class_info['path'])
+
+        return mock.Mock(autospec=imported_class)
 
     def _patch_autospec_classes(self):
         for class_type in self._autospec_classes:

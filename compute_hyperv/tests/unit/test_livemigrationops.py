@@ -44,7 +44,6 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         super(LiveMigrationOpsTestCase, self).setUp()
         self.context = 'fake_context'
         self._livemigrops = livemigrationops.LiveMigrationOps()
-        self._livemigrops._livemigrutils = mock.MagicMock()
         self._pathutils = self._livemigrops._pathutils
 
     def _test_live_migration(self, side_effect=None,

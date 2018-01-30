@@ -21,9 +21,21 @@ from compute_hyperv.tests import test
 
 
 class HyperVBaseTestCase(test.NoDBTestCase):
+    _autospec_classes = []
+
     def setUp(self):
         super(HyperVBaseTestCase, self).setUp()
 
         utilsfactory_patcher = mock.patch.object(utilsfactory, '_get_class')
         utilsfactory_patcher.start()
-        self.addCleanup(utilsfactory_patcher.stop)
+
+        self._patch_autospec_classes()
+        self.addCleanup(mock.patch.stopall)
+
+    def _patch_autospec_classes(self):
+        for class_type in self._autospec_classes:
+            mocked_class = mock.MagicMock(autospec=class_type)
+            patcher = mock.patch(
+                '.'.join([class_type.__module__, class_type.__name__]),
+                mocked_class)
+            patcher.start()

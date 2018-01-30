@@ -26,12 +26,15 @@ from compute_hyperv.tests.unit import test_base
 class SnapshotOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V SnapshotOps class."""
 
+    _autospec_classes = [
+        snapshotops.pathutils.PathUtils,
+    ]
+
     def setUp(self):
         super(SnapshotOpsTestCase, self).setUp()
 
         self.context = 'fake_context'
         self._snapshotops = snapshotops.SnapshotOps()
-        self._snapshotops._pathutils = mock.MagicMock()
         self._snapshotops._vmutils = mock.MagicMock()
         self._snapshotops._vhdutils = mock.MagicMock()
 

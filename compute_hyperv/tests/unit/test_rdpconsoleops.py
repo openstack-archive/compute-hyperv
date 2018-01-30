@@ -25,12 +25,14 @@ from compute_hyperv.tests.unit import test_base
 
 class RDPConsoleOpsTestCase(test_base.HyperVBaseTestCase):
 
-    @mock.patch.object(rdpconsoleops.hostops, 'api', mock.MagicMock())
+    _autospec_classes = [
+        rdpconsoleops.hostops.HostOps,
+    ]
+
     def setUp(self):
         super(RDPConsoleOpsTestCase, self).setUp()
 
         self.rdpconsoleops = rdpconsoleops.RDPConsoleOps()
-        self.rdpconsoleops._hostops = mock.MagicMock()
         self.rdpconsoleops._vmutils = mock.MagicMock()
         self.rdpconsoleops._rdpconsoleutils = mock.MagicMock()
 

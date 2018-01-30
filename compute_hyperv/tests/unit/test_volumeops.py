@@ -62,12 +62,15 @@ def get_fake_connection_info(**kwargs):
 class VolumeOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for VolumeOps class."""
 
+    _autospec_classes = [
+        volumeops.cinder.API,
+    ]
+
     def setUp(self):
         super(VolumeOpsTestCase, self).setUp()
         self._volumeops = volumeops.VolumeOps()
         self._volumeops._volutils = mock.MagicMock()
         self._volumeops._vmutils = mock.Mock()
-        self._volumeops._volume_api = mock.Mock()
         self._volume_api = self._volumeops._volume_api
 
     def test_get_volume_driver(self):
@@ -854,6 +857,10 @@ class ISCSIVolumeDriverTestCase(test_base.HyperVBaseTestCase):
 class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V SMBFSVolumeDriver class."""
 
+    _autospec_classes = [
+        volumeops.pathutils.PathUtils,
+    ]
+
     _FAKE_EXPORT_PATH = '//ip/share/'
     _FAKE_CONN_INFO = get_fake_connection_info(export=_FAKE_EXPORT_PATH)
 
@@ -861,7 +868,6 @@ class SMBFSVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         super(SMBFSVolumeDriverTestCase, self).setUp()
         self._volume_driver = volumeops.SMBFSVolumeDriver()
         self._volume_driver._conn = mock.Mock()
-        self._volume_driver._pathutils = mock.Mock()
         self._volume_driver._vmutils = mock.Mock()
         self._volume_driver._vhdutils = mock.Mock()
         self._conn = self._volume_driver._conn

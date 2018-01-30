@@ -33,6 +33,11 @@ from compute_hyperv.tests.unit import test_base
 class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V BlockDeviceInfoManager class."""
 
+    _autospec_classes = [
+        block_device_manager.volumeops.VolumeOps,
+        block_device_manager.pathutils.PathUtils,
+    ]
+
     _FAKE_CONN_INFO = {
         'serial': 'fake_volume_id'
     }
@@ -46,9 +51,7 @@ class BlockDeviceManagerTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(BlockDeviceManagerTestCase, self).setUp()
         self._bdman = block_device_manager.BlockDeviceInfoManager()
-        self._bdman._volops = mock.Mock()
         self._bdman._vmutils = mock.Mock()
-        self._bdman._pathutils = mock.Mock()
 
         self._volops = self._bdman._volops
         self._pathutils = self._bdman._pathutils

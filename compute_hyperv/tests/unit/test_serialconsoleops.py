@@ -24,11 +24,15 @@ from compute_hyperv.tests.unit import test_base
 
 
 class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
+
+    _autospec_classes = [
+        serialconsoleops.pathutils.PathUtils,
+    ]
+
     def setUp(self):
         super(SerialConsoleOpsTestCase, self).setUp()
         serialconsoleops._console_handlers = {}
         self._serialops = serialconsoleops.SerialConsoleOps()
-        self._serialops._pathutils = mock.MagicMock()
         self._serialops._vmutils = mock.MagicMock()
 
         self._vmutils = self._serialops._vmutils

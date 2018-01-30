@@ -15,6 +15,7 @@
 
 import mock
 from nova import utils
+from nova.virt import driver
 from os_win import constants
 from os_win import utilsfactory
 
@@ -24,6 +25,11 @@ from compute_hyperv.tests.unit import test_base
 
 
 class EventHandlerTestCase(test_base.HyperVBaseTestCase):
+
+    _autospec_classes = [
+        eventhandler.serialconsoleops.SerialConsoleOps,
+    ]
+
     _FAKE_POLLING_INTERVAL = 3
     _FAKE_EVENT_CHECK_TIMEFRAME = 15
 
@@ -31,7 +37,8 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
     def setUp(self, mock_get_vmutils):
         super(EventHandlerTestCase, self).setUp()
 
-        self._state_change_callback = mock.Mock()
+        self._state_change_callback = mock.Mock(
+            autospec=driver.ComputeDriver.emit_event)
         self.flags(
             power_state_check_timeframe=self._FAKE_EVENT_CHECK_TIMEFRAME,
             group='hyperv')
@@ -41,7 +48,6 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
 
         self._event_handler = eventhandler.InstanceEventHandler(
             self._state_change_callback)
-        self._event_handler._serial_console_ops = mock.Mock()
 
     @mock.patch.object(vmops.VMOps, 'get_instance_uuid')
     @mock.patch.object(eventhandler.InstanceEventHandler, '_emit_event')

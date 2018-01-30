@@ -35,6 +35,12 @@ CONF = compute_hyperv.nova.conf.CONF
 class HostOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V HostOps class."""
 
+    _autospec_classes = [
+        hostops.pathutils.PathUtils,
+        hostops.vmops.VMOps,
+        hostops.api.API,
+    ]
+
     FAKE_ARCHITECTURE = 0
     FAKE_NAME = 'fake_name'
     FAKE_MANUFACTURER = 'FAKE_MANUFACTURER'
@@ -43,14 +49,10 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
     FAKE_LOCAL_IP = '10.11.12.13'
     FAKE_TICK_COUNT = 1000000
 
-    @mock.patch.object(hostops, 'api', mock.MagicMock())
     def setUp(self):
         super(HostOpsTestCase, self).setUp()
         self._hostops = hostops.HostOps()
-        self._hostops._api = mock.MagicMock()
-        self._hostops._vmops = mock.MagicMock()
         self._hostops._hostutils = mock.MagicMock()
-        self._hostops._pathutils = mock.MagicMock()
         self._hostops._diskutils = mock.MagicMock()
 
     def test_get_cpu_info(self):

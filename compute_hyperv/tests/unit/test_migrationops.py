@@ -32,6 +32,14 @@ from compute_hyperv.tests.unit import test_base
 class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V MigrationOps class."""
 
+    _autospec_classes = [
+        migrationops.pathutils.PathUtils,
+        migrationops.volumeops.VolumeOps,
+        migrationops.vmops.VMOps,
+        migrationops.imagecache.ImageCache,
+        migrationops.block_device_manager.BlockDeviceInfoManager,
+    ]
+
     _FAKE_DISK = 'fake_disk'
     _FAKE_TIMEOUT = 10
     _FAKE_RETRY_INTERVAL = 5
@@ -42,14 +50,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
 
         self._migrationops = migrationops.MigrationOps()
         self._migrationops._hostutils = mock.MagicMock()
-        self._migrationops._vmops = mock.MagicMock()
         self._migrationops._vmutils = mock.MagicMock()
-        self._migrationops._pathutils = mock.Mock()
         self._migrationops._vhdutils = mock.MagicMock()
-        self._migrationops._pathutils = mock.MagicMock()
-        self._migrationops._volumeops = mock.MagicMock()
-        self._migrationops._imagecache = mock.MagicMock()
-        self._migrationops._block_dev_man = mock.MagicMock()
         self._migrationops._migrationutils = mock.MagicMock()
         self._migrationops._metricsutils = mock.MagicMock()
         self._hostutils = self._migrationops._hostutils

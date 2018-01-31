@@ -23,6 +23,8 @@ hyperv_opts = [
                help='Number of seconds to wait for an instance to be '
                     'evacuated during host maintenance.'),
     cfg.IntOpt('cluster_event_check_interval',
+               deprecated_for_removal=True,
+               deprecated_since="5.0.1",
                default=2),
     cfg.BoolOpt('instance_automatic_shutdown',
                 default=False,

@@ -155,7 +155,12 @@ class VMOps(object):
         root_iso_path_cached = self._imagecache.get_cached_image(context,
                                                                  instance)
         root_iso_path = self._pathutils.get_root_vhd_path(instance.name, 'iso')
-        self._pathutils.copyfile(root_iso_path_cached, root_iso_path)
+
+        if not os.path.exists(root_iso_path):
+            self._pathutils.copyfile(root_iso_path_cached, root_iso_path)
+        else:
+            LOG.info("Root iso '%s' already exists. Reusing it.",
+                     root_iso_path)
 
         return root_iso_path
 
@@ -170,6 +175,12 @@ class VMOps(object):
         root_vhd_path = self._pathutils.get_root_vhd_path(instance.name,
                                                           format_ext,
                                                           is_rescue_vhd)
+
+        if os.path.exists(root_vhd_path):
+            LOG.info("Root vhd '%s' already exists. Reusing it.",
+                     root_vhd_path)
+            return root_vhd_path
+
         root_vhd_size = instance.flavor.root_gb * units.Gi
 
         try:
@@ -234,12 +245,16 @@ class VMOps(object):
             self.create_ephemeral_disk(instance.name, eph)
 
     def create_ephemeral_disk(self, instance_name, eph_info):
-        self._vhdutils.create_dynamic_vhd(eph_info['path'],
-                                          eph_info['size'] * units.Gi)
+        if not os.path.exists(eph_info['path']):
+            self._vhdutils.create_dynamic_vhd(eph_info['path'],
+                                              eph_info['size'] * units.Gi)
+        else:
+            LOG.info("Ephemeral '%s' disk already exists. Reusing it.",
+                     eph_info['path'])
 
     def get_attached_ephemeral_disks(self, instance_name):
         vm_image_disks = self._vmutils.get_vm_storage_paths(
-                instance_name)[0]
+            instance_name)[0]
         return [image_path for image_path in vm_image_disks
                 if os.path.basename(image_path).lower().startswith('eph')]
 
@@ -291,10 +306,13 @@ class VMOps(object):
         if self._vmutils.vm_exists(instance_name):
             raise exception.InstanceExists(name=instance_name)
 
-        # Make sure we're starting with a clean slate.
-        self._delete_disk_files(instance)
-
         vm_gen = self.get_image_vm_generation(instance.uuid, image_meta)
+
+        instance_dir = self._pathutils.get_instance_dir(instance.name,
+                                                        create_dir=False)
+        if instance_dir:
+            LOG.info("Instance directory already exists."
+                     "Reusing existing files.")
 
         self._block_dev_man.validate_and_update_bdi(
             instance, image_meta, vm_gen, block_device_info)

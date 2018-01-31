@@ -167,13 +167,16 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_create_root_iso.assert_called_once_with(self.context,
                                                      mock_instance)
 
+    @mock.patch('os.path.exists')
     @mock.patch.object(vmops.imagecache.ImageCache, 'get_cached_image')
-    def test_create_root_iso(self, mock_get_cached_image):
+    def _test_create_root_iso(self, mock_get_cached_image,
+                              mock_os_path_exists, iso_already_exists=False):
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
         mock_get_root_vhd_path = self._vmops._pathutils.get_root_vhd_path
         mock_get_root_vhd_path.return_value = mock.sentinel.ROOT_ISO_PATH
         mock_get_cached_image.return_value = mock.sentinel.CACHED_ISO_PATH
+        mock_os_path_exists.return_value = iso_already_exists
 
         self._vmops._create_root_iso(self.context, mock_instance)
 
@@ -181,8 +184,17 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                                       mock_instance)
         mock_get_root_vhd_path.assert_called_once_with(mock_instance.name,
                                                        'iso')
-        self._vmops._pathutils.copyfile.assert_called_once_with(
-            mock.sentinel.CACHED_ISO_PATH, mock.sentinel.ROOT_ISO_PATH)
+        if not iso_already_exists:
+            self._vmops._pathutils.copyfile.assert_called_once_with(
+                mock.sentinel.CACHED_ISO_PATH, mock.sentinel.ROOT_ISO_PATH)
+        else:
+            self._vmops._pathutils.copyfile.assert_not_called()
+
+    def test_create_root_iso(self):
+        self._test_create_root_iso()
+
+    def test_create_root_iso_already_existing_image(self):
+        self._test_create_root_iso(iso_already_exists=True)
 
     def _prepare_create_root_device_mocks(self, use_cow_images, vhd_format,
                                        vhd_size):
@@ -199,15 +211,17 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         return mock_instance
 
+    @mock.patch('os.path.exists')
     @mock.patch('compute_hyperv.nova.imagecache.ImageCache.get_cached_image')
     def _test_create_root_vhd_exception(self, mock_get_cached_image,
-                                        vhd_format):
+                                        mock_os_path_exists, vhd_format):
         mock_instance = self._prepare_create_root_device_mocks(
             use_cow_images=False, vhd_format=vhd_format,
             vhd_size=(self.FAKE_SIZE + 1))
         fake_vhd_path = self.FAKE_ROOT_PATH % vhd_format
         mock_get_cached_image.return_value = fake_vhd_path
         fake_root_path = self._vmops._pathutils.get_root_vhd_path.return_value
+        mock_os_path_exists.return_value = False
 
         self.assertRaises(exception.FlavorDiskSmallerThanImage,
                           self._vmops._create_root_vhd, self.context,
@@ -219,13 +233,17 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._pathutils.remove.assert_called_once_with(
             fake_root_path)
 
+    @mock.patch('os.path.exists')
     @mock.patch('compute_hyperv.nova.imagecache.ImageCache.get_cached_image')
-    def _test_create_root_vhd_qcow(self, mock_get_cached_image, vhd_format):
+    def _test_create_root_vhd_qcow(self, mock_get_cached_image,
+                                   mock_os_path_exists, vhd_format,
+                                   vhd_already_exists=False):
         mock_instance = self._prepare_create_root_device_mocks(
             use_cow_images=True, vhd_format=vhd_format,
             vhd_size=(self.FAKE_SIZE - 1))
         fake_vhd_path = self.FAKE_ROOT_PATH % vhd_format
         mock_get_cached_image.return_value = fake_vhd_path
+        mock_os_path_exists.return_value = vhd_already_exists
 
         fake_root_path = self._vmops._pathutils.get_root_vhd_path.return_value
         root_vhd_internal_size = mock_instance.flavor.root_gb * units.Gi
@@ -237,23 +255,32 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(fake_root_path, response)
         self._vmops._pathutils.get_root_vhd_path.assert_called_with(
             mock_instance.name, vhd_format, False)
+
         differencing_vhd = self._vmops._vhdutils.create_differencing_vhd
-        differencing_vhd.assert_called_with(fake_root_path, fake_vhd_path)
-        self._vmops._vhdutils.get_vhd_info.assert_called_once_with(
-            fake_vhd_path)
 
-        if vhd_format is constants.DISK_FORMAT_VHD:
-            self.assertFalse(get_size.called)
-            self.assertFalse(self._vmops._vhdutils.resize_vhd.called)
+        if not vhd_already_exists:
+            differencing_vhd.assert_called_with(fake_root_path, fake_vhd_path)
+            self._vmops._vhdutils.get_vhd_info.assert_called_once_with(
+                fake_vhd_path)
+
+            if vhd_format is constants.DISK_FORMAT_VHD:
+                self.assertFalse(get_size.called)
+                self.assertFalse(self._vmops._vhdutils.resize_vhd.called)
+            else:
+                get_size.assert_called_once_with(fake_vhd_path,
+                                                 root_vhd_internal_size)
+                self._vmops._vhdutils.resize_vhd.assert_called_once_with(
+                    fake_root_path, root_vhd_internal_size,
+                    is_file_max_size=False)
         else:
-            get_size.assert_called_once_with(fake_vhd_path,
-                                             root_vhd_internal_size)
-            self._vmops._vhdutils.resize_vhd.assert_called_once_with(
-                fake_root_path, root_vhd_internal_size, is_file_max_size=False)
+            differencing_vhd.assert_not_called()
+            self._vmops._vhdutils.resize_vhd.assert_not_called()
 
+    @mock.patch('os.path.exists')
     @mock.patch('compute_hyperv.nova.imagecache.ImageCache.get_cached_image')
-    def _test_create_root_vhd(self, mock_get_cached_image, vhd_format,
-                              is_rescue_vhd=False):
+    def _test_create_root_vhd(self, mock_get_cached_image, mock_os_path_exists,
+                              vhd_format, is_rescue_vhd=False,
+                              vhd_already_exists=False):
         mock_instance = self._prepare_create_root_device_mocks(
             use_cow_images=False, vhd_format=vhd_format,
             vhd_size=(self.FAKE_SIZE - 1))
@@ -265,6 +292,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         fake_root_path = self._vmops._pathutils.get_root_vhd_path.return_value
         root_vhd_internal_size = mock_instance.flavor.root_gb * units.Gi
         get_size = self._vmops._vhdutils.get_internal_vhd_size_by_file_size
+        mock_os_path_exists.return_value = vhd_already_exists
 
         response = self._vmops._create_root_vhd(
             context=self.context,
@@ -278,15 +306,20 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._pathutils.get_root_vhd_path.assert_called_with(
             mock_instance.name, vhd_format, is_rescue_vhd)
 
-        self._vmops._pathutils.copyfile.assert_called_once_with(
-            fake_vhd_path, fake_root_path)
-        get_size.assert_called_once_with(fake_vhd_path, root_vhd_internal_size)
-        if is_rescue_vhd:
-            self.assertFalse(self._vmops._vhdutils.resize_vhd.called)
+        if not vhd_already_exists:
+            self._vmops._pathutils.copyfile.assert_called_once_with(
+                fake_vhd_path, fake_root_path)
+            get_size.assert_called_once_with(fake_vhd_path,
+                                             root_vhd_internal_size)
+
+            if is_rescue_vhd:
+                self.assertFalse(self._vmops._vhdutils.resize_vhd.called)
+            else:
+                self._vmops._vhdutils.resize_vhd.assert_called_once_with(
+                    fake_root_path, root_vhd_internal_size,
+                    is_file_max_size=False)
         else:
-            self._vmops._vhdutils.resize_vhd.assert_called_once_with(
-                fake_root_path, root_vhd_internal_size,
-                is_file_max_size=False)
+            self._vmops._pathutils.copyfile.assert_not_called()
 
     def test_create_root_vhd(self):
         self._test_create_root_vhd(vhd_format=constants.DISK_FORMAT_VHD)
@@ -294,11 +327,27 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_create_root_vhdx(self):
         self._test_create_root_vhd(vhd_format=constants.DISK_FORMAT_VHDX)
 
+    def test_create_root_vhd_existing_disk(self):
+        self._test_create_root_vhd(vhd_format=constants.DISK_FORMAT_VHD,
+                                   vhd_already_exists=True)
+
+    def test_create_root_vhdx_existing_disk(self):
+        self._test_create_root_vhd(vhd_format=constants.DISK_FORMAT_VHDX,
+                                   vhd_already_exists=True)
+
     def test_create_root_vhd_use_cow_images_true(self):
         self._test_create_root_vhd_qcow(vhd_format=constants.DISK_FORMAT_VHD)
 
     def test_create_root_vhdx_use_cow_images_true(self):
         self._test_create_root_vhd_qcow(vhd_format=constants.DISK_FORMAT_VHDX)
+
+    def test_create_root_vhd_use_already_existing_cow_images(self):
+        self._test_create_root_vhd_qcow(vhd_format=constants.DISK_FORMAT_VHD,
+                                        vhd_already_exists=True)
+
+    def test_create_root_vhdx_use_already_existing_cow_images(self):
+        self._test_create_root_vhd_qcow(vhd_format=constants.DISK_FORMAT_VHDX,
+                                        vhd_already_exists=True)
 
     def test_create_rescue_vhd(self):
         self._test_create_root_vhd(vhd_format=constants.DISK_FORMAT_VHD,
@@ -488,8 +537,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               mock.sentinel.network_info, block_device_info)
             self._vmops._vmutils.vm_exists.assert_called_once_with(
                 mock_instance.name)
-            mock_delete_disk_files.assert_called_once_with(
-                mock_instance)
             mock_validate_and_update_bdi = (
                 self._vmops._block_dev_man.validate_and_update_bdi)
             mock_validate_and_update_bdi.assert_called_once_with(

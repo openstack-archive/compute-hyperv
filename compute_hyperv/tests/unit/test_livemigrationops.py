@@ -21,7 +21,6 @@ from os_win import exceptions as os_win_exc
 
 import compute_hyperv.nova.conf
 from compute_hyperv.nova import livemigrationops
-from compute_hyperv.nova import serialconsoleops
 from compute_hyperv.tests import fake_instance
 from compute_hyperv.tests.unit import test_base
 
@@ -32,27 +31,33 @@ CONF = compute_hyperv.nova.conf.CONF
 class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V LiveMigrationOps class."""
 
+    _autospec_classes = [
+        livemigrationops.pathutils.PathUtils,
+        livemigrationops.vmops.VMOps,
+        livemigrationops.volumeops.VolumeOps,
+        livemigrationops.serialconsoleops.SerialConsoleOps,
+        livemigrationops.imagecache.ImageCache,
+        livemigrationops.block_device_manager.BlockDeviceInfoManager,
+    ]
+
     def setUp(self):
         super(LiveMigrationOpsTestCase, self).setUp()
         self.context = 'fake_context'
         self._livemigrops = livemigrationops.LiveMigrationOps()
         self._livemigrops._livemigrutils = mock.MagicMock()
-        self._livemigrops._pathutils = mock.MagicMock()
-        self._livemigrops._block_dev_man = mock.MagicMock()
         self._pathutils = self._livemigrops._pathutils
 
-    @mock.patch.object(serialconsoleops.SerialConsoleOps,
-                       'stop_console_handler')
-    @mock.patch('compute_hyperv.nova.vmops.VMOps.copy_vm_dvd_disks')
-    def _test_live_migration(self, mock_copy_dvd_disk,
-                             mock_stop_console_handler,
-                             side_effect=None,
+    def _test_live_migration(self, side_effect=None,
                              shared_storage=False,
                              migrate_data_received=True,
                              migrate_data_version='1.1'):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_post = mock.MagicMock()
         mock_recover = mock.MagicMock()
+
+        mock_copy_dvd_disks = self._livemigrops._vmops.copy_vm_dvd_disks
+        mock_stop_console_handler = (
+            self._livemigrops._serial_console_ops.stop_console_handler)
         mock_copy_logs = self._livemigrops._pathutils.copy_vm_console_logs
         fake_dest = mock.sentinel.DESTINATION
         mock_check_shared_inst_dir = (
@@ -113,11 +118,11 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         if not shared_storage:
             mock_copy_logs.assert_called_once_with(mock_instance.name,
                                                    fake_dest)
-            mock_copy_dvd_disk.assert_called_once_with(mock_instance.name,
-                                                       fake_dest)
+            mock_copy_dvd_disks.assert_called_once_with(mock_instance.name,
+                                                        fake_dest)
         else:
             self.assertFalse(mock_copy_logs.called)
-            self.assertFalse(mock_copy_dvd_disk.called)
+            self.assertFalse(mock_copy_dvd_disks.called)
 
         mock_live_migr = self._livemigrops._livemigrutils.live_migrate_vm
         mock_live_migr.assert_called_once_with(
@@ -137,14 +142,11 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     def test_live_migration_shared_storage(self):
         self._test_live_migration(shared_storage=True)
 
-    @mock.patch('compute_hyperv.nova.volumeops.VolumeOps'
-                '.get_disk_path_mapping')
-    @mock.patch('compute_hyperv.nova.imagecache.ImageCache.get_cached_image')
-    @mock.patch('compute_hyperv.nova.volumeops.VolumeOps.connect_volumes')
-    def _test_pre_live_migration(self, mock_connect_volumes,
-                                 mock_get_cached_image,
-                                 mock_get_disk_path_mapping,
-                                 phys_disks_attached=True):
+    def _test_pre_live_migration(self, phys_disks_attached=True):
+        mock_get_disk_path_mapping = (
+            self._livemigrops._volumeops.get_disk_path_mapping)
+        mock_get_cached_image = self._livemigrops._imagecache.get_cached_image
+
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_instance.image_ref = "fake_image_ref"
         mock_get_disk_path_mapping.return_value = (
@@ -166,7 +168,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.BLOCK_INFO)
         mock_get_cached_image.assert_called_once_with(self.context,
                                                       mock_instance)
-        mock_connect_volumes.assert_called_once_with(
+        self._livemigrops._volumeops.connect_volumes.assert_called_once_with(
             mock.sentinel.BLOCK_INFO)
         mock_get_disk_path_mapping.assert_called_once_with(
             mock.sentinel.BLOCK_INFO, block_dev_only=True)
@@ -183,9 +185,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     def test_pre_live_migration_invalid_disk_mapping(self):
         self._test_pre_live_migration(phys_disks_attached=False)
 
-    @mock.patch('compute_hyperv.nova.volumeops.VolumeOps.disconnect_volumes')
-    def _test_post_live_migration(self, mock_disconnect_volumes,
-                                  shared_storage=False):
+    def _test_post_live_migration(self, shared_storage=False):
         migrate_data = migrate_data_obj.HyperVLiveMigrateData(
             is_shared_instance_path=shared_storage)
 
@@ -193,6 +193,8 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             self.context, mock.sentinel.instance,
             mock.sentinel.block_device_info,
             migrate_data)
+        mock_disconnect_volumes = (
+            self._livemigrops._volumeops.disconnect_volumes)
         mock_disconnect_volumes.assert_called_once_with(
             mock.sentinel.block_device_info)
         mock_get_inst_dir = self._pathutils.get_instance_dir
@@ -237,11 +239,10 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.context, mock_instance, mock.sentinel.src_comp_info,
             mock.sentinel.dest_comp_info)
 
-    @mock.patch.object(livemigrationops.vmops.VMOps, 'plug_vifs')
-    def test_post_live_migration_at_destination(self, mock_plug_vifs):
+    def test_post_live_migration_at_destination(self):
         self._livemigrops.post_live_migration_at_destination(
             self.context, mock.sentinel.instance,
             network_info=mock.sentinel.NET_INFO,
             block_migration=mock.sentinel.BLOCK_INFO)
-        mock_plug_vifs.assert_called_once_with(mock.sentinel.instance,
-                                               mock.sentinel.NET_INFO)
+        self._livemigrops._vmops.plug_vifs.assert_called_once_with(
+            mock.sentinel.instance, mock.sentinel.NET_INFO)

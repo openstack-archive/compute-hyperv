@@ -20,7 +20,6 @@ import mock
 from nova import safe_utils
 from nova.virt import driver as nova_base_driver
 
-from compute_hyperv.nova.cluster import clusterops
 from compute_hyperv.nova.cluster import driver
 from compute_hyperv.nova import driver as base_driver
 from compute_hyperv.tests.unit import test_base
@@ -28,16 +27,19 @@ from compute_hyperv.tests.unit import test_base
 
 class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
 
-    @mock.patch.object(clusterops, 'ClusterOps')
-    @mock.patch.object(base_driver.hostops, 'api', mock.MagicMock())
+    _autospec_classes = [
+        driver.clusterops.ClusterOps,
+        base_driver.hostops.api.API,
+        driver.livemigrationops.ClusterLiveMigrationOps,
+    ]
+
     @mock.patch.object(base_driver.HyperVDriver,
                        '_check_minimum_windows_version')
-    def setUp(self, mock_check_minimum_windows_version, mock_clusterops_init):
+    def setUp(self, mock_check_minimum_windows_version):
         super(HyperVClusterTestCase, self).setUp()
 
         self.context = 'context'
         self.driver = driver.HyperVClusterDriver(mock.sentinel.virtapi)
-        self.driver._livemigrationops = mock.Mock()
 
     def test_public_api_signatures(self):
         driver_methods = dict(driver.HyperVClusterDriver.__dict__,

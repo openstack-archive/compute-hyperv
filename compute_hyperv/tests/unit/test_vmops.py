@@ -29,12 +29,9 @@ from oslo_concurrency import processutils
 from oslo_utils import fileutils
 from oslo_utils import units
 
-from compute_hyperv.nova import block_device_manager
 import compute_hyperv.nova.conf
 from compute_hyperv.nova import constants
-from compute_hyperv.nova import pdk
 from compute_hyperv.nova import vmops
-from compute_hyperv.nova import volumeops
 from compute_hyperv.tests import fake_instance
 from compute_hyperv.tests.unit import test_base
 
@@ -44,6 +41,16 @@ CONF = compute_hyperv.nova.conf.CONF
 @ddt.ddt
 class VMOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V VMOps class."""
+
+    _autospec_classes = [
+        vmops.pathutils.PathUtils,
+        vmops.volumeops.VolumeOps,
+        vmops.imagecache.ImageCache,
+        vmops.serialconsoleops.SerialConsoleOps,
+        vmops.block_device_manager.BlockDeviceInfoManager,
+        vmops.vif_utils.HyperVVIFDriver,
+        vmops.pdk.PDK,
+    ]
 
     _FAKE_TIMEOUT = 2
     FAKE_SIZE = 10
@@ -71,13 +78,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._vmutils = mock.MagicMock()
         self._vmops._metricsutils = mock.MagicMock()
         self._vmops._vhdutils = mock.MagicMock()
-        self._vmops._pathutils = mock.MagicMock()
         self._vmops._hostutils = mock.MagicMock()
         self._vmops._migrutils = mock.MagicMock()
-        self._vmops._pdk = mock.MagicMock()
-        self._vmops._serial_console_ops = mock.MagicMock()
-        self._vmops._block_dev_man = mock.MagicMock()
-        self._vmops._vif_driver = mock.MagicMock()
         self._pathutils = self._vmops._pathutils
 
         self._vmutils = self._vmops._vmutils
@@ -168,13 +170,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                                      mock_instance)
 
     @mock.patch('os.path.exists')
-    @mock.patch.object(vmops.imagecache.ImageCache, 'get_cached_image')
-    def _test_create_root_iso(self, mock_get_cached_image,
-                              mock_os_path_exists, iso_already_exists=False):
+    def _test_create_root_iso(self, mock_os_path_exists,
+                              iso_already_exists=False):
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
         mock_get_root_vhd_path = self._vmops._pathutils.get_root_vhd_path
         mock_get_root_vhd_path.return_value = mock.sentinel.ROOT_ISO_PATH
+        mock_get_cached_image = self._vmops._imagecache.get_cached_image
         mock_get_cached_image.return_value = mock.sentinel.CACHED_ISO_PATH
         mock_os_path_exists.return_value = iso_already_exists
 
@@ -212,14 +214,12 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         return mock_instance
 
     @mock.patch('os.path.exists')
-    @mock.patch('compute_hyperv.nova.imagecache.ImageCache.get_cached_image')
-    def _test_create_root_vhd_exception(self, mock_get_cached_image,
-                                        mock_os_path_exists, vhd_format):
+    def _test_create_root_vhd_exception(self, mock_os_path_exists, vhd_format):
         mock_instance = self._prepare_create_root_device_mocks(
             use_cow_images=False, vhd_format=vhd_format,
             vhd_size=(self.FAKE_SIZE + 1))
         fake_vhd_path = self.FAKE_ROOT_PATH % vhd_format
-        mock_get_cached_image.return_value = fake_vhd_path
+        self._vmops._imagecache.get_cached_image.return_value = fake_vhd_path
         fake_root_path = self._vmops._pathutils.get_root_vhd_path.return_value
         mock_os_path_exists.return_value = False
 
@@ -234,15 +234,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             fake_root_path)
 
     @mock.patch('os.path.exists')
-    @mock.patch('compute_hyperv.nova.imagecache.ImageCache.get_cached_image')
-    def _test_create_root_vhd_qcow(self, mock_get_cached_image,
-                                   mock_os_path_exists, vhd_format,
+    def _test_create_root_vhd_qcow(self, mock_os_path_exists, vhd_format,
                                    vhd_already_exists=False):
         mock_instance = self._prepare_create_root_device_mocks(
             use_cow_images=True, vhd_format=vhd_format,
             vhd_size=(self.FAKE_SIZE - 1))
         fake_vhd_path = self.FAKE_ROOT_PATH % vhd_format
-        mock_get_cached_image.return_value = fake_vhd_path
+        self._vmops._imagecache.get_cached_image.return_value = fake_vhd_path
         mock_os_path_exists.return_value = vhd_already_exists
 
         fake_root_path = self._vmops._pathutils.get_root_vhd_path.return_value
@@ -277,14 +275,14 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             self._vmops._vhdutils.resize_vhd.assert_not_called()
 
     @mock.patch('os.path.exists')
-    @mock.patch('compute_hyperv.nova.imagecache.ImageCache.get_cached_image')
-    def _test_create_root_vhd(self, mock_get_cached_image, mock_os_path_exists,
+    def _test_create_root_vhd(self, mock_os_path_exists,
                               vhd_format, is_rescue_vhd=False,
                               vhd_already_exists=False):
         mock_instance = self._prepare_create_root_device_mocks(
             use_cow_images=False, vhd_format=vhd_format,
             vhd_size=(self.FAKE_SIZE - 1))
         fake_vhd_path = self.FAKE_ROOT_PATH % vhd_format
+        mock_get_cached_image = self._vmops._imagecache.get_cached_image
         mock_get_cached_image.return_value = fake_vhd_path
         rescue_image_id = (
             mock.sentinel.rescue_image_id if is_rescue_vhd else None)
@@ -494,10 +492,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('compute_hyperv.nova.vmops.VMOps._delete_disk_files')
     @mock.patch('compute_hyperv.nova.vmops.VMOps._get_neutron_events',
                 return_value=[])
-    @mock.patch.object(block_device_manager.BlockDeviceInfoManager,
-                       'validate_and_update_bdi')
-    def _test_spawn(self, mock_validate_and_update_bdi,
-                    mock_get_neutron_events,
+    def _test_spawn(self, mock_get_neutron_events,
                     mock_delete_disk_files,
                     mock_create_root_device,
                     mock_create_ephemerals, mock_get_image_vm_gen,
@@ -647,7 +642,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
     @mock.patch.object(vmops.VMOps, '_requires_certificate')
     @mock.patch.object(vmops.VMOps, '_get_instance_vnuma_config')
-    @mock.patch.object(vmops.volumeops.VolumeOps, 'attach_volumes')
     @mock.patch.object(vmops.VMOps, '_attach_root_device')
     @mock.patch.object(vmops.VMOps, 'configure_remotefx')
     @mock.patch.object(vmops.VMOps, '_get_image_serial_port_settings')
@@ -658,7 +652,6 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                              mock_get_port_settings,
                              mock_configure_remotefx,
                              mock_attach_root_device,
-                             mock_attach_volumes,
                              mock_get_vnuma_config,
                              mock_requires_certificate,
                              mock_requires_secure_boot,
@@ -700,7 +693,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             self.context, mock_instance, root_device_info)
         mock_attach_ephemerals.assert_called_once_with(mock_instance.name,
             block_device_info['ephemerals'])
-        mock_attach_volumes.assert_called_once_with(
+        self._vmops._volumeops.attach_volumes.assert_called_once_with(
             self.context, block_device_info['block_device_mapping'],
             mock_instance)
 
@@ -878,8 +871,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance, vnuma_enabled, nested_virt_enabled)
         self.assertEqual(expected_dyn_memory_ratio, response)
 
-    @mock.patch.object(vmops.volumeops.VolumeOps, 'attach_volume')
-    def test_attach_root_device_volume(self, mock_attach_volume):
+    def test_attach_root_device_volume(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         root_device_info = {'type': constants.VOLUME,
                             'connection_info': mock.sentinel.CONN_INFO,
@@ -888,7 +880,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops._attach_root_device(self.context,
                                         mock_instance, root_device_info)
 
-        mock_attach_volume.assert_called_once_with(
+        self._vmops._volumeops.attach_volume.assert_called_once_with(
             self.context,
             root_device_info['connection_info'], mock_instance,
             disk_bus=root_device_info['disk_bus'])
@@ -1185,7 +1177,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_get_configdrive_path.assert_has_calls(
                 expected_get_configdrive_path_calls)
             mock_ConfigDriveBuilder.assert_called_with(
-                instance_md=mock_InstanceMetadata())
+                instance_md=mock_InstanceMetadata.return_value)
             mock_make_drive = mock_ConfigDriveBuilder().__enter__().make_drive
             mock_make_drive.assert_called_once_with(path_iso)
             if not CONF.hyperv.config_drive_cdrom:
@@ -1315,13 +1307,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
               {'vm_exists': False, 'planned_vm_exists': False},
               {'vm_exists': False, 'planned_vm_exists': True})
     @ddt.unpack
-    @mock.patch('compute_hyperv.nova.volumeops.VolumeOps.disconnect_volumes')
     @mock.patch('compute_hyperv.nova.vmops.VMOps._delete_disk_files')
     @mock.patch('compute_hyperv.nova.vmops.VMOps.power_off')
     @mock.patch('compute_hyperv.nova.vmops.VMOps.unplug_vifs')
     def test_destroy(self, mock_unplug_vifs, mock_power_off,
-                     mock_delete_disk_files, mock_disconnect_volumes,
-                     vm_exists=True,
+                     mock_delete_disk_files, vm_exists=True,
                      planned_vm_exists=False):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._vmops._vmutils.vm_exists.return_value = vm_exists
@@ -1357,7 +1347,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         mock_unplug_vifs.assert_called_once_with(
             mock_instance, mock.sentinel.fake_network_info)
-        mock_disconnect_volumes.assert_called_once_with(
+        self._vmops._volumeops.disconnect_volumes.assert_called_once_with(
             mock.sentinel.FAKE_BD_INFO)
         mock_delete_disk_files.assert_called_once_with(
             mock_instance,
@@ -1547,15 +1537,14 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_set_vm_state.assert_called_once_with(
             mock_instance, os_win_const.HYPERV_VM_STATE_ENABLED)
 
-    @mock.patch('compute_hyperv.nova.volumeops.VolumeOps'
-                '.fix_instance_volume_disk_paths')
     @mock.patch('compute_hyperv.nova.vmops.VMOps._set_vm_state')
-    def test_power_on_having_block_devices(self, mock_set_vm_state,
-                                           mock_fix_instance_vol_paths):
+    def test_power_on_having_block_devices(self, mock_set_vm_state):
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
         self._vmops.power_on(mock_instance, mock.sentinel.block_device_info)
 
+        mock_fix_instance_vol_paths = (
+            self._vmops._volumeops.fix_instance_volume_disk_paths)
         mock_fix_instance_vol_paths.assert_called_once_with(
             mock_instance.name, mock.sentinel.block_device_info)
         mock_set_vm_state.assert_called_once_with(
@@ -2042,13 +2031,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
               (0, True),
               (0, False))
     @ddt.unpack
-    @mock.patch.object(volumeops.VolumeOps, 'bytes_per_sec_to_iops')
     @mock.patch.object(vmops.VMOps, '_get_scoped_flavor_extra_specs')
     @mock.patch.object(vmops.VMOps, '_get_instance_local_disks')
     def test_set_instance_disk_qos_specs(self, total_iops_sec, is_resize,
                                          mock_get_local_disks,
-                                         mock_get_scoped_specs,
-                                         mock_bytes_per_sec_to_iops):
+                                         mock_get_scoped_specs):
         fake_total_bytes_sec = 8
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_local_disks = [mock.sentinel.root_vhd_path,
@@ -2058,6 +2045,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_set_qos_specs = self._vmops._vmutils.set_disk_qos_specs
         mock_get_scoped_specs.return_value = dict(
             disk_total_bytes_sec=fake_total_bytes_sec)
+        mock_bytes_per_sec_to_iops = (
+            self._vmops._volumeops.bytes_per_sec_to_iops)
         mock_bytes_per_sec_to_iops.return_value = total_iops_sec
 
         self._vmops._set_instance_disk_qos_specs(mock_instance, is_resize)
@@ -2155,8 +2144,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(vmops.VMOps, '_check_vtpm_requirements')
     @mock.patch.object(vmops.VMOps, '_feature_requested')
     @mock.patch.object(vmops.VMOps, '_create_fsk')
-    @mock.patch.object(pdk.PDK, 'create_pdk')
-    def _test_configure_secure_vm(self, mock_create_pdk, mock_create_fsk,
+    def _test_configure_secure_vm(self, mock_create_fsk,
                                   mock_feature_requested,
                                   mock_check_vtpm_requirements,
                                   requires_shielded, requires_encryption):

@@ -30,12 +30,15 @@ from compute_hyperv.tests.unit import test_base
 class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V Cluster LivemigrationOps class."""
 
+    _autospec_classes = [
+        base_livemigrationops.volumeops.VolumeOps,
+    ]
+
     def setUp(self):
         super(ClusterLiveMigrationOpsTestCase, self).setUp()
         self._fake_context = 'fake_context'
         self.livemigrops = livemigrationops.ClusterLiveMigrationOps()
         self.livemigrops._clustutils = mock.MagicMock()
-        self.livemigrops._volumeops = mock.MagicMock()
 
         self._clustutils = self.livemigrops._clustutils
 

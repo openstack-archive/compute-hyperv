@@ -33,10 +33,16 @@ CONF = compute_hyperv.nova.conf.CONF
 class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V ClusterOps class."""
 
+    _autospec_classes = [
+        clusterops.hostops.HostOps,
+        clusterops.network.API,
+        clusterops.vmops.VMOps,
+        clusterops.serialconsoleops.SerialConsoleOps,
+    ]
+
     _FAKE_INSTANCE_NAME = 'fake_instance_name'
 
-    @mock.patch('nova.network.API')
-    def setUp(self, mock_network_api):
+    def setUp(self):
         super(ClusterOpsTestCase, self).setUp()
         self.context = 'fake_context'
 
@@ -44,9 +50,6 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.clusterops._context = self.context
         self.clusterops._clustutils = mock.MagicMock()
         self.clusterops._vmutils = mock.MagicMock()
-        self.clusterops._network_api = mock.MagicMock()
-        self.clusterops._vmops = mock.MagicMock()
-        self.clusterops._serial_console_ops = mock.MagicMock()
         self._clustutils = self.clusterops._clustutils
 
     def test_get_instance_host(self):

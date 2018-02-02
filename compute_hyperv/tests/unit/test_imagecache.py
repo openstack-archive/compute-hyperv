@@ -35,6 +35,10 @@ CONF = compute_hyperv.nova.conf.CONF
 class ImageCacheTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V ImageCache class."""
 
+    _autospec_classes = [
+        imagecache.pathutils.PathUtils,
+    ]
+
     FAKE_FORMAT = 'fake_format'
     FAKE_IMAGE_REF = 'fake_image_ref'
     FAKE_VHD_SIZE_GB = 1
@@ -46,7 +50,6 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.instance = fake_instance.fake_instance_obj(self.context)
 
         self.imagecache = imagecache.ImageCache()
-        self.imagecache._pathutils = mock.MagicMock()
         self.imagecache._vhdutils = mock.MagicMock()
 
         self.tmpdir = self.useFixture(fixtures.TempDir()).path

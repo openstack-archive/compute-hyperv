@@ -34,6 +34,7 @@ from nova.tests.unit import conf_fixture
 from nova.tests.unit import policy_fixture
 from oslo_log.fixture import logging_error as log_fixture
 from oslo_log import log as logging
+from oslotest import mock_fixture
 from oslotest import moxstubout
 import six
 import testtools
@@ -70,6 +71,12 @@ def _patch_mock_to_raise_for_invalid_assert_calls():
 # to patch the mock lib
 _patch_mock_to_raise_for_invalid_assert_calls()
 
+# NOTE(claudiub): this needs to be called before any mock.patch calls are
+# being done, and especially before any other test classes load. This fixes
+# the mock.patch autospec issue:
+# https://github.com/testing-cabal/mock/issues/396
+mock_fixture.patch_mock_module()
+
 
 class NoDBTestCase(testtools.TestCase):
     """Test case base class for all unit tests.
@@ -83,6 +90,7 @@ class NoDBTestCase(testtools.TestCase):
     def setUp(self):
         """Run before each test method to initialize test environment."""
         super(NoDBTestCase, self).setUp()
+        self.useFixture(mock_fixture.MockAutospecFixture())
         self.useFixture(nova_fixtures.Timeout(
             os.environ.get('OS_TEST_TIMEOUT', 0),
             self.TIMEOUT_SCALING_FACTOR))

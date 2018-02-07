@@ -7,4 +7,10 @@ and compute-hyperv.
 For a sample configuration file, refer to :ref:`config_sample`.
 
 .. show-options::
-   :config-file: etc/compute-hyperv-config-generator.conf
+
+    compute_hyperv
+    os_win
+    nova.conf
+    oslo.log
+    oslo.messaging
+    oslo.concurrency

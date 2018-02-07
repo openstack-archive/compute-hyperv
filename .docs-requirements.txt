@@ -1,0 +1,23 @@
+# As ``readthedocs`` will not use tox, we have to explicitly provide the doc
+# build requirements that are not included in requirements.txt.
+#
+# Unfortunately, we'll have to update this file manually at least once per
+# release.
+
+# The order of packages is significant, because pip processes them in the order
+# of appearance. Changing the order has an impact on the overall integration
+# process, which may cause wedges in the gate later.
+
+# We'll have to make sure that the nova branch matches the compute-hyperv one.
+-e git+http://github.com/openstack/nova.git#egg=nova
+
+hacking<0.13,>=0.12.0 # Apache-2.0
+
+coverage!=4.4,>=4.0 # Apache-2.0
+sphinx!=1.6.6,>=1.6.2 # BSD
+oslo.config>=5.1.0 # Apache-2.0
+oslosphinx>=4.7.0  # Apache-2.0
+openstackdocstheme>=1.18.1 # Apache-2.0
+
+# releasenotes
+reno>=2.5.0 # Apache-2.0

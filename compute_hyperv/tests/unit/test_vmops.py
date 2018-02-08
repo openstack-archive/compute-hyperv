@@ -510,6 +510,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         fake_config_drive_path = mock_create_config_drive.return_value
         block_device_info = {'ephemerals': [], 'root_disk': root_device_info}
 
+        self._vmops._pathutils.get_instance_dir.return_value = (
+            'fake-instance-dir')
         self._vmops._vmutils.vm_exists.return_value = exists
         mock_configdrive_required.return_value = configdrive_required
         mock_create_instance.side_effect = fail
@@ -532,6 +534,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                               mock.sentinel.network_info, block_device_info)
             self._vmops._vmutils.vm_exists.assert_called_once_with(
                 mock_instance.name)
+            self._vmops._pathutils.get_instance_dir.assert_called_once_with(
+                mock_instance.name, create_dir=False)
             mock_validate_and_update_bdi = (
                 self._vmops._block_dev_man.validate_and_update_bdi)
             mock_validate_and_update_bdi.assert_called_once_with(

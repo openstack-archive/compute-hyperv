@@ -310,7 +310,7 @@ class VMOps(object):
 
         instance_dir = self._pathutils.get_instance_dir(instance.name,
                                                         create_dir=False)
-        if instance_dir:
+        if os.path.exists(instance_dir):
             LOG.info("Instance directory already exists."
                      "Reusing existing files.")
 

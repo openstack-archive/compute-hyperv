@@ -126,3 +126,99 @@ able to create and manage highly available virtual machines. For the Hyper-V
 Cluster Driver to be usable, the Hyper-V Cluster nodes will have to be joined
 to an Active Directory and a Microsoft Failover Cluster. The nodes in a
 Hyper-V Cluster must be identical.
+
+
+Guarded Host configuration (Shielded VMs)
+-----------------------------------------
+
+Shielded VMs is a new feature introduced in Windows / Hyper-V Server 2016 and
+can be used in order to have highly secure virtual machines that cannot be
+read from, tampered with, or inspected by malware, or even malicious
+administrators.
+
+In order for a Hyper-V compute node to be able to spawn such VMs, it must be
+configured as a Guarded Host.
+
+For more information on how to configure your Active Directory, Host Guardian
+Service, and compute node as a Guarded Host, you can read `this article`__.
+
+__ https://cloudbase.it/hyperv-shielded-vms-part-1/
+
+
+.. _numa_setup:
+
+NUMA spanning configuration
+---------------------------
+
+Non-Uniform Memory Access (NUMA) is a computer system architecture that groups
+processors and memory in NUMA nodes. Processor threads accessing data in the
+same NUMA cell have lower memory access latencies and better overall
+performance. Some applications are NUMA-aware, taking advantage of NUMA
+performance optimizations.
+
+Windows / Hyper-V Server 2012 introduced support for Virtual NUMA (vNUMA),
+which can be exposed to the VMs, allowing them to benefit from the NUMA
+performance optimizations.
+
+By default, when Hyper-V starts a VM, it will try to fit all of its memory in
+a single NUMA node, but it doesn't fit in only one, it will be spanned across
+multiple NUMA nodes. This is called NUMA spanning, and it is enabled by
+default. This allows Hyper-V to easily utilize the host's memory for VMs.
+
+NUMA spanning can be disabled and VMs can be configured to span a specific
+number of NUMA nodes (including 1), and have that NUMA topology exposed to
+the guest. Keep in mind that if a VM's vNUMA topology doesn't fit in the
+host's available NUMA topology, it won't be able to start, and as a side
+effect, less memory can be utilized for VMs.
+
+If a compute node only has 1 NUMA node, disabling NUMA spanning will have no
+effect. To check how many NUMA node a host has, run the following powershell
+command:
+
+.. code-block:: powershell
+
+    Get-VMHostNumaNode
+
+The output will contain a list of NUMA nodes, their processors, total memory,
+and used memory.
+
+To disable NUMA spanning, run the following powershell commands:
+
+.. code-block:: powershell
+
+    Set-VMHost -NumaSpanningEnabled $false
+    Restart-Service vmms
+
+In order for the changes to take effect, the Hyper-V Virtual Machine Management
+service (vmms) and the Hyper-V VMs have to be restarted.
+
+For more details on vNUMA, you can read the `following documentation`__.
+
+__ https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-R2-and-2012/dn282282(v=ws.11)
+
+
+.. _pci_devices_setup:
+
+PCI passthrough host configuration
+----------------------------------
+
+Starting with Windows / Hyper-V Server 2016, PCI devices can be directly
+assigned to Hyper-V VMs.
+
+In order to benefit from this feature, the host must support SR-IOV and
+have assignable PCI devices. This can easily be checked by running the
+following in powershell:
+
+.. code-block:: powershell
+
+    Start-BitsTransfer https://raw.githubusercontent.com/Microsoft/Virtualization-Documentation/master/hyperv-samples/benarm-powershell/DDA/survey-dda.ps1
+    .\survey-dda.ps1
+
+The script above will output if the host supports SR-IOV, a detailed list
+of PCI devices and if they're assignable or not.
+
+If all the conditions are met, the desired devices will have to be prepared to
+be assigned to VMs. The `following article`__ contains a step-by-step guide on
+how to prepare them and how to restore the configurations if needed.
+
+__ https://blogs.technet.microsoft.com/heyscriptingguy/2016/07/14/passing-through-devices-to-hyper-v-vms-by-using-discrete-device-assignment/

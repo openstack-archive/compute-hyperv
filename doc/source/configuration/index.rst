@@ -103,6 +103,44 @@ features, and that they will have to be shut down and rebuilt, or have the
 setting manually set.
 
 
+.. _pci_devices_config:
+
+Whitelisting PCI devices
+------------------------
+
+After the assignable PCI devices have been prepared for Hyper-V
+(:ref:`pci_devices_setup`), the next step is whitelist them in the compute
+node's ``nova.conf``.
+
+.. code-block:: ini
+
+    [pci]
+    # this is a list of dictionaries, more dictionaries can be added.
+    passthrough_whitelist = [{"vendor_id": "<dev_vendor_id>", "product_id": "<dev_product_id>"}]
+
+The ``vendor_id`` and ``product_id`` necessary for the ``passthrough_whitelist``
+can be obtained from assignable PCI device's ``InstanceId``:
+
+.. code-block:: powershell
+
+    Get-VMHostAssignableDevice
+
+The ``InstanceId`` should have the following format:
+
+.. code-block:: none
+
+    PCIP\VEN_<vendor_id>&DEV_<product_id>
+
+The ``<vendor_id>`` and ``<product_id>`` can be extracted and used in the
+``nova.conf`` file. After the configuration file has been changed, the
+``nova-compute`` service will have to be restarted.
+
+Afterwards, the ``nova-api`` and ``nova-scheduler`` services will have to be
+configured. For this, check the `nova PCI passthrough configuration guide`__.
+
+__ https://docs.openstack.org/nova/queens/admin/pci-passthrough.html
+
+
 Configuration options
 ---------------------
 

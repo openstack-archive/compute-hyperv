@@ -54,6 +54,13 @@ hyperv_opts = [
                 default=True,
                 help="Allow the VM the failback to its original host once it "
                      "is available."),
+    cfg.BoolOpt('force_destroy_instances',
+                default=False,
+                help="If this option is enabled, instance destroy requests "
+                     "are executed immediately, regardless of instance "
+                     "pending tasks. In some situations, the destroy "
+                     "operation will fail (e.g. due to file locks), "
+                     "requiring subsequent retries."),
 ]
 
 CONF = nova.conf.CONF

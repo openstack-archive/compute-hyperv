@@ -856,8 +856,26 @@ class VMOps(object):
             if backup_location:
                 self._pathutils.check_remove_dir(backup_location)
 
-    def destroy(self, instance, network_info, block_device_info,
-                destroy_disks=True, cleanup_migration_files=True):
+    def destroy(self, instance, *args, **kwargs):
+        # Nova allows destroying instances regardless of pending tasks.
+        # In some cases, we may not be able to properly delete instances
+        # while having a pending task (e.g. when snapshotting, due to file
+        # locks).
+        #
+        # We may append other locks for operations that are non preemptive.
+        # We should not rely on instance task states, which may be hanging.
+        @utils.synchronized(constants.SNAPSHOT_LOCK_TEMPLATE %
+                            dict(instance_uuid=instance.uuid))
+        def synchronized_destroy():
+            self._destroy(instance, *args, **kwargs)
+
+        if CONF.hyperv.force_destroy_instances:
+            self._destroy(instance, *args, **kwargs)
+        else:
+            synchronized_destroy()
+
+    def _destroy(self, instance, network_info, block_device_info,
+                 destroy_disks=True, cleanup_migration_files=True):
         instance_name = instance.name
         LOG.info("Got request to destroy instance", instance=instance)
 

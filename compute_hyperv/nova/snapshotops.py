@@ -19,10 +19,14 @@ Management class for VM snapshot operations.
 import os
 
 from nova.compute import task_states
+from nova import exception
 from nova.image import glance
+from nova import utils
+from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_log import log as logging
 
+from compute_hyperv.nova import constants
 from compute_hyperv.nova import pathutils
 
 LOG = logging.getLogger(__name__)
@@ -45,6 +49,20 @@ class SnapshotOps(object):
                                         purge_props=False)
 
     def snapshot(self, context, instance, image_id, update_task_state):
+        # This operation is not fully preemptive at the moment. We're locking
+        # it as well as the destroy operation (if configured to do so).
+        @utils.synchronized(constants.SNAPSHOT_LOCK_TEMPLATE %
+                            dict(instance_uuid=instance.uuid))
+        def instance_synchronized_snapshot():
+            self._snapshot(context, instance, image_id, update_task_state)
+
+        try:
+            instance_synchronized_snapshot()
+        except os_win_exc.HyperVVMNotFoundException:
+            # the instance might disappear before starting the operation.
+            raise exception.InstanceNotFound(instance_id=instance.uuid)
+
+    def _snapshot(self, context, instance, image_id, update_task_state):
         """Create snapshot from a running VM instance."""
         instance_name = instance.name
 

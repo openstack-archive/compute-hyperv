@@ -110,3 +110,7 @@ OPTIONAL = "optional"
 
 IMAGE_PROP_VTPM = "os_vtpm"
 IMAGE_PROP_VTPM_SHIELDED = "os_shielded_vm"
+
+# We have to make sure that such locks are not used outside the driver in
+# order to avoid deadlocks. For this reason, we'll use the 'hv-' scope.
+SNAPSHOT_LOCK_TEMPLATE = "%(instance_uuid)s-hv-snapshot"

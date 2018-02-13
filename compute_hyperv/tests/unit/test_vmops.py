@@ -1319,7 +1319,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._pathutils.check_remove_dir.assert_has_calls(
             exp_check_remove_dir_calls)
 
-    @ddt.data({},
+    @ddt.data({"force_destroy": True},
               {'vm_exists': False, 'planned_vm_exists': False},
               {'vm_exists': False, 'planned_vm_exists': True})
     @ddt.unpack
@@ -1328,7 +1328,10 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch('compute_hyperv.nova.vmops.VMOps.unplug_vifs')
     def test_destroy(self, mock_unplug_vifs, mock_power_off,
                      mock_delete_disk_files, vm_exists=True,
-                     planned_vm_exists=False):
+                     planned_vm_exists=False,
+                     force_destroy=False):
+        self.flags(force_destroy_instances=force_destroy, group="hyperv")
+
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self._vmops._vmutils.vm_exists.return_value = vm_exists
         self._vmops._migrutils.planned_vm_exists.return_value = (

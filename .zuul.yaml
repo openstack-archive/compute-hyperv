@@ -9,7 +9,6 @@
       - openstack/nova
 
 - project:
-    name: openstack/compute-hyperv
     check:
       jobs:
         - build-openstack-releasenotes

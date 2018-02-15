@@ -15,14 +15,14 @@ Driver configuration
 In order to use the compute-hyperv Nova driver, the following configuration
 option will have to be set in the ``nova.conf`` file:
 
-  .. code-block:: ini
+.. code-block:: ini
 
     [DEFAULT]
     compute_driver = compute_hyperv.driver.HyperVDriver
 
 And for Hyper-V Clusters, the following:
 
-  .. code-block:: ini
+.. code-block:: ini
 
     [DEFAULT]
     compute_driver = compute_hyperv.cluster.driver.HyperVClusterDriver
@@ -54,14 +54,14 @@ Nova instance files location
 By default, the OpenStack Hyper-V installer will configure ``nova-compute`` to
 use the following path as the ``instances_path``:
 
-  .. code-block:: ini
+.. code-block:: ini
 
     [DEFAULT]
     instances_path = C:\OpenStack\Instances
 
 ``instances_path`` can be set to an SMB share, mounted or unmounted:
 
-  .. code-block:: ini
+.. code-block:: ini
 
     [DEFAULT]
     # in this case, X is a persistently mounted SMB share.
@@ -72,7 +72,7 @@ use the following path as the ``instances_path``:
 
 Alternatively, CSVs can be used:
 
-  .. code-block:: ini
+.. code-block:: ini
 
     [DEFAULT]
     instances_path = C:\ClusterStorage\Volume1\OpenStack\Instances
@@ -137,7 +137,7 @@ For live migrating virtual machines to hosts with different CPU features the
 following configuration option must be set in the compute node's ``nova.conf``
 file:
 
-  .. code-block:: ini
+.. code-block:: ini
 
     [hyperv]
     limit_cpu_features = True

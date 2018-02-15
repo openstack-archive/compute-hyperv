@@ -60,13 +60,13 @@ Neutron Server meets the following requirements:
 * ``networking-hyperv`` installed. To check if ``networking-hyperv`` is
   installed, run the following:
 
-  .. code-block:: bash
+.. code-block:: bash
 
     pip freeze | grep networking-hyperv
 
   If there is no output, it can be installed by running the command:
 
-  .. code-block:: bash
+.. code-block:: bash
 
     pip install networking-hyperv==VERSION
 
@@ -79,7 +79,7 @@ Neutron Server meets the following requirements:
   driver. The configuration option can be found in
   ``/etc/neutron/plugins/ml2/ml2_conf.ini``:
 
-  .. code-block:: ini
+.. code-block:: ini
 
     [ml2]
     mechanism_drivers = openvswitch,hyperv

@@ -66,18 +66,18 @@ How to restart a service on Hyper-V
 
 Restarting a service on OpenStack can easily be done through Powershell:
 
-  .. code-block:: powershell
+.. code-block:: powershell
 
      Restart-Service service-name
 
 or through cmd:
 
-  .. code-block:: bat
+.. code-block:: bat
 
      net stop service_name && net start service_name
 
 For example, the following command will restart the iSCSI initiator service:
 
-  .. code-block:: powershell
+.. code-block:: powershell
 
      Restart-Service msiscsi

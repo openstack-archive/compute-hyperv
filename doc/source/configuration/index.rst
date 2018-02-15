@@ -81,7 +81,53 @@ Alternatively, CSVs can be used:
 Block Storage (Cinder) configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TODO
+This section describes Nova configuration options that handle the way in which
+Cinder volumes are consumed.
+
+When having multiple paths connecting the host to the storage backend,
+make sure to enable the following config option:
+
+.. code-block:: ini
+
+    [hyperv]
+    use_multipath_io = True
+
+This will ensure that the available paths are actually leveraged. Also, before
+attempting any volume connection, it will ensure that the MPIO service is
+enabled and that passthrough block devices (iSCSI / FC) are claimed by MPIO.
+SMB backed volumes are not affected by this option.
+
+In some cases, Nova may fail to attach volumes due to transient connectivity
+issues. The following options specify how many and how often retries should be
+performed.
+
+.. code-block:: ini
+
+    [hyperv]
+    # Those are the default values.
+    volume_attach_retry_count = 10
+    volume_attach_retry_interval = 5
+
+    # The following options only apply to disk scan retries.
+    mounted_disk_query_retry_count = 10
+    mounted_disk_query_retry_interval = 5
+
+When having one or more hardware iSCSI initiators, you may use the following
+config option, explicitly telling Nova which iSCSI initiator to use:
+
+.. code-block:: ini
+
+    [hyperv]
+    iscsi_initiator_list = PCI\VEN_1077&DEV_2031&SUBSYS_17E8103C&REV_02\\4&257301f0&0&0010_0, PCI\VEN_1077&DEV_2031&SUBSYS_17E8103C&REV_02\4&257301f0&0&0010_1
+
+The list of available initiators may be retrieved using:
+
+.. code-block:: powershell
+
+    Get-InitiatorPort
+
+If no iSCSI initiator is specified, the MS iSCSI Initiator service will only
+pick one of the available ones when establishing iSCSI sessions.
 
 
 Live migration configuration

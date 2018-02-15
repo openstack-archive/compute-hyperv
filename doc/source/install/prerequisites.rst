@@ -52,10 +52,18 @@ not. If all the requirements are met, the host is Hyper-V capable.
 Storage considerations
 ----------------------
 
-The Hyper-V compute nodes needs to have ample storage for storing the virtual
-machine images running on the compute nodes (for boot-from-image instances).
+Instance files
+~~~~~~~~~~~~~~
 
-For Hyper-V compute nodes, the following storage options are available:
+Nova will use a pre-configured directory for storing instance files such as:
+
+* instance boot images and ``ephemeral`` disk images
+* instance config files (config drive image and Hyper-V files)
+* instance console log
+* cached Glance images
+* snapshot files
+
+The following options are available for the instance directory:
 
 * Local disk.
 * SMB shares. Make sure that they are persistent.
@@ -63,6 +71,11 @@ For Hyper-V compute nodes, the following storage options are available:
     * Storage Spaces
     * Storage Spaces Direct (``S2D``)
     * SAN LUNs as underlying CSV storage
+
+.. note::
+
+    Ample storage may be required when using Nova "local" storage for the
+    instance virtual disk images (as opposed to booting from Cinder volumes).
 
 Compute nodes can be configured to use the same storage option. Doing so will
 result in faster cold / live migration operations to other compute nodes using
@@ -75,6 +88,99 @@ compute nodes will report as having 100 GB storage available. Nova has to
 spawn 2 instances requiring 80 GB storage each. Normally, Nova would be able
 to spawn only one instance, but both will spawn on different hosts,
 overcommiting the disk by 60 GB.
+
+
+Cinder volumes
+~~~~~~~~~~~~~~
+
+The Nova Hyper-V driver can attach Cinder volumes exposed through the
+following protocols:
+
+* iSCSI
+* Fibre Channel
+* SMB - the volumes are stored as virtual disk images (e.g. VHD / VHDX)
+
+.. note::
+
+    The Nova Hyper-V Cluster driver only supports SMB backed volumes. The
+    reason is that the volumes need to be available on the destination
+    host side during an unexpected instance failover.
+
+Before configuring Nova, you should ensure that the Hyper-V compute nodes
+can properly access the storage backend used by Cinder.
+
+The MSI installer can enable the Microsoft Software iSCSI initiator for you.
+When using hardware iSCSI initiators or Fibre Channel, make sure that the HBAs
+are properly configured and the drivers are up to date.
+
+Please consult your storage vendor documentation to see if there are any other
+special requirements (e.g. additional software to be installed, such as iSCSI
+DSMs - Device Specific Modules).
+
+Some Cinder backends require pre-configured information (specified via volume
+types or Cinder Volume config file) about the hosts that are going to consume
+the volumes (e.g. the operating system type), based on which the LUNs will be
+created/exposed. The reason is that the supported SCSI command set may differ
+based on the operating system. An incorrect LUN type may prevent Windows nodes
+from accessing the volumes (although generic LUN types should be fine in most
+cases).
+
+Multipath IO
+""""""""""""
+
+You may setup multiple paths between your Windows hosts and the storage
+backends in order to provide increased throughput and fault tolerance.
+
+When using iSCSI or Fibre Channel, make sure to enable and configure the
+MPIO service. MPIO is a service that manages available disk paths, performing
+failover and load balancing based on pre-configured policies. It's extendable,
+in the sense that Device Specific Modules may be imported.
+
+The MPIO service will ensure that LUNs accessible through multiple paths are
+exposed by the OS as a single disk drive.
+
+.. warning::
+    If multiple disk paths are available and the MPIO service is not
+    configured properly, the same LUN can be exposed as multiple disk drives
+    (one per available path). This must be addressed urgently as it can
+    potentially lead to data corruption.
+
+Run the following to enable the MPIO service:
+
+.. code-block:: powershell
+
+    Enable-WindowsOptionalFeature –Online –FeatureName MultiPathIO
+
+    # Ensure that the "mpio" service is running
+    Get-Service mpio
+
+Once you have enabled MPIO, make sure to configure it to automatically
+claim volumes exposed by the desired storage backend. If needed, import
+vendor provided DSMs.
+
+For more details about Windows MPIO, check the following `page`__.
+
+__ https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-R2-and-2008/ee619734(v=ws.10)
+
+SMB 3.0 and later also supports using multiple paths to a share (the UNC
+path can be the same), leveraging ``SMB Direct`` and ``SMB Multichannel``.
+
+By default, all available paths will be used when accessing SMB shares.
+You can configure constraints in order to choose which adapters should
+be used when connecting to SMB shares (for example, to avoid using a
+management network for SMB traffic).
+
+.. note::
+
+    SMB does not require or interact in any way with the MPIO service.
+
+For best performance, ``SMB Direct`` (RDMA) should also be used, if your
+network cards support it.
+
+For more details about ``SMB Multichannel``, check the following
+`blog post`__.
+
+__ https://blogs.technet.microsoft.com/josebda/2012/06/28/the-basics-of-smb-multichannel-a-feature-of-windows-server-2012-and-smb-3-0/
 
 
 NTP configuration

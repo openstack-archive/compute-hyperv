@@ -14,7 +14,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import eventlet.hubs as hubs
 import mock
+import monotonic
 from os_win import utilsfactory
 
 from compute_hyperv.tests import test
@@ -39,3 +41,11 @@ class HyperVBaseTestCase(test.NoDBTestCase):
                 '.'.join([class_type.__module__, class_type.__name__]),
                 mocked_class)
             patcher.start()
+
+
+class MonotonicTestCase(test.NoDBTestCase):
+    def test_monotonic(self):
+        import nova  # noqa
+
+        hub = hubs.get_hub()
+        self.assertEqual(monotonic.monotonic, hub.clock)

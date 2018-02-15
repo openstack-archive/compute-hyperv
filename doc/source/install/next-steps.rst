@@ -21,7 +21,38 @@ alive / running.
 
 Starting with Ocata, Nova cells became mandatory. Make sure that the newly
 added Hyper-V compute node is mapped into a Nova cell, otherwise Nova will not
-build any instances on it.
+build any instances on it. In small deployments, two cells are enough:
+``cell0`` and ``cell1``. ``cell0`` is a special cell, instances that are never
+scheduled are relegated to the ``cell0`` database, which is effectively a
+graveyard of instances that failed to start. All successful/running instances
+are stored in ``cell1``.
+
+You can check your Nova cells by running this on the Nova Controller:
+
+.. code-block:: bash
+
+    nova-manage cell_v2 list_cells
+
+You should at least have 2 cells listed (``cell0`` and ``cell1``). If they're
+not, or only ``cell0`` exists, you can simply run:
+
+.. code-block:: bash
+
+    nova-manage cell_v2 simple_cell_setup
+
+If you have the 2 cells, in order to map the newly created compute nodes to
+``cell1``, run:
+
+.. code-block:: bash
+
+    nova-manage cell_v2 discover_hosts
+    nova-manage cell_v2 list_hosts
+
+The ``list_hosts`` command should output a table with your compute nodes
+mapped to the Nova cell. For more details on Nova cells, their benefits and
+how to properly use them, check the `Nova cells documentation`__.
+
+__ https://docs.openstack.org/nova/latest/user/cells.html
 
 If Neutron Hyper-V Agent has been chosen as an L2 agent, make sure that the
 Neutron Server meets the following requirements:

@@ -349,6 +349,38 @@ One port will always be configured as Read / Write, and by default, that port
 is ``1``.
 
 
+Hyper-V VM vNIC attach / detach
+-------------------------------
+
+When creating a new instance, users can specify how many NICs the instance will
+have, and to which neutron networks / ports they will be connected to. But
+starting with Kilo, additional NICs can be added to Hyper-V VMs after they have
+been created. This can be done through the command:
+
+.. code-block:: bash
+
+    # alternatively, --port_id <port_id> can be specified.
+    nova interface-attach --net-id <net_id> <instance>
+
+However, there are a few restrictions that have to be taken into account in
+order for the operation to be successful. When attaching a new vNIC to an
+instance, the instance must be turned off, unless all the following conditions
+are met:
+
+* The compute node hosting the VM is a Windows / Hyper-V Server 2016 or newer.
+* The instance is a Generation 2 VM.
+
+If the conditions are met, the vNIC can be hot-plugged and the instance does
+not have to be turned off.
+
+The same restrictions apply when detaching a vNIC from a Hyper-V instance.
+Detaching interfaces can be done through the command:
+
+.. code-block:: bash
+
+    nova interface-detach <instance> <port_id>
+
+
 Nested virtualization
 ---------------------
 

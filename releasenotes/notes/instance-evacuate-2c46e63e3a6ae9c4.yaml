@@ -1,0 +1,4 @@
+---
+features:
+  - |
+    The Hyper-V driver now supports the "instance evacuate" feature.

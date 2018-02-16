@@ -1,0 +1,5 @@
+---
+fixes:
+  - |
+    The Hyper-V driver now properly provides instance disk metadata (even for
+    untagged disks), allowing the guests to safely identify disks.

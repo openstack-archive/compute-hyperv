@@ -16,6 +16,7 @@
 
 from compute_hyperv.nova.cluster import clusterops
 from compute_hyperv.nova.cluster import livemigrationops
+from compute_hyperv.nova.cluster import volumeops
 from compute_hyperv.nova import driver
 
 
@@ -25,6 +26,7 @@ class HyperVClusterDriver(driver.HyperVDriver):
 
         self._clops = clusterops.ClusterOps()
         self._livemigrationops = livemigrationops.ClusterLiveMigrationOps()
+        self._volumeops = volumeops.ClusterVolumeOps()
 
         self._clops.start_failover_listener_daemon()
         self._clops.reclaim_failovered_instances()

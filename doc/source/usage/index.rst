@@ -256,8 +256,87 @@ regular instances.
 __ https://specs.openstack.org/openstack/nova-specs/specs/ocata/implemented/hyper-v-vnuma-enable.html
 
 
-Hyper-V QoS
------------
+Using Cinder Volumes
+--------------------
+
+Identifying disks
+~~~~~~~~~~~~~~~~~
+
+When attaching multiple volumes to an instance, it's important to have a way
+in which you can safely identify them on the guest side.
+
+While Libvirt exposes the Cinder volume id as disk serial id (visible in
+/dev/disk/by-id/), this is not possible in case of Hyper-V.
+
+The mountpoints exposed by Nova (e.g. /dev/sd*) are not a reliable source
+either (which mostly stands for other Nova drivers as well).
+
+Starting with Queens, the Hyper-V driver includes disk address information in
+the instance metadata, accessible on the guest side through the metadata
+service. This also applies to untagged volume attachments.
+
+.. note::
+    The config drive should not be relied upon when fetching disk metadata
+    as it never gets updated after an instance is created.
+
+Here's an example:
+
+.. code-block:: bash
+
+    nova volume-attach cirros 1517bb04-38ed-4b4a-bef3-21bec7d38792
+    vm_fip="192.168.42.74"
+
+    cmd="curl -s 169.254.169.254/openstack/latest/meta_data.json"
+    ssh_opts=( -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null" )
+    metadata=`ssh "${ssh_opts[@]}" "cirros@$vm_fip" $cmd`
+    echo $metadata | python -m json.tool
+
+    # Sample output
+    #
+    # {
+    #     "availability_zone": "nova",
+    #     "devices": [
+    #         {
+    #             "address": "0:0:0:0",
+    #             "bus": "scsi",
+    #             "serial": "1517bb04-38ed-4b4a-bef3-21bec7d38792",
+    #             "tags": [],
+    #             "type": "disk"
+    #         }
+    #     ],
+    #     "hostname": "cirros.novalocal",
+    #     "launch_index": 0,
+    #     "name": "cirros",
+    #     "project_id": "3a8199184dfc4821ab01f9cbd72f905e",
+    #     "uuid": "f0a09969-d477-4d2f-9ad3-3e561226d49d"
+    # }
+
+    # Now that we have the disk SCSI address, we may fetch its path.
+    file `find /dev/disk/by-path  | grep "scsi-0:0:0:0"`
+
+    # Sample output
+    # /dev/disk/by-path/pci-0000:00:10.0-scsi-0:0:0:0: symbolic link to ../../sdb
+
+The volumes may be identified in a similar way in case of Windows guests as
+well.
+
+
+Online volume extend
+~~~~~~~~~~~~~~~~~~~~
+
+The Hyper-V driver supports online Cinder volume resize. Still, there are a
+few cases in which this feature is not available:
+
+* SMB backed volumes
+* Some iSCSI backends where the online resize operation impacts connected
+  initiators. For example, when using the Cinder LVM driver and TGT, the
+  iSCSI targets are actually recreated during the process. The MS iSCSI
+  initiator will attempt to reconnect but TGT will report that the target
+  does not exist, for which reason no reconnect attempts will be performed.
+
+
+Disk QoS
+--------
 
 In terms of QoS, Hyper-V allows IOPS limits to be set on virtual disk images
 preventing instances to exhaust the storage resources.

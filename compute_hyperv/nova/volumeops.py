@@ -77,6 +77,10 @@ class VolumeOps(object):
 
         self._vmutils = utilsfactory.get_vmutils()
         self._default_root_device = 'vda'
+
+        self._load_volume_drivers()
+
+    def _load_volume_drivers(self):
         self.volume_drivers = {
             constants.STORAGE_PROTOCOL_SMBFS: SMBFSVolumeDriver(),
             constants.STORAGE_PROTOCOL_ISCSI: ISCSIVolumeDriver(),

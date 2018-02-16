@@ -1,0 +1,7 @@
+---
+features:
+  - |
+    The Hyper-V driver now supports online volume resize (only applies to
+    iSCSI/FC disks). Warning: this won't work properly with some iSCSI
+    backends (e.g. LVM + tgt), which will drop connected initiators
+    during an online volume resize operation.

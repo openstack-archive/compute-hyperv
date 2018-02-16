@@ -19,6 +19,9 @@ hosts as OpenStack compute nodes, more specifically:
 * ``nova-compute`` configuration options
 * Troubleshooting and debugging tips & tricks
 
+For release notes, please check out the following `page`__.
+
+__ http://compute-hyperv.readthedocs.io/projects/releasenotes
 
 Contents:
 

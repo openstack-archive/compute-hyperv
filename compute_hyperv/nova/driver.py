@@ -197,7 +197,7 @@ class HyperVDriver(driver.ComputeDriver):
                                       instance,
                                       update_device_metadata=True)
 
-    def detach_volume(self, connection_info, instance, mountpoint,
+    def detach_volume(self, context, connection_info, instance, mountpoint,
                       encryption=None):
         context = nova_context.get_admin_context()
         # The nova compute manager only updates the device metadata in

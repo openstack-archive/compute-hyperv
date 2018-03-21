@@ -17,7 +17,6 @@ import mock
 from nova import utils
 from nova.virt import driver
 from os_win import constants
-from os_win import utilsfactory
 
 from compute_hyperv.nova import eventhandler
 from compute_hyperv.nova import vmops
@@ -33,8 +32,7 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
     _FAKE_POLLING_INTERVAL = 3
     _FAKE_EVENT_CHECK_TIMEFRAME = 15
 
-    @mock.patch.object(utilsfactory, 'get_vmutils')
-    def setUp(self, mock_get_vmutils):
+    def setUp(self):
         super(EventHandlerTestCase, self).setUp()
 
         self._state_change_callback = mock.Mock(

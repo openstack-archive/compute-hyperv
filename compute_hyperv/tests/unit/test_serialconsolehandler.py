@@ -37,9 +37,7 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
 
         self._consolehandler = serialconsolehandler.SerialConsoleHandler(
             mock.sentinel.instance_name)
-
         self._consolehandler._log_path = mock.sentinel.log_path
-        self._consolehandler._vmutils = mock.Mock()
 
     @mock.patch.object(serialconsolehandler.SerialConsoleHandler,
                        '_setup_handlers')

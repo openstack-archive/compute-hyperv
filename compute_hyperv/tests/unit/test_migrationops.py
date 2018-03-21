@@ -49,12 +49,6 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self.context = 'fake-context'
 
         self._migrationops = migrationops.MigrationOps()
-        self._migrationops._hostutils = mock.MagicMock()
-        self._migrationops._vmutils = mock.MagicMock()
-        self._migrationops._vhdutils = mock.MagicMock()
-        self._migrationops._migrationutils = mock.MagicMock()
-        self._migrationops._metricsutils = mock.MagicMock()
-        self._hostutils = self._migrationops._hostutils
         self._vmops = self._migrationops._vmops
         self._vmutils = self._migrationops._vmutils
         self._pathutils = self._migrationops._pathutils

@@ -38,8 +38,6 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         super(ClusterLiveMigrationOpsTestCase, self).setUp()
         self._fake_context = 'fake_context'
         self.livemigrops = livemigrationops.ClusterLiveMigrationOps()
-        self.livemigrops._clustutils = mock.MagicMock()
-
         self._clustutils = self.livemigrops._clustutils
 
     def test_is_instance_clustered(self):

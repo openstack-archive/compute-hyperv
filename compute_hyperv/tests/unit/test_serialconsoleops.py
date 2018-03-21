@@ -33,8 +33,6 @@ class SerialConsoleOpsTestCase(test_base.HyperVBaseTestCase):
         super(SerialConsoleOpsTestCase, self).setUp()
         serialconsoleops._console_handlers = {}
         self._serialops = serialconsoleops.SerialConsoleOps()
-        self._serialops._vmutils = mock.MagicMock()
-
         self._vmutils = self._serialops._vmutils
 
     def _setup_console_handler_mock(self):

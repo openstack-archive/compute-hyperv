@@ -48,8 +48,6 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
 
         self.clusterops = clusterops.ClusterOps()
         self.clusterops._context = self.context
-        self.clusterops._clustutils = mock.MagicMock()
-        self.clusterops._vmutils = mock.MagicMock()
         self._clustutils = self.clusterops._clustutils
 
     def test_get_instance_host(self):

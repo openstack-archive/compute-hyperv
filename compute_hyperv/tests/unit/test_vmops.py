@@ -75,13 +75,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.context = 'fake-context'
 
         self._vmops = vmops.VMOps(virtapi=mock.MagicMock())
-        self._vmops._vmutils = mock.MagicMock()
-        self._vmops._metricsutils = mock.MagicMock()
-        self._vmops._vhdutils = mock.MagicMock()
-        self._vmops._hostutils = mock.MagicMock()
-        self._vmops._migrutils = mock.MagicMock()
         self._pathutils = self._vmops._pathutils
-
         self._vmutils = self._vmops._vmutils
 
     def test_list_instances(self):

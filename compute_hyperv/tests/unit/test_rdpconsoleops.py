@@ -31,10 +31,7 @@ class RDPConsoleOpsTestCase(test_base.HyperVBaseTestCase):
 
     def setUp(self):
         super(RDPConsoleOpsTestCase, self).setUp()
-
         self.rdpconsoleops = rdpconsoleops.RDPConsoleOps()
-        self.rdpconsoleops._vmutils = mock.MagicMock()
-        self.rdpconsoleops._rdpconsoleutils = mock.MagicMock()
 
     def test_get_rdp_console(self):
         mock_get_host_ip = self.rdpconsoleops._hostops.get_host_ip_addr

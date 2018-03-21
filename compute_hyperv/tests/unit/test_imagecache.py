@@ -50,8 +50,6 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.instance = fake_instance.fake_instance_obj(self.context)
 
         self.imagecache = imagecache.ImageCache()
-        self.imagecache._vhdutils = mock.MagicMock()
-
         self.tmpdir = self.useFixture(fixtures.TempDir()).path
 
     def _test_get_root_vhd_size_gb(self, old_flavor=True):

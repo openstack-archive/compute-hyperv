@@ -15,6 +15,7 @@
 
 import os
 
+import ddt
 import fixtures
 import mock
 from nova import exception
@@ -32,6 +33,7 @@ from compute_hyperv.tests.unit import test_base
 CONF = compute_hyperv.nova.conf.CONF
 
 
+@ddt.ddt
 class ImageCacheTestCase(test_base.HyperVBaseTestCase):
     """Unit tests for the Hyper-V ImageCache class."""
 
@@ -180,7 +182,10 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.imagecache._vhdutils.get_vhd_info.assert_called_once_with(
             expected_vhd_path)
 
-    def test_age_and_verify_cached_images(self):
+    @ddt.data(True, False)
+    def test_age_and_verify_cached_images(self, remove_unused_base_images):
+        self.flags(remove_unused_base_images=remove_unused_base_images)
+
         fake_images = [mock.sentinel.FAKE_IMG1, mock.sentinel.FAKE_IMG2]
         fake_used_images = [mock.sentinel.FAKE_IMG1]
 
@@ -197,8 +202,12 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
 
         self.imagecache._update_image_timestamp.assert_called_once_with(
             mock.sentinel.FAKE_IMG1)
-        self.imagecache._remove_if_old_image.assert_called_once_with(
-            mock.sentinel.FAKE_IMG2)
+
+        if remove_unused_base_images:
+            self.imagecache._remove_if_old_image.assert_called_once_with(
+                mock.sentinel.FAKE_IMG2)
+        else:
+            self.imagecache._remove_if_old_image.assert_not_called()
 
     @mock.patch.object(imagecache.os, 'utime')
     @mock.patch.object(imagecache.ImageCache, '_get_image_backing_files')

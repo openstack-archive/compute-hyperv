@@ -22,6 +22,7 @@ import sys
 
 import mock
 from nova import exception
+from nova.image import api
 from nova import safe_utils
 from nova.tests.unit import fake_instance
 from nova.virt import driver as base_driver
@@ -43,8 +44,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         driver.rdpconsoleops.RDPConsoleOps,
         driver.serialconsoleops.SerialConsoleOps,
         driver.imagecache.ImageCache,
-        driver.image.API,
         driver.pathutils.PathUtils,
+        api.API,
     ]
 
     FAKE_WIN_2008R2_VERSION = '6.0.0'

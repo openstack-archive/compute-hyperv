@@ -32,9 +32,9 @@ class SerialConsoleHandlerTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(SerialConsoleHandlerTestCase, self).setUp()
 
-        pathutils.PathUtils.return_value.mock_get_log_paths.return_value = [
-            mock.sentinel.log_path]
-
+        mock_get_vm_console_logs = (
+            pathutils.PathUtils.return_value.get_vm_console_log_paths)
+        mock_get_vm_console_logs.return_value = [mock.sentinel.log_path]
         self._consolehandler = serialconsolehandler.SerialConsoleHandler(
             mock.sentinel.instance_name)
         self._consolehandler._log_path = mock.sentinel.log_path

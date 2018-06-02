@@ -55,7 +55,7 @@ class SnapshotOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.PATH, 'rb')
         glance_image_service.update.assert_called_once_with(
             self.context, mock.sentinel.IMAGE_ID, image_metadata,
-            self._snapshotops._pathutils.open().__enter__(),
+            self._snapshotops._pathutils.open.return_value.__enter__(),
             purge_props=False)
 
     @mock.patch('compute_hyperv.nova.snapshotops.SnapshotOps'

@@ -531,7 +531,7 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                 mock.call(root_device_path, mock_vhd_info,
                           mock_instance.flavor.root_gb * units.Gi))
         else:
-            self.assertFalse(self._pathutils.lookup_root_vhd.called)
+            self.assertFalse(self._pathutils.lookup_root_vhd_path.called)
 
         mock_check_resize_vhd.assert_has_calls(expected_check_resize)
         self._vhdutils.get_vhd_info.assert_has_calls(

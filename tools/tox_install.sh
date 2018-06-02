@@ -52,5 +52,5 @@ shift
 
 install_project nova
 
-$install_cmd -U $*
+$install_cmd -U .
 exit $?

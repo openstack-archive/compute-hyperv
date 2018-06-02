@@ -18,6 +18,7 @@ import mock
 from nova.compute import power_state
 from nova.compute import task_states
 from nova.compute import vm_states
+from nova.network.neutronv2 import api as network_api
 from nova import objects
 from os_win import exceptions as os_win_exc
 
@@ -35,7 +36,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
 
     _autospec_classes = [
         clusterops.hostops.HostOps,
-        clusterops.network.API,
+        network_api.API,
         clusterops.vmops.VMOps,
         clusterops.serialconsoleops.SerialConsoleOps,
     ]

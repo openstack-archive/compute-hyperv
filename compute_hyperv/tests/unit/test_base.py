@@ -32,9 +32,9 @@ class HyperVBaseTestCase(test.NoDBTestCase):
         utilsfactory_patcher = mock.patch.object(
             utilsfactory, '_get_class', HyperVBaseTestCase._mock_get_class)
         utilsfactory_patcher.start()
+        self.addCleanup(utilsfactory_patcher.stop)
 
         self._patch_autospec_classes()
-        self.addCleanup(mock.patch.stopall)
 
     @staticmethod
     def _mock_get_class(class_type, *args, **kwargs):
@@ -51,6 +51,7 @@ class HyperVBaseTestCase(test.NoDBTestCase):
                 '.'.join([class_type.__module__, class_type.__name__]),
                 mocked_class)
             patcher.start()
+            self.addCleanup(patcher.stop)
 
 
 class MonotonicTestCase(test.NoDBTestCase):

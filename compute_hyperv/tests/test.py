@@ -34,10 +34,10 @@ from nova.tests.unit import conf_fixture
 from nova.tests.unit import policy_fixture
 from oslo_log.fixture import logging_error as log_fixture
 from oslo_log import log as logging
+from oslotest import base
 from oslotest import mock_fixture
 from oslotest import moxstubout
 import six
-import testtools
 
 import compute_hyperv.nova.conf
 
@@ -78,7 +78,7 @@ _patch_mock_to_raise_for_invalid_assert_calls()
 mock_fixture.patch_mock_module()
 
 
-class NoDBTestCase(testtools.TestCase):
+class NoDBTestCase(base.BaseTestCase):
     """Test case base class for all unit tests.
 
     Due to the slowness of DB access, please consider deriving from

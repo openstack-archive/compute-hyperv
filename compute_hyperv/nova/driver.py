@@ -105,6 +105,7 @@ class HyperVDriver(driver.ComputeDriver):
         "supports_tagged_attach_volume": True,
         "supports_extend_volume": True,
         "supports_multiattach": False,
+        "supports_trusted_certs": True,
     }
 
     def __init__(self, virtapi):

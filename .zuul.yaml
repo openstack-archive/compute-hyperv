@@ -13,7 +13,9 @@
       jobs:
         - build-openstack-releasenotes
         - build-compute-hyperv-sphinx-docs
+        - openstack-tox-lower-constraints
     gate:
       jobs:
         - build-openstack-releasenotes
         - build-compute-hyperv-sphinx-docs
+        - openstack-tox-lower-constraints

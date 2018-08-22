@@ -36,7 +36,6 @@ from oslo_log.fixture import logging_error as log_fixture
 from oslo_log import log as logging
 from oslotest import base
 from oslotest import mock_fixture
-from oslotest import moxstubout
 import six
 
 import compute_hyperv.nova.conf
@@ -107,9 +106,6 @@ class NoDBTestCase(base.BaseTestCase):
         # because sqlalchemy-migrate messes with the warnings filters.
         self.useFixture(nova_fixtures.WarningsFixture())
 
-        mox_fixture = self.useFixture(moxstubout.MoxStubout())
-        self.mox = mox_fixture.mox
-        self.stubs = mox_fixture.stubs
         self.addCleanup(self._clear_attrs)
         self.policy = self.useFixture(policy_fixture.PolicyFixture())
 

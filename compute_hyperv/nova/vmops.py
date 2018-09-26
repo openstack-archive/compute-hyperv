@@ -433,8 +433,7 @@ class VMOps(object):
                                      vif['id'],
                                      vif['address'])
 
-        if CONF.hyperv.enable_instance_metrics_collection:
-            self._metricsutils.enable_vm_metrics_collection(instance_name)
+        self.configure_instance_metrics(instance_name)
 
         if secure_boot_enabled:
             certificate_required = self._requires_certificate(image_meta)
@@ -1102,6 +1101,26 @@ class VMOps(object):
         if network_info:
             for vif in network_info:
                 self._vif_driver.unplug(instance, vif)
+
+    def configure_instance_metrics(self, instance_name,
+                                   enable_network_metrics=False):
+        if not CONF.hyperv.enable_instance_metrics_collection:
+            LOG.debug("Instance metrics collection is not enabled.")
+            return
+
+        LOG.debug("Enabling instance %s metrics.", instance_name)
+        # Some metrics (cpu, memory and network) are disabled when the vms are
+        # powered off. This looks like a Hyper-V bug that we'll have to
+        # mitigate at the Nova driver level.
+        self._metricsutils.enable_vm_metrics_collection(instance_name)
+
+        # Network metrics are handled separately. The reason is that the vm
+        # must be running and the ports must be already attached in order to
+        # be able to enable those metrics.
+        if enable_network_metrics:
+            vif_ids = self._vmutils.get_vm_nic_names(instance_name)
+            for vif_id in vif_ids:
+                self._vif_driver.enable_metrics(instance_name, vif_id)
 
     def _get_image_serial_port_settings(self, image_meta):
         image_props = image_meta['properties']

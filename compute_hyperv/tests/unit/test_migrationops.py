@@ -381,8 +381,6 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
                                  mock_update_disk_image_paths,
                                  mock_check_and_update_disks,
                                  mock_check_eph_disks):
-        self.flags(enable_instance_metrics_collection=True,
-                   group='hyperv')
         block_device_info = {'ephemerals': mock.sentinel.ephemerals}
         mock_instance = fake_instance.fake_instance_obj(self.context)
 
@@ -417,9 +415,8 @@ class MigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self._migrationops._vmops.configure_remotefx.assert_called_once_with(
             mock_instance, get_image_vm_gen.return_value,
             mock.sentinel.resize_instance)
-        mock_enable = (
-            self._migrationops._metricsutils.enable_vm_metrics_collection)
-        mock_enable.assert_called_once_with(mock_instance.name)
+        self._vmops.configure_instance_metrics.assert_called_once_with(
+            mock_instance.name)
 
     def test_import_vm(self):
         self._migrationops._import_vm(mock.sentinel.instance_dir)

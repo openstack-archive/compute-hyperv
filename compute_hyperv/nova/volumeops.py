@@ -399,6 +399,7 @@ class BaseVolumeDriver(object):
         self._diskutils = utilsfactory.get_diskutils()
         self._vmutils = utilsfactory.get_vmutils()
         self._migrutils = utilsfactory.get_migrationutils()
+        self._metricsutils = utilsfactory.get_metricsutils()
 
     @property
     def _connector(self):
@@ -487,6 +488,21 @@ class BaseVolumeDriver(object):
                                        disk_path,
                                        ctrller_path,
                                        slot)
+
+        self._configure_disk_metrics(disk_path)
+
+    def _configure_disk_metrics(self, disk_path):
+        if not CONF.hyperv.enable_instance_metrics_collection:
+            return
+
+        if self._is_block_dev:
+            LOG.warning("Hyper-V does not support collecting metrics for "
+                        "passthrough disks (e.g. iSCSI/FC).")
+            return
+
+        LOG.debug("Enabling disk metrics: %s.", disk_path)
+        self._metricsutils.enable_disk_metrics_collection(
+            disk_path, is_physical=self._is_block_dev)
 
     def detach_volume(self, connection_info, instance_name):
         if self._migrutils.planned_vm_exists(instance_name):

@@ -45,6 +45,7 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         self.context = 'fake_context'
         self._livemigrops = livemigrationops.LiveMigrationOps()
         self._pathutils = self._livemigrops._pathutils
+        self._vmops = self._livemigrops._vmops
 
     def _test_live_migration(self, side_effect=None,
                              shared_storage=False,
@@ -239,9 +240,13 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.dest_comp_info)
 
     def test_post_live_migration_at_destination(self):
+        mock_instance = fake_instance.fake_instance_obj(self.context)
+
         self._livemigrops.post_live_migration_at_destination(
-            self.context, mock.sentinel.instance,
+            self.context, mock_instance,
             network_info=mock.sentinel.NET_INFO,
             block_migration=mock.sentinel.BLOCK_INFO)
         self._livemigrops._vmops.plug_vifs.assert_called_once_with(
-            mock.sentinel.instance, mock.sentinel.NET_INFO)
+            mock_instance, mock.sentinel.NET_INFO)
+        self._vmops.configure_instance_metrics.assert_called_once_with(
+            mock_instance.name)

@@ -539,6 +539,7 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         self._vmutils = self._base_vol_driver._vmutils
         self._migrutils = self._base_vol_driver._migrutils
         self._diskutils = self._base_vol_driver._diskutils
+        self._metricsutils = self._base_vol_driver._metricsutils
         self._conn = self._base_vol_driver._conn
 
     @mock.patch.object(connector.InitiatorConnector, 'factory')
@@ -674,6 +675,8 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
             self._base_vol_driver._check_san_policy()
 
     @mock.patch.object(volumeops.BaseVolumeDriver,
+                       '_configure_disk_metrics')
+    @mock.patch.object(volumeops.BaseVolumeDriver,
                        '_get_disk_res_path')
     @mock.patch.object(volumeops.BaseVolumeDriver, '_get_disk_ctrl_and_slot')
     @mock.patch.object(volumeops.BaseVolumeDriver,
@@ -684,6 +687,7 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
                             mock_connect_volume,
                             mock_get_disk_ctrl_and_slot,
                             mock_get_disk_res_path,
+                            mock_configure_metrics,
                             is_block_dev=True):
         connection_info = get_fake_connection_info()
         self._base_vol_driver._is_block_dev = is_block_dev
@@ -719,6 +723,7 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         mock_get_disk_ctrl_and_slot.assert_called_once_with(
             mock.sentinel.instance_name, mock.sentinel.disk_bus)
         mock_validate_host_config.assert_called_once_with()
+        mock_configure_metrics.assert_called_once_with(mock.sentinel.disk_path)
 
     def test_attach_volume_image_file(self):
         self._test_attach_volume(is_block_dev=False)
@@ -730,6 +735,27 @@ class BaseVolumeDriverTestCase(test_base.HyperVBaseTestCase):
         self._base_vol_driver.detach_volume(mock.sentinel.connection_info,
                                             mock.sentinel.inst_name)
         self._vmutils.detach_vm_disk.assert_not_called()
+
+    @ddt.data({},
+              {'metrics_enabled': False},
+              {'is_block_dev': True})
+    @ddt.unpack
+    def test_configure_disk_metrics(self, metrics_enabled=True,
+                                    is_block_dev=False):
+        self.flags(enable_instance_metrics_collection=metrics_enabled,
+                   group='hyperv')
+        self._base_vol_driver._is_block_dev = is_block_dev
+
+        enable_metrics = self._metricsutils.enable_disk_metrics_collection
+
+        self._base_vol_driver._configure_disk_metrics(mock.sentinel.disk_path)
+
+        if metrics_enabled and not is_block_dev:
+            enable_metrics.assert_called_once_with(
+                mock.sentinel.disk_path,
+                is_physical=is_block_dev)
+        else:
+            enable_metrics.assert_not_called()
 
     @ddt.data(True, False)
     @mock.patch.object(volumeops.BaseVolumeDriver,

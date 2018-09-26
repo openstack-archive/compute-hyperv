@@ -77,6 +77,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops = vmops.VMOps(virtapi=mock.MagicMock())
         self._pathutils = self._vmops._pathutils
         self._vmutils = self._vmops._vmutils
+        self._metricsutils = self._vmops._metricsutils
+        self._vif_driver = self._vmops._vif_driver
 
     def test_list_instances(self):
         mock_instance = mock.MagicMock()
@@ -647,6 +649,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual([], events)
         mock_is_neutron.assert_called_once_with()
 
+    @mock.patch.object(vmops.VMOps, 'configure_instance_metrics')
     @mock.patch.object(vmops.VMOps, 'update_vm_resources')
     @mock.patch.object(vmops.VMOps, '_configure_secure_vm')
     @mock.patch.object(vmops.VMOps, '_requires_secure_boot')
@@ -666,9 +669,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                              mock_requires_certificate,
                              mock_requires_secure_boot,
                              mock_configure_secure_vm,
-                             mock_update_vm_resources):
-        self.flags(enable_instance_metrics_collection=True,
-                   group='hyperv')
+                             mock_update_vm_resources,
+                             mock_configure_metrics):
         root_device_info = mock.sentinel.ROOT_DEV_INFO
         block_device_info = {'root_disk': root_device_info, 'ephemerals': [],
                              'block_device_mapping': []}
@@ -713,8 +715,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         self._vmops._vmutils.create_nic.assert_called_once_with(
             mock_instance.name, mock.sentinel.ID, mock.sentinel.ADDRESS)
-        mock_enable = self._vmops._metricsutils.enable_vm_metrics_collection
-        mock_enable.assert_called_once_with(mock_instance.name)
+        mock_configure_metrics.assert_called_once_with(mock_instance.name)
         mock_requires_secure_boot.assert_called_once_with(
             mock_instance, mock.sentinel.image_meta, mock.sentinel.vm_gen)
         mock_requires_certificate.assert_called_once_with(
@@ -1720,6 +1721,39 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._vmops.unplug_vifs(mock_instance,
                                 network_info=mock_network_info)
         self._vmops._vif_driver.unplug.assert_has_calls(calls)
+
+    @ddt.data({},
+              {'metrics_enabled': False},
+              {'enable_network_metrics': False})
+    @ddt.unpack
+    def test_configure_instance_metrics(self, metrics_enabled=True,
+                                        enable_network_metrics=True):
+        port_names = ['port1', 'port2']
+
+        enable_vm_metrics = self._metricsutils.enable_vm_metrics_collection
+        self._vmutils.get_vm_nic_names.return_value = port_names
+
+        self.flags(enable_instance_metrics_collection=metrics_enabled,
+                   group='hyperv')
+
+        self._vmops.configure_instance_metrics(
+            mock.sentinel.instance_name,
+            enable_network_metrics=enable_network_metrics)
+
+        if metrics_enabled:
+            enable_vm_metrics.assert_called_once_with(
+                mock.sentinel.instance_name)
+            if enable_network_metrics:
+                self._vmutils.get_vm_nic_names.assert_called_once_with(
+                    mock.sentinel.instance_name)
+                self._vif_driver.enable_metrics.assert_has_calls(
+                    [mock.call(mock.sentinel.instance_name, port_name)
+                     for port_name in port_names])
+        else:
+            enable_vm_metrics.assert_not_called()
+
+        if not (metrics_enabled and enable_network_metrics):
+            self._vif_driver.enable_metrics.assert_not_called()
 
     def _setup_remotefx_mocks(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)

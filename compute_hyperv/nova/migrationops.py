@@ -325,8 +325,7 @@ class MigrationOps(object):
         self._check_ephemeral_disks(instance, ephemerals, resize_instance)
 
         self._vmops.configure_remotefx(instance, vm_gen, resize_instance)
-        if CONF.hyperv.enable_instance_metrics_collection:
-            self._metricsutils.enable_vm_metrics_collection(instance.name)
+        self._vmops.configure_instance_metrics(instance.name)
 
     def _import_vm(self, instance_dir):
         snapshot_dir = self._pathutils.get_instance_snapshot_dir(

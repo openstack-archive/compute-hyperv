@@ -21,7 +21,7 @@ import mock
 from nova import exception
 from nova import objects
 from nova.tests.unit.objects import test_flavor
-from oslo_utils.fixture import uuidsentinel as uuids
+from nova.tests import uuidsentinel as uuids
 from oslo_utils import units
 
 import compute_hyperv.nova.conf

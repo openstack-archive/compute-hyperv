@@ -82,7 +82,7 @@ class ClusterOps(object):
     def start_failover_listener_daemon(self):
         """Start the daemon failover listener."""
 
-        listener = self._clustutils.get_vm_owner_change_listener()
+        listener = self._clustutils.get_vm_owner_change_listener_v2()
         cbk = functools.partial(utils.spawn_n, self._failover_migrate)
 
         utils.spawn_n(listener, cbk)
@@ -105,24 +105,25 @@ class ClusterOps(object):
                           instance.name, instance.host,
                           self._this_node)
 
-    def _failover_migrate(self, instance_name, old_host, new_host):
+    def _failover_migrate(self, instance_name, new_host):
         """This method will check if the generated event is a legitimate
         failover to this node. If it is, it will proceed to prepare the
         failovered VM if necessary and update the owner of the compute vm in
         nova and ports in neutron.
         """
-        LOG.info('Checking instance failover %(instance)s to %(new_host)s '
-                 'from host %(old_host)s.',
-                 {'instance': instance_name,
-                  'new_host': new_host,
-                  'old_host': old_host})
-
         instance = self._get_instance_by_name(instance_name)
         if not instance:
             # Some instances on the hypervisor may not be tracked by nova
             LOG.debug('Instance %s does not exist in nova. Skipping.',
                       instance_name)
             return
+
+        old_host = instance.host
+        LOG.info('Checking instance failover %(instance)s to %(new_host)s '
+                 'from host %(old_host)s.',
+                 {'instance': instance_name,
+                  'new_host': new_host,
+                  'old_host': old_host})
 
         if instance.task_state == task_states.MIGRATING:
             # In case of live migration triggered by the user, we get the
@@ -142,9 +143,8 @@ class ClusterOps(object):
                       instance_name)
             return
 
-        LOG.info('Instance %(instance)s  failover to %(host)s.',
-                 {'instance': instance_name,
-                  'host': new_host})
+        LOG.info('Handling instance %(instance)s failover to this host.',
+                 {'instance': instance_name})
 
         self._nova_failover_server(instance, new_host)
         self._failover_migrate_networks(instance, old_host)

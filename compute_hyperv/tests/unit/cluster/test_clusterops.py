@@ -112,7 +112,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
 
         spawn_args = mock_spawn.call_args_list[0][0]
         self.assertEqual(
-            self._clustutils.get_vm_owner_change_listener.return_value,
+            self._clustutils.get_vm_owner_change_listener_v2.return_value,
             spawn_args[0])
 
         cbk = spawn_args[1]
@@ -149,7 +149,6 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         mock_get_instance_by_name.return_value = None
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
-                                          mock.sentinel.old_host,
                                           mock.sentinel.new_host)
 
         mock_LOG.debug.assert_called_once_with(
@@ -166,7 +165,6 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         instance.task_state = task_states.MIGRATING
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
-                                          mock.sentinel.old_host,
                                           mock.sentinel.new_host)
 
         mock_LOG.debug.assert_called_once_with(
@@ -175,11 +173,11 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
     def test_failover_migrate_at_source_node(self, mock_get_instance_by_name):
         instance = mock_get_instance_by_name.return_value
-        old_host = 'old_host'
-        self.clusterops._this_node = old_host
+        instance.host = 'old_host'
+        self.clusterops._this_node = instance.host
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
-                                          old_host, mock.sentinel.new_host)
+                                          mock.sentinel.new_host)
 
         self.clusterops._vmops.unplug_vifs.assert_called_once_with(instance,
             self.clusterops._network_api.get_instance_nw_info.return_value)
@@ -191,7 +189,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.clusterops._this_node = 'new_host'
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
-                                          None, 'host')
+                                          'host')
 
         mock_LOG.debug.assert_called_once_with(
             'Instance %s did not failover to this node.',
@@ -206,10 +204,11 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         instance = mock_get_instance_by_name.return_value
         old_host = 'old_host'
         new_host = 'new_host'
+        instance.host = old_host
         self.clusterops._this_node = new_host
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
-                                          old_host, new_host)
+                                          new_host)
 
         mock_get_instance_by_name.assert_called_once_with(
             mock.sentinel.instance_name)

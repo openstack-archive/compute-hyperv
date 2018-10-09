@@ -63,9 +63,17 @@ hyperv_opts = [
                      "requiring subsequent retries."),
 ]
 
+coordination_opts = [
+    cfg.StrOpt('backend_url',
+               default='file:///C:/OpenStack/Lock',
+               help='The backend URL to use for distributed coordination.'),
+]
+
 CONF = nova.conf.CONF
+CONF.register_opts(coordination_opts, 'coordination')
 CONF.register_opts(hyperv_opts, 'hyperv')
 
 
 def list_opts():
-    return [('hyperv', hyperv_opts)]
+    return [('coordination', coordination_opts),
+            ('hyperv', hyperv_opts)]

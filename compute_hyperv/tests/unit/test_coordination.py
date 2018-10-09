@@ -50,6 +50,8 @@ class MockToozLock(tooz.locking.Lock):
 
 @mock.patch('tooz.coordination.get_coordinator')
 class CoordinatorTestCase(test_base.HyperVBaseTestCase):
+    MOCK_TOOZ = False
+
     def test_coordinator_start(self, get_coordinator):
         crd = get_coordinator.return_value
 

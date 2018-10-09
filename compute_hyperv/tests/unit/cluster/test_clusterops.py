@@ -21,6 +21,7 @@ from nova.compute import vm_states
 from nova.network.neutronv2 import api as network_api
 from nova import objects
 from nova.virt import event as virtevent
+from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
 
 from compute_hyperv.nova.cluster import clusterops
@@ -144,10 +145,12 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance1.name, mock_instance1.host,
             self.clusterops._this_node)
 
+    @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')
     @mock.patch.object(clusterops, 'LOG')
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
     def test_failover_migrate_no_instance(self, mock_get_instance_by_name,
-                                          mock_LOG):
+                                          mock_LOG,
+                                          mock_wait_pending_instance):
         mock_get_instance_by_name.return_value = None
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
@@ -159,35 +162,40 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertFalse(
             self.clusterops._network_api.get_instance_nw_info.called)
 
+    @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')
     @mock.patch.object(clusterops, 'LOG')
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
     def test_failover_migrate_migrating(self, mock_get_instance_by_name,
-                                        mock_LOG):
+                                        mock_LOG, mock_wait_pending_instance):
         instance = mock_get_instance_by_name.return_value
         instance.task_state = task_states.MIGRATING
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
-                                          mock.sentinel.new_host)
+                                          'new_host')
 
         mock_LOG.debug.assert_called_once_with(
             'Instance %s is live migrating.', mock.sentinel.instance_name)
 
+    @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
-    def test_failover_migrate_at_source_node(self, mock_get_instance_by_name):
+    def test_failover_migrate_at_source_node(self, mock_get_instance_by_name,
+                                             mock_wait_pending_instance):
         instance = mock_get_instance_by_name.return_value
         instance.host = 'old_host'
         self.clusterops._this_node = instance.host
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
-                                          mock.sentinel.new_host)
+                                          'new_host')
 
         self.clusterops._vmops.unplug_vifs.assert_called_once_with(instance,
             self.clusterops._network_api.get_instance_nw_info.return_value)
 
+    @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')
     @mock.patch.object(clusterops, 'LOG')
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
     def test_failover_migrate_not_this_node(self, mock_get_instance_by_name,
-                                            mock_LOG):
+                                            mock_LOG,
+                                            mock_wait_pending_instance):
         self.clusterops._this_node = 'new_host'
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
@@ -197,21 +205,28 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
             'Instance %s did not failover to this node.',
             mock.sentinel.instance_name)
 
+    @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')
     @mock.patch.object(clusterops.ClusterOps, '_failover_migrate_networks')
     @mock.patch.object(clusterops.ClusterOps, '_nova_failover_server')
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
-    def test_failover_migrate_this_node(self, mock_get_instance_by_name,
-                                        mock_nova_failover_server,
-                                        mock_failover_migrate_networks):
+    def test_failover_migrate_changed_host(self, mock_get_instance_by_name,
+                                           mock_nova_failover_server,
+                                           mock_failover_migrate_networks,
+                                           mock_wait_pending_instance):
         instance = mock_get_instance_by_name.return_value
         old_host = 'old_host'
         new_host = 'new_host'
         instance.host = old_host
         self.clusterops._this_node = new_host
+        self._clustutils.get_vm_host.return_value = new_host
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
                                           new_host)
 
+        mock_wait_pending_instance.assert_called_once_with(
+            mock.sentinel.instance_name)
+        self._clustutils.get_vm_host.assert_called_once_with(
+            mock.sentinel.instance_name)
         mock_get_instance_by_name.assert_called_once_with(
             mock.sentinel.instance_name)
         get_inst_nw_info = self.clusterops._network_api.get_instance_nw_info
@@ -224,6 +239,50 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
             instance, get_inst_nw_info.return_value)
         c_handler = self.clusterops._serial_console_ops.start_console_handler
         c_handler.assert_called_once_with(mock.sentinel.instance_name)
+
+    @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')
+    @mock.patch.object(clusterops.ClusterOps, '_failover_migrate_networks')
+    @mock.patch.object(clusterops.ClusterOps, '_nova_failover_server')
+    @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
+    def test_failover_same_node(self, mock_get_instance_by_name,
+                                mock_nova_failover_server,
+                                mock_failover_migrate_networks,
+                                mock_wait_pending_instance):
+        # In some cases, the instances may bounce between hosts. We're testing
+        # the case in which the instance is actually returning to the initial
+        # host during the time in which we're processing events.
+        instance = mock_get_instance_by_name.return_value
+        old_host = 'old_host'
+        new_host = 'new_host'
+        instance.host = old_host
+        self.clusterops._this_node = old_host
+        self._clustutils.get_vm_host.return_value = old_host
+
+        self.clusterops._failover_migrate(mock.sentinel.instance_name,
+                                          new_host)
+
+        get_inst_nw_info = self.clusterops._network_api.get_instance_nw_info
+        get_inst_nw_info.assert_called_once_with(self.clusterops._context,
+                                                 instance)
+        mock_nova_failover_server.assert_called_once_with(instance, old_host)
+        self.clusterops._vmops.unplug_vifs.assert_not_called()
+        self.clusterops._vmops.plug_vifs.assert_called_once_with(
+            instance, get_inst_nw_info.return_value)
+        mock_failover_migrate_networks.assert_not_called()
+        c_handler = self.clusterops._serial_console_ops.start_console_handler
+        c_handler.assert_called_once_with(mock.sentinel.instance_name)
+
+    @mock.patch('time.sleep')
+    def test_wait_for_pending_instance(self, mock_sleep):
+        self._clustutils.get_cluster_group_state_info.side_effect = [
+            dict(state=os_win_const.CLUSTER_GROUP_PENDING),
+            dict(state=os_win_const.CLUSTER_GROUP_ONLINE)]
+
+        self.clusterops._wait_for_pending_instance(mock.sentinel.instance_name)
+
+        self._clustutils.get_cluster_group_state_info.assert_has_calls(
+            [mock.call(mock.sentinel.instance_name)] * 2)
+        mock_sleep.assert_called_once_with(2)
 
     def test_failover_migrate_networks(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)

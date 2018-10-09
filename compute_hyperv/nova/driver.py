@@ -30,6 +30,7 @@ from os_win import utilsfactory
 from oslo_log import log as logging
 import six
 
+from compute_hyperv.nova import coordination
 from compute_hyperv.nova import eventhandler
 from compute_hyperv.nova import hostops
 from compute_hyperv.nova import imagecache
@@ -108,6 +109,8 @@ class HyperVDriver(driver.ComputeDriver):
         "supports_trusted_certs": True,
     }
 
+    use_coordination = False
+
     def __init__(self, virtapi):
         # check if the current version of Windows is supported before any
         # further driver initialisation.
@@ -151,6 +154,9 @@ class HyperVDriver(driver.ComputeDriver):
         return False
 
     def init_host(self, host):
+        if self.use_coordination:
+            coordination.COORDINATOR.start()
+
         self._serialconsoleops.start_console_handlers()
 
         self._set_event_handler_callbacks()

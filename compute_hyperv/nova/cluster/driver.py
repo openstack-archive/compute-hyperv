@@ -21,6 +21,8 @@ from compute_hyperv.nova import driver
 
 
 class HyperVClusterDriver(driver.HyperVDriver):
+    use_coordination = True
+
     def __init__(self, virtapi):
         super(HyperVClusterDriver, self).__init__(virtapi)
 

@@ -1,0 +1,11 @@
+---
+upgrade:
+  - |
+    When using the cluster driver, a distributed lock backend will have to be
+    configured.
+fixes:
+  - |
+    In order to fix race conditions that can occur when handling instance
+    failovers, the cluster driver is now using distributed locks. A
+    distributed lock backend (e.g. etcd, mysql, file based, etc) will have to
+    be configured.

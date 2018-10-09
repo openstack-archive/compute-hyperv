@@ -16,6 +16,7 @@
 """Management class for Cluster VM operations."""
 
 import functools
+import time
 
 from nova.compute import power_state
 from nova.compute import task_states
@@ -26,11 +27,13 @@ from nova import objects
 from nova import utils
 from nova.virt import block_device
 from nova.virt import event as virtevent
+from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_log import log as logging
 
 import compute_hyperv.nova.conf
+from compute_hyperv.nova import coordination
 from compute_hyperv.nova import hostops
 from compute_hyperv.nova import serialconsoleops
 from compute_hyperv.nova import vmops
@@ -106,6 +109,7 @@ class ClusterOps(object):
                           instance.name, instance.host,
                           self._this_node)
 
+    @coordination.synchronized('failover-{instance_name}')
     def _failover_migrate(self, instance_name, new_host):
         """This method will check if the generated event is a legitimate
         failover to this node. If it is, it will proceed to prepare the
@@ -126,6 +130,31 @@ class ClusterOps(object):
                   'new_host': new_host,
                   'old_host': old_host})
 
+        # While the cluster group is in "pending" state, it may not even be
+        # registered in Hyper-V, so there's not much we can do. We'll have to
+        # wait for it to be handled by the Failover Cluster service.
+        self._wait_for_pending_instance(instance_name)
+
+        current_host = self._clustutils.get_vm_host(instance_name)
+        instance_moved_again = current_host.upper() != new_host.upper()
+        if instance_moved_again:
+            LOG.warning("While processing instance %(instance)s failover to "
+                        "%(host)s, it has moved to %(current_host)s.",
+                        dict(host=new_host,
+                             current_host=current_host,
+                             instance=instance_name))
+            new_host = current_host
+
+        host_changed = old_host.upper() != new_host.upper()
+        migrated_here = new_host.upper() == self._this_node.upper()
+        migrated_from_here = old_host.upper() == self._this_node.upper()
+
+        if not host_changed:
+            LOG.warning("The source node is the same as the destination "
+                        "node: %(host)s. The instance %(instance)s may have "
+                        "bounced between hosts due to a failure.",
+                        dict(host=old_host, instance=instance_name))
+
         if instance.task_state == task_states.MIGRATING:
             # In case of live migration triggered by the user, we get the
             # event that the instance changed host but we do not want
@@ -135,11 +164,11 @@ class ClusterOps(object):
 
         nw_info = self._network_api.get_instance_nw_info(self._context,
                                                          instance)
-        if old_host and old_host.upper() == self._this_node.upper():
-            LOG.debug('Actions at source node.')
+        if host_changed and migrated_from_here:
+            LOG.debug('Cleaning up moved instance: %s.', instance_name)
             self._vmops.unplug_vifs(instance, nw_info)
             return
-        elif new_host.upper() != self._this_node.upper():
+        if not migrated_here:
             LOG.debug('Instance %s did not failover to this node.',
                       instance_name)
             return
@@ -148,9 +177,25 @@ class ClusterOps(object):
                  {'instance': instance_name})
 
         self._nova_failover_server(instance, new_host)
-        self._failover_migrate_networks(instance, old_host)
+        if host_changed:
+            self._failover_migrate_networks(instance, old_host)
+
         self._vmops.plug_vifs(instance, nw_info)
         self._serial_console_ops.start_console_handler(instance_name)
+
+    def _wait_for_pending_instance(self, instance_name):
+        # TODO(lpetrut): switch to an event listener. We'd probably want to
+        # avoid having one event listener per failed over instance, as there
+        # can be many of them.
+        group_state = self._clustutils.get_cluster_group_state_info(
+            instance_name)['state']
+        while group_state == os_win_const.CLUSTER_GROUP_PENDING:
+            LOG.debug("Waiting for pending instance cluster group: %s",
+                      instance_name)
+            time.sleep(2)
+
+            group_state = self._clustutils.get_cluster_group_state_info(
+                instance_name)['state']
 
     def _failover_migrate_networks(self, instance, source):
         """This is called after a VM failovered to this node.

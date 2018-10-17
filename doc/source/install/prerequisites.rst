@@ -233,6 +233,15 @@ Cluster Driver to be usable, the Hyper-V Cluster nodes will have to be joined
 to an Active Directory and a Microsoft Failover Cluster. The nodes in a
 Hyper-V Cluster must be identical.
 
+In order to avoid race conditions, our driver relies on distributed locks. A
+distributed lock backend such as etcd, mysql or a file share will have to be
+configured.
+
+For more details about available distributed lock backends, check the
+`list of drivers supported by tooz`__.
+
+__ https://docs.openstack.org/tooz/latest/user/drivers.html
+
 
 Guarded Host configuration (Shielded VMs)
 -----------------------------------------

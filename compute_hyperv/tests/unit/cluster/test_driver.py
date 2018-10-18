@@ -29,6 +29,7 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
 
     _autospec_classes = [
         driver.clusterops.ClusterOps,
+        base_driver.eventhandler.InstanceEventHandler,
         base_driver.hostops.api.API,
         driver.livemigrationops.ClusterLiveMigrationOps,
     ]
@@ -56,6 +57,14 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
 
         self.assertPublicAPISignatures(nova_base_driver.ComputeDriver,
                                        driver.HyperVClusterDriver)
+
+    def test_set_event_handler_callbacks(self):
+        self.driver._set_event_handler_callbacks()
+
+        self.driver._event_handler.add_callback.assert_has_calls(
+            [mock.call(self.driver.emit_event),
+             mock.call(self.driver._vmops.instance_state_change_callback),
+             mock.call(self.driver._clops.instance_state_change_callback)])
 
     @mock.patch.object(base_driver.HyperVDriver, 'spawn')
     def test_spawn(self, mock_superclass_spawn):

@@ -30,6 +30,7 @@ from nova import objects
 from nova.objects import fields
 from nova import utils
 from nova.virt import configdrive
+from nova.virt import event as virtevent
 from nova.virt import hardware
 from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
@@ -1466,3 +1467,15 @@ class VMOps(object):
                           "its uuid. It may have been deleted meanwhile.",
                           instance_name)
                 ctxt.reraise = expect_existing
+
+    def instance_state_change_callback(self, event):
+        if event.transition in (virtevent.EVENT_LIFECYCLE_STARTED,
+                                virtevent.EVENT_LIFECYCLE_RESUMED):
+            # We can handle the following operations concurrently.
+            utils.spawn_n(self._serial_console_ops.start_console_handler,
+                          event.name)
+            utils.spawn_n(self.configure_instance_metrics,
+                          event.name,
+                          enable_network_metrics=True)
+        else:
+            self._serial_console_ops.stop_console_handler(event.name)

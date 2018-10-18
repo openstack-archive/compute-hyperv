@@ -126,6 +126,7 @@ class HyperVDriver(driver.ComputeDriver):
         self._imagecache = imagecache.ImageCache()
         self._image_api = image.API()
         self._pathutils = pathutils.PathUtils()
+        self._event_handler = eventhandler.InstanceEventHandler()
 
     def _check_minimum_windows_version(self):
         hostutils = utilsfactory.get_hostutils()
@@ -151,12 +152,18 @@ class HyperVDriver(driver.ComputeDriver):
 
     def init_host(self, host):
         self._serialconsoleops.start_console_handlers()
-        event_handler = eventhandler.InstanceEventHandler(
-            state_change_callback=self.emit_event)
-        event_handler.start_listener()
+
+        self._set_event_handler_callbacks()
+        self._event_handler.start_listener()
 
         instance_path = self._pathutils.get_instances_dir()
         self._pathutils.check_create_dir(instance_path)
+
+    def _set_event_handler_callbacks(self):
+        # Subclasses may override this.
+        self._event_handler.add_callback(self.emit_event)
+        self._event_handler.add_callback(
+            self._vmops.instance_state_change_callback)
 
     def list_instance_uuids(self):
         return self._vmops.list_instance_uuids()

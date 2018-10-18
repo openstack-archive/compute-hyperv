@@ -22,6 +22,8 @@ from nova import exception
 from nova import objects
 from nova.objects import fields
 from nova.tests.unit.objects import test_virtual_interface
+from nova import utils
+from nova.virt import event as virtevent
 from nova.virt import hardware
 from os_win import constants as os_win_const
 from os_win import exceptions as os_win_exc
@@ -31,6 +33,7 @@ from oslo_utils import units
 
 import compute_hyperv.nova.conf
 from compute_hyperv.nova import constants
+from compute_hyperv.nova import eventhandler
 from compute_hyperv.nova import vmops
 from compute_hyperv.tests import fake_instance
 from compute_hyperv.tests.unit import test_base
@@ -2420,3 +2423,25 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           self._vmops.get_instance_uuid,
                           mock.sentinel.instance_name,
                           expect_existing=True)
+
+    @ddt.data(virtevent.EVENT_LIFECYCLE_STARTED,
+              virtevent.EVENT_LIFECYCLE_STOPPED)
+    @mock.patch.object(vmops.VMOps, 'configure_instance_metrics')
+    @mock.patch.object(utils, 'spawn_n',
+                       lambda f, *args, **kwargs: f(*args, **kwargs))
+    def test_instance_state_change_callback(self, transition,
+                                            mock_configure_metrics):
+        event = eventhandler.HyperVLifecycleEvent(
+            mock.sentinel.uuid,
+            mock.sentinel.name,
+            transition)
+
+        self._vmops.instance_state_change_callback(event)
+
+        serialops = self._vmops._serial_console_ops
+        if transition == virtevent.EVENT_LIFECYCLE_STARTED:
+            serialops.start_console_handler.assert_called_once_with(event.name)
+            mock_configure_metrics.assert_called_once_with(
+                event.name, enable_network_metrics=True)
+        else:
+            serialops.stop_console_handler.assert_called_once_with(event.name)

@@ -36,6 +36,7 @@ import compute_hyperv.nova.conf
 from compute_hyperv.nova import coordination
 from compute_hyperv.nova import hostops
 from compute_hyperv.nova import serialconsoleops
+from compute_hyperv.nova.utils import placement as placement_utils
 from compute_hyperv.nova import vmops
 
 LOG = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ class ClusterOps(object):
         self._network_api = network.API()
         self._vmops = vmops.VMOps()
         self._serial_console_ops = serialconsoleops.SerialConsoleOps()
+        self._placement = placement_utils.PlacementUtils()
 
     def get_instance_host(self, instance):
         return self._clustutils.get_vm_host(instance.name)
@@ -179,6 +181,13 @@ class ClusterOps(object):
         self._nova_failover_server(instance, new_host)
         if host_changed:
             self._failover_migrate_networks(instance, old_host)
+            try:
+                self._placement.move_compute_node_allocations(
+                    self._context, instance, old_host, new_host,
+                    merge_existing=False)
+            except Exception:
+                LOG.exception("Could not update failed over instance '%s' "
+                              "allocations.", instance)
 
         self._vmops.plug_vifs(instance, nw_info)
         self._serial_console_ops.start_console_handler(instance_name)

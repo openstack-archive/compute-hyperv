@@ -21,7 +21,7 @@ from oslo_log import log as logging
 
 LOG = logging.getLogger(__name__)
 
-SYMMETRIC_GET_PUT_ALLOCATIONS = "1.12"  # Queens
+CONSUMER_GENERATION_VERSION = "1.28"  # Rocky
 
 
 class PlacementUtils(object):
@@ -47,7 +47,7 @@ class PlacementUtils(object):
                          new_rp_uuid, merge_existing=True):
         allocs = self._get_allocs_for_consumer(
             context, consumer_uuid,
-            version=SYMMETRIC_GET_PUT_ALLOCATIONS)
+            version=CONSUMER_GENERATION_VERSION)
         allocations = allocs['allocations']
 
         if old_rp_uuid == new_rp_uuid:
@@ -78,12 +78,13 @@ class PlacementUtils(object):
 
         del allocations[old_rp_uuid]
         self._put_allocs(context, consumer_uuid, allocs,
-                         version=SYMMETRIC_GET_PUT_ALLOCATIONS)
+                         version=CONSUMER_GENERATION_VERSION)
 
     def _put_allocs(self, context, consumer_uuid, allocations, version=None):
         url = '/allocations/%s' % consumer_uuid
         r = self.reportclient.put(url, allocations,
-                                  version=version)
+                                  version=version,
+                                  global_request_id=context.global_id)
         if r.status_code != 204:
             errors = r.json().get('errors') or []
             # NOTE(jaypipes): Yes, it sucks doing string comparison like this
@@ -101,7 +102,8 @@ class PlacementUtils(object):
 
     def _get_allocs_for_consumer(self, context, consumer, version=None):
         resp = self.reportclient.get('/allocations/%s' % consumer,
-                                     version=version)
+                                     version=version,
+                                     global_request_id=context.global_id)
         if not resp:
             # TODO(efried): Use code/title/detail to make a better exception
             raise exception.ConsumerAllocationRetrievalFailed(

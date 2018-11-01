@@ -20,6 +20,7 @@ from nova.compute import task_states
 from nova.compute import vm_states
 from nova.network.neutronv2 import api as network_api
 from nova import objects
+from nova.virt import event as virtevent
 from os_win import exceptions as os_win_exc
 
 from compute_hyperv.nova.cluster import clusterops
@@ -50,6 +51,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.clusterops = clusterops.ClusterOps()
         self.clusterops._context = self.context
         self._clustutils = self.clusterops._clustutils
+        self._network_api = self.clusterops._network_api
 
     def test_get_instance_host(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -340,3 +342,17 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.assertEqual(mock.sentinel.host, mock_instance.host)
         self.assertEqual(mock.sentinel.host, mock_instance.node)
         mock_instance.save.assert_called_once_with(expected_task_state=[None])
+
+    @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')
+    def test_instance_state_change_callback(self, mock_get_instance_by_name):
+        event = mock.Mock(transition=virtevent.EVENT_LIFECYCLE_STARTED)
+        mock_instance = mock_get_instance_by_name.return_value
+
+        self.clusterops.instance_state_change_callback(event)
+
+        mock_get_instance_by_name.assert_called_once_with(event.name)
+        self._network_api.get_instance_nw_info.assert_called_once_with(
+            self.context, mock_instance)
+        self.clusterops._vmops.plug_vifs.assert_called_once_with(
+            mock_instance,
+            self._network_api.get_instance_nw_info.return_value)

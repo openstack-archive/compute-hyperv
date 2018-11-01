@@ -25,6 +25,7 @@ from nova import network
 from nova import objects
 from nova import utils
 from nova.virt import block_device
+from nova.virt import event as virtevent
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
 from oslo_log import log as logging
@@ -230,3 +231,14 @@ class ClusterOps(object):
         instance.host = new_host
         instance.node = new_host
         instance.save(expected_task_state=[None])
+
+    def instance_state_change_callback(self, event):
+        if event.transition == virtevent.EVENT_LIFECYCLE_STARTED:
+            # In some cases, we may not be able to plug the vifs when the
+            # instances are failed over (e.g. if the instances end up in
+            # "failed" state, without actually being registered in Hyper-V,
+            # being brought back online afterwards)
+            instance = self._get_instance_by_name(event.name)
+            nw_info = self._network_api.get_instance_nw_info(self._context,
+                                                             instance)
+            self._vmops.plug_vifs(instance, nw_info)

@@ -31,6 +31,12 @@ class HyperVClusterDriver(driver.HyperVDriver):
         self._clops.start_failover_listener_daemon()
         self._clops.reclaim_failovered_instances()
 
+    def _set_event_handler_callbacks(self):
+        super(HyperVClusterDriver, self)._set_event_handler_callbacks()
+
+        self._event_handler.add_callback(
+            self._clops.instance_state_change_callback)
+
     def spawn(self, context, instance, image_meta, injected_files,
               admin_password, allocations, network_info=None,
               block_device_info=None):

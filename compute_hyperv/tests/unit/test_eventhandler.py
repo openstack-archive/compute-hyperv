@@ -76,16 +76,23 @@ class EventHandlerTestCase(test_base.HyperVBaseTestCase):
     @mock.patch.object(eventhandler.InstanceEventHandler, '_get_virt_event')
     @mock.patch.object(utils, 'spawn_n')
     def test_emit_event(self, mock_spawn, mock_get_event):
+        state = constants.HYPERV_VM_STATE_ENABLED
+        self.flags(enable_instance_metrics_collection=True,
+                   group="hyperv")
+
         self._event_handler._emit_event(mock.sentinel.instance_name,
                                         mock.sentinel.instance_uuid,
-                                        mock.sentinel.instance_state)
+                                        state)
 
         virt_event = mock_get_event.return_value
         mock_spawn.assert_has_calls(
             [mock.call(self._state_change_callback, virt_event),
+             mock.call(self._event_handler._vmops.configure_instance_metrics,
+                       mock.sentinel.instance_name,
+                       enable_network_metrics=True),
              mock.call(self._event_handler._handle_serial_console_workers,
                        mock.sentinel.instance_name,
-                       mock.sentinel.instance_state)])
+                       state)])
 
     def test_handle_serial_console_instance_running(self):
         self._event_handler._handle_serial_console_workers(

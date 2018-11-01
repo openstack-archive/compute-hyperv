@@ -14,9 +14,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import ddt
 import mock
 from nova import exception
 from nova.network import model
+from os_win import constants as os_win_const
 
 import compute_hyperv.nova.conf
 from compute_hyperv.nova import vif
@@ -41,11 +43,16 @@ class HyperVNovaNetworkVIFPluginTestCase(test_base.HyperVBaseTestCase):
             'fake_vswitch_name', mock.sentinel.fake_id)
 
 
+@ddt.ddt
 class HyperVVIFDriverTestCase(test_base.HyperVBaseTestCase):
     def setUp(self):
         super(HyperVVIFDriverTestCase, self).setUp()
         self.vif_driver = vif.HyperVVIFDriver()
         self.vif_driver._vif_plugin = mock.MagicMock()
+
+        self._netutils = self.vif_driver._netutils
+        self._vmutils = self.vif_driver._vmutils
+        self._metricsutils = self.vif_driver._metricsutils
 
     @mock.patch.object(vif.nova.network, 'is_neutron')
     def test_init_neutron(self, mock_is_neutron):
@@ -70,11 +77,19 @@ class HyperVVIFDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.instance, vif)
 
     @mock.patch.object(vif, 'os_vif')
+    @mock.patch.object(vif.HyperVVIFDriver, 'enable_metrics')
     @mock.patch.object(vif.os_vif_util, 'nova_to_osvif_instance')
     @mock.patch.object(vif.os_vif_util, 'nova_to_osvif_vif')
     def test_plug_ovs(self, mock_nova_to_osvif_vif,
-                      mock_nova_to_osvif_instance, mock_os_vif):
+                      mock_nova_to_osvif_instance,
+                      mock_enable_metrics, mock_os_vif):
+        self.flags(enable_instance_metrics_collection=True,
+                   group='hyperv')
+
         vif = {'type': model.VIF_TYPE_OVS}
+        osvif_instance = mock_nova_to_osvif_instance.return_value
+        vif_obj = mock_nova_to_osvif_vif.return_value
+
         self.vif_driver.plug(mock.sentinel.instance, vif)
 
         mock_nova_to_osvif_vif.assert_called_once_with(vif)
@@ -82,10 +97,32 @@ class HyperVVIFDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.instance)
         connect_vnic = self.vif_driver._netutils.connect_vnic_to_vswitch
         connect_vnic.assert_called_once_with(
-            CONF.hyperv.vswitch_name, mock_nova_to_osvif_vif.return_value.id)
+            CONF.hyperv.vswitch_name, vif_obj.id)
         mock_os_vif.plug.assert_called_once_with(
-            mock_nova_to_osvif_vif.return_value,
-            mock_nova_to_osvif_instance.return_value)
+            vif_obj, osvif_instance)
+
+        self._netutils.add_metrics_collection_acls.assert_called_once_with(
+            vif_obj.id)
+        mock_enable_metrics.assert_called_once_with(
+            osvif_instance.name, vif_obj.id)
+
+    @ddt.data(True, False)
+    def test_enable_metrics(self, vm_running):
+        state = (os_win_const.HYPERV_VM_STATE_ENABLED if vm_running
+                 else os_win_const.HYPERV_VM_STATE_DISABLED)
+        self._vmutils.get_vm_state.return_value = state
+
+        enable_metrics = self._metricsutils.enable_port_metrics_collection
+
+        self.vif_driver.enable_metrics(mock.sentinel.instance_name,
+                                       mock.sentinel.vif_id)
+
+        self._vmutils.get_vm_state.assert_called_once_with(
+            mock.sentinel.instance_name)
+        if vm_running:
+            enable_metrics.assert_called_once_with(mock.sentinel.vif_id)
+        else:
+            enable_metrics.assert_not_called()
 
     def test_plug_type_unknown(self):
         vif = {'type': mock.sentinel.vif_type}

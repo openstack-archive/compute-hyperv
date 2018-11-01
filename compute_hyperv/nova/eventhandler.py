@@ -72,6 +72,14 @@ class InstanceEventHandler(object):
                                           instance_state)
         utils.spawn_n(self._state_change_callback, virt_event)
 
+        should_enable_metrics = (
+            CONF.hyperv.enable_instance_metrics_collection and
+            instance_state == constants.HYPERV_VM_STATE_ENABLED)
+        if should_enable_metrics:
+            utils.spawn_n(self._vmops.configure_instance_metrics,
+                          instance_name,
+                          enable_network_metrics=True)
+
         utils.spawn_n(self._handle_serial_console_workers,
                       instance_name, instance_state)
 

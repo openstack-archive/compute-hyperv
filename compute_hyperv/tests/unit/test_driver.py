@@ -35,6 +35,7 @@ from compute_hyperv.tests.unit import test_base
 class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
 
     _autospec_classes = [
+        driver.eventhandler.InstanceEventHandler,
         driver.hostops.HostOps,
         driver.volumeops.VolumeOps,
         driver.vmops.VMOps,
@@ -124,9 +125,7 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             # original frame will contain the 'foo' variable.
             self.assertEqual('foofoo', trace.tb_frame.f_locals['foo'])
 
-    @mock.patch.object(driver.eventhandler, 'InstanceEventHandler')
-    def test_init_host(self, mock_InstanceEventHandler):
-
+    def test_init_host(self):
         mock_get_inst_dir = self.driver._pathutils.get_instances_dir
         mock_get_inst_dir.return_value = mock.sentinel.FAKE_DIR
 
@@ -135,10 +134,10 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         mock_start_console_handlers = (
             self.driver._serialconsoleops.start_console_handlers)
         mock_start_console_handlers.assert_called_once_with()
-        mock_InstanceEventHandler.assert_called_once_with(
-            state_change_callback=self.driver.emit_event)
-        fake_event_handler = mock_InstanceEventHandler.return_value
-        fake_event_handler.start_listener.assert_called_once_with()
+        self.driver._event_handler.add_callback.assert_has_calls(
+            [mock.call(self.driver.emit_event),
+             mock.call(self.driver._vmops.instance_state_change_callback)])
+        self.driver._event_handler.start_listener.assert_called_once_with()
 
         mock_get_inst_dir.assert_called_once_with()
         self.driver._pathutils.check_create_dir.assert_called_once_with(

@@ -1096,7 +1096,8 @@ class VMOps(object):
                 except Exception as exc:
                     LOG.exception("Failed to plug vif: '%s'.",
                                   vif, instance=instance)
-                    raise exception.VirtualInterfacePlugException(exc)
+                    raise exception.VirtualInterfacePlugException(
+                        six.text_type(exc))
 
     def unplug_vifs(self, instance, network_info):
         if network_info:

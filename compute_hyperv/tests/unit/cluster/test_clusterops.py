@@ -18,6 +18,7 @@ import mock
 from nova.compute import power_state
 from nova.compute import task_states
 from nova.compute import vm_states
+from nova import exception
 from nova.network.neutronv2 import api as network_api
 from nova import objects
 from nova.virt import event as virtevent
@@ -41,6 +42,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         network_api.API,
         clusterops.vmops.VMOps,
         clusterops.serialconsoleops.SerialConsoleOps,
+        clusterops.placement_utils.PlacementUtils,
     ]
 
     _FAKE_INSTANCE_NAME = 'fake_instance_name'
@@ -51,8 +53,10 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
 
         self.clusterops = clusterops.ClusterOps()
         self.clusterops._context = self.context
+
         self._clustutils = self.clusterops._clustutils
         self._network_api = self.clusterops._network_api
+        self._placement = self.clusterops._placement
 
     def test_get_instance_host(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
@@ -219,6 +223,9 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         instance.host = old_host
         self.clusterops._this_node = new_host
         self._clustutils.get_vm_host.return_value = new_host
+        # Placement exceptions shouldn't break the rest of the failover logic.
+        self._placement.move_compute_node_allocations.side_effect = (
+            exception.NovaException)
 
         self.clusterops._failover_migrate(mock.sentinel.instance_name,
                                           new_host)
@@ -235,6 +242,9 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         mock_nova_failover_server.assert_called_once_with(instance, new_host)
         mock_failover_migrate_networks.assert_called_once_with(
             instance, old_host)
+        self._placement.move_compute_node_allocations.assert_called_once_with(
+            self.clusterops._context, instance, old_host, new_host,
+            merge_existing=False)
         self.clusterops._vmops.plug_vifs.assert_called_once_with(
             instance, get_inst_nw_info.return_value)
         c_handler = self.clusterops._serial_console_ops.start_console_handler
@@ -268,6 +278,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         self.clusterops._vmops.unplug_vifs.assert_not_called()
         self.clusterops._vmops.plug_vifs.assert_called_once_with(
             instance, get_inst_nw_info.return_value)
+        self._placement.move_compute_node_allocations.assert_not_called()
         mock_failover_migrate_networks.assert_not_called()
         c_handler = self.clusterops._serial_console_ops.start_console_handler
         c_handler.assert_called_once_with(mock.sentinel.instance_name)

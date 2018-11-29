@@ -17,6 +17,7 @@ import os
 import ddt
 from eventlet import timeout as etimeout
 import mock
+from nova.compute import task_states
 from nova.compute import vm_states
 from nova import exception
 from nova import objects
@@ -1317,9 +1318,11 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         self._pathutils.check_remove_dir.assert_has_calls(
             exp_check_remove_dir_calls)
 
-    @ddt.data({"force_destroy": True},
+    @ddt.data({"force_destroy": True, "destroy_disks": False},
               {'vm_exists': False, 'planned_vm_exists': False},
-              {'vm_exists': False, 'planned_vm_exists': True})
+              {'vm_exists': False, 'planned_vm_exists': True},
+              {'task_state': task_states.RESIZE_REVERTING},
+              {'cleanup_migr_files': False})
     @ddt.unpack
     @mock.patch('compute_hyperv.nova.vmops.VMOps._delete_disk_files')
     @mock.patch('compute_hyperv.nova.vmops.VMOps.power_off')
@@ -1327,10 +1330,14 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_destroy(self, mock_unplug_vifs, mock_power_off,
                      mock_delete_disk_files, vm_exists=True,
                      planned_vm_exists=False,
-                     force_destroy=False):
+                     force_destroy=False,
+                     task_state=task_states.DELETING,
+                     destroy_disks=True,
+                     cleanup_migr_files=True):
         self.flags(force_destroy_instances=force_destroy, group="hyperv")
 
-        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_instance = fake_instance.fake_instance_obj(
+            self.context, task_state=task_state)
         self._vmops._vmutils.vm_exists.return_value = vm_exists
         self._vmops._migrutils.planned_vm_exists.return_value = (
             planned_vm_exists)
@@ -1339,7 +1346,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             instance=mock_instance,
             block_device_info=mock.sentinel.FAKE_BD_INFO,
             network_info=mock.sentinel.fake_network_info,
-            cleanup_migration_files=mock.sentinel.cleanup_migr_files)
+            cleanup_migration_files=cleanup_migr_files,
+            destroy_disks=destroy_disks)
 
         self._vmops._vmutils.vm_exists.assert_called_with(
             mock_instance.name)
@@ -1366,10 +1374,16 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             mock_instance, mock.sentinel.fake_network_info)
         self._vmops._volumeops.disconnect_volumes.assert_called_once_with(
             mock.sentinel.FAKE_BD_INFO)
-        mock_delete_disk_files.assert_called_once_with(
-            mock_instance,
-            self._pathutils.get_instance_dir.return_value,
-            mock.sentinel.cleanup_migr_files)
+
+        reverting_resize = task_state == task_states.RESIZE_REVERTING
+        exp_migr_files_cleanup = cleanup_migr_files and not reverting_resize
+        if destroy_disks or reverting_resize:
+            mock_delete_disk_files.assert_called_once_with(
+                mock_instance,
+                self._pathutils.get_instance_dir.return_value,
+                exp_migr_files_cleanup)
+        else:
+            mock_delete_disk_files.assert_not_called()
 
     @mock.patch('compute_hyperv.nova.vmops.VMOps.power_off')
     def test_destroy_exception(self, mock_power_off):

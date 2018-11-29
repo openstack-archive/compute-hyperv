@@ -24,6 +24,7 @@ import time
 
 from eventlet import timeout as etimeout
 from nova.api.metadata import base as instance_metadata
+from nova.compute import task_states
 from nova.compute import vm_states
 from nova import exception
 from nova import objects
@@ -883,6 +884,15 @@ class VMOps(object):
         # we won't be able to retrieve it otherwise.
         instance_path = self._pathutils.get_instance_dir(instance.name,
                                                          create_dir=False)
+
+        # When reverting resizes, the manager will request instance files
+        # cleanup to be skipped if the hosts use shared storage, in which
+        # case we'd leak files if multiple CSVs are used. It's safe to
+        # cleanup the instance files when reverting resizes as long as we
+        # preserve the "*_revert" dir.
+        if instance.task_state == task_states.RESIZE_REVERTING:
+            destroy_disks = True
+            cleanup_migration_files = False
 
         try:
             if self._vmutils.vm_exists(instance_name):

@@ -38,17 +38,25 @@ class SnapshotOpsTestCase(test_base.HyperVBaseTestCase):
         self.context = 'fake_context'
         self._snapshotops = snapshotops.SnapshotOps()
 
+        self._vhdutils = self._snapshotops._vhdutils
+
     @mock.patch('nova.image.glance.get_remote_image_service')
     def test_save_glance_image(self, mock_get_remote_image_service):
+        fake_fmt = 'fake_fmt'
         image_metadata = {"is_public": False,
-                          "disk_format": "vhd",
+                          "disk_format": fake_fmt,
                           "container_format": "bare"}
         glance_image_service = mock.MagicMock()
+        self._vhdutils.get_vhd_format.return_value = fake_fmt.upper()
         mock_get_remote_image_service.return_value = (glance_image_service,
                                                       mock.sentinel.IMAGE_ID)
+
         self._snapshotops._save_glance_image(context=self.context,
                                              image_id=mock.sentinel.IMAGE_ID,
                                              image_vhd_path=mock.sentinel.PATH)
+
+        self._vhdutils.get_vhd_format.assert_called_once_with(
+            mock.sentinel.PATH)
         mock_get_remote_image_service.assert_called_once_with(
             self.context, mock.sentinel.IMAGE_ID)
         self._snapshotops._pathutils.open.assert_called_with(

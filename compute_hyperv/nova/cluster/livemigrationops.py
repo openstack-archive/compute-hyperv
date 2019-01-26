@@ -97,9 +97,9 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
             instance.name)
         node_name = self._clustutils.get_node_name()
 
-        if (state_info['owner_node'].lower() != node_name.lower()
-                or state_info['state'] != expected_state
-                or state_info['migration_queued']):
+        if (state_info['owner_node'].lower() != node_name.lower() or
+                state_info['state'] != expected_state or
+                state_info['migration_queued']):
             instance.vm_state = vm_states.ERROR
             instance.save()
 

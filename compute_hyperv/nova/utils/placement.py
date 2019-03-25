@@ -16,7 +16,6 @@
 from nova import exception
 from nova import objects
 from nova.scheduler.client import report
-from nova.scheduler import utils as scheduler_utils
 from oslo_log import log as logging
 
 LOG = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ class PlacementUtils(object):
             LOG.info("Merging existing allocations for consumer %s on "
                      "provider %s: %s.",
                      consumer_uuid, new_rp_uuid, allocations)
-            scheduler_utils.merge_resources(
+            self.merge_resources(
                 allocations[new_rp_uuid]['resources'],
                 allocations[old_rp_uuid]['resources'])
         else:
@@ -110,3 +109,20 @@ class PlacementUtils(object):
                 consumer_uuid=consumer, error=resp.text)
 
         return resp.json()
+
+    @staticmethod
+    def merge_resources(original_resources, new_resources, sign=1):
+        """Merge a list of new resources with existing resources.
+
+        Either add the resources (if sign is 1) or subtract (if sign is -1).
+        If the resulting value is 0 do not include the resource in the results.
+        """
+
+        all_keys = set(original_resources.keys()) | set(new_resources.keys())
+        for key in all_keys:
+            value = (original_resources.get(key, 0) +
+                     (sign * new_resources.get(key, 0)))
+            if value:
+                original_resources[key] = value
+            else:
+                original_resources.pop(key, None)

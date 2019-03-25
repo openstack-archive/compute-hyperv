@@ -239,7 +239,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
     def test_extend_volume(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self.driver.extend_volume(
-            mock.sentinel.connection_info, mock_instance)
+            mock.sentinel.connection_info, mock_instance,
+            mock.sentinel.requested_size)
 
         self.driver._volumeops.extend_volume.assert_called_once_with(
             mock.sentinel.connection_info)

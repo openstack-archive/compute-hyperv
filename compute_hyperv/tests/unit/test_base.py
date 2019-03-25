@@ -39,7 +39,7 @@ class HyperVBaseTestCase(test.NoDBTestCase):
     @staticmethod
     def _mock_get_class(class_type, *args, **kwargs):
         existing_classes = utilsfactory.utils_map[class_type]
-        class_info = list(existing_classes.values())[0]
+        class_info = existing_classes[0]
         imported_class = importutils.import_class(class_info['path'])
 
         return mock.Mock(autospec=imported_class)

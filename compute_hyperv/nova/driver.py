@@ -456,3 +456,10 @@ class HyperVDriver(driver.ComputeDriver):
 
     def check_instance_shared_storage_cleanup(self, context, data):
         return self._pathutils.check_instance_shared_storage_cleanup(data)
+
+    def update_provider_tree(self, provider_tree, nodename, allocations=None):
+        inventory = provider_tree.data(nodename).inventory
+        alloc_ratios = self._get_allocation_ratios(inventory)
+
+        self._hostops.update_provider_tree(
+            provider_tree, nodename, alloc_ratios, allocations)

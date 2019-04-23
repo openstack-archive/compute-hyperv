@@ -20,6 +20,7 @@ from nova import context as nova_context
 from nova import exception
 from nova import objects
 from nova.objects import fields as obj_fields
+import os_resource_classes as orc
 from os_win import constants as os_win_const
 from oslo_serialization import jsonutils
 from oslo_utils import units
@@ -388,3 +389,48 @@ class HostOpsTestCase(test_base.HyperVBaseTestCase):
                           self._hostops._wait_for_instance_pending_task,
                           context=mock.sentinel.CONTEXT,
                           vm_uuid=mock.sentinel.VM_UUID)
+
+    @mock.patch.object(hostops.HostOps, 'get_available_resource')
+    def test_update_provider_tree(self, mock_get_avail_res):
+        resources = mock.MagicMock()
+        allocation_ratios = mock.MagicMock()
+        provider_tree = mock.Mock()
+
+        mock_get_avail_res.return_value = resources
+
+        self.flags(reserved_host_disk_mb=1)
+
+        exp_inventory = {
+            orc.VCPU: {
+                'total': resources['vcpus'],
+                'min_unit': 1,
+                'max_unit': resources['vcpus'],
+                'step_size': 1,
+                'allocation_ratio': allocation_ratios[orc.VCPU],
+                'reserved': CONF.reserved_host_cpus,
+            },
+            orc.MEMORY_MB: {
+                'total': resources['memory_mb'],
+                'min_unit': 1,
+                'max_unit': resources['memory_mb'],
+                'step_size': 1,
+                'allocation_ratio': allocation_ratios[orc.MEMORY_MB],
+                'reserved': CONF.reserved_host_memory_mb,
+            },
+            orc.DISK_GB: {
+                'total': resources['local_gb'],
+                'min_unit': 1,
+                'max_unit': resources['local_gb'],
+                'step_size': 1,
+                'allocation_ratio': allocation_ratios[orc.DISK_GB],
+                'reserved': 1,
+            },
+        }
+
+        self._hostops.update_provider_tree(
+            provider_tree, mock.sentinel.node_name, allocation_ratios,
+            mock.sentinel.allocations)
+
+        provider_tree.update_inventory.assert_called_once_with(
+            mock.sentinel.node_name,
+            exp_inventory)

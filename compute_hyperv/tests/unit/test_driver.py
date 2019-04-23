@@ -630,3 +630,17 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
 
         self.assertEqual(check_cleanup.return_value, ret_val)
         check_cleanup.assert_called_once_with(mock.sentinel.data)
+
+    @mock.patch.object(driver.HyperVDriver, '_get_allocation_ratios')
+    def test_update_provider_tree(self, mock_get_alloc_ratios):
+        mock_ptree = mock.Mock()
+        mock_inventory = mock_ptree.data.return_value.inventory
+
+        self.driver.update_provider_tree(
+            mock_ptree, mock.sentinel.nodename, mock.sentinel.allocations)
+
+        mock_get_alloc_ratios.assert_called_once_with(mock_inventory)
+        self.driver._hostops.update_provider_tree.assert_called_once_with(
+            mock_ptree, mock.sentinel.nodename,
+            mock_get_alloc_ratios.return_value,
+            mock.sentinel.allocations)

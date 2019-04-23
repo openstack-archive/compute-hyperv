@@ -21,11 +21,13 @@ import platform
 import time
 
 from nova.compute import api
+from nova.compute import utils as compute_utils
 from nova.compute import vm_states
 from nova import context
 from nova import exception
 from nova import objects
 from nova.objects import fields as obj_fields
+import os_resource_classes as orc
 from os_win import constants as os_win_const
 from os_win import utilsfactory
 from oslo_log import log as logging
@@ -346,3 +348,39 @@ class HostOps(object):
                           'task_state': instance.task_state,
                           'timeout': CONF.hyperv.evacuate_task_state_timeout})
                 raise exception.InternalError(message=err)
+
+    def update_provider_tree(self, provider_tree, nodename,
+                             allocation_ratios, allocations=None):
+        resources = self.get_available_resource()
+
+        inventory = {
+            orc.VCPU: {
+                'total': resources['vcpus'],
+                'min_unit': 1,
+                'max_unit': resources['vcpus'],
+                'step_size': 1,
+                'allocation_ratio': allocation_ratios[orc.VCPU],
+                'reserved': CONF.reserved_host_cpus,
+            },
+            orc.MEMORY_MB: {
+                'total': resources['memory_mb'],
+                'min_unit': 1,
+                'max_unit': resources['memory_mb'],
+                'step_size': 1,
+                'allocation_ratio': allocation_ratios[orc.MEMORY_MB],
+                'reserved': CONF.reserved_host_memory_mb,
+            },
+            # TODO(lpetrut): once #1784020 is fixed, we can skip reporting
+            # shared storage capacity
+            orc.DISK_GB: {
+                'total': resources['local_gb'],
+                'min_unit': 1,
+                'max_unit': resources['local_gb'],
+                'step_size': 1,
+                'allocation_ratio': allocation_ratios[orc.DISK_GB],
+                'reserved': compute_utils.convert_mb_to_ceil_gb(
+                    CONF.reserved_host_disk_mb),
+            },
+        }
+
+        provider_tree.update_inventory(nodename, inventory)

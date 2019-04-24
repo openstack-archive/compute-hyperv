@@ -25,7 +25,6 @@ from nova import exception
 from nova.virt import configdrive
 from nova.virt import driver
 from os_win import utilsfactory
-from oslo_config import cfg
 from oslo_log import log as logging
 from oslo_utils import excutils
 from oslo_utils import units
@@ -40,13 +39,6 @@ from compute_hyperv.nova import volumeops
 
 LOG = logging.getLogger(__name__)
 CONF = nova.conf.CONF
-
-hyperv_migration_opts = [
-    cfg.BoolOpt('move_disks_on_cold_migration',
-                default=True)
-]
-
-CONF.register_opts(hyperv_migration_opts, 'hyperv')
 
 
 class MigrationOps(object):

@@ -61,6 +61,12 @@ hyperv_opts = [
                      "pending tasks. In some situations, the destroy "
                      "operation will fail (e.g. due to file locks), "
                      "requiring subsequent retries."),
+    cfg.BoolOpt('move_disks_on_cold_migration',
+                default=True,
+                help="Move the instance files to the instance dir configured "
+                     "on the destination host. You may consider disabling "
+                     "this when using multiple CSVs or shares and you wish "
+                     "the source location to be preserved."),
 ]
 
 coordination_opts = [

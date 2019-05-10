@@ -107,6 +107,10 @@ class HyperVDriver(driver.ComputeDriver):
         "supports_extend_volume": True,
         "supports_multiattach": False,
         "supports_trusted_certs": True,
+
+        # Supported image types
+        "supports_image_type_vhd": True,
+        "supports_image_type_vhdx": True,
     }
 
     use_coordination = False

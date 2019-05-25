@@ -177,7 +177,7 @@ The boot order can be specified when creating a new instance:
 For more details on block devices, including more details about setting the
 the boot order, you can check the `block device mapping docs`__.
 
-__ https://docs.openstack.org/nova/pike/user/block-device-mapping.html#block-device-mapping-v2
+__ https://docs.openstack.org/nova/stein/user/block-device-mapping.html#block-device-mapping-v2
 
 
 RemoteFX

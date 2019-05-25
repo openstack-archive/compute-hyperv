@@ -1,10 +1,8 @@
 - job:
-    name: build-compute-hyperv-sphinx-docs
-    parent: build-openstack-sphinx-docs
+    name: compute-hyperv-openstack-tox-docs
+    parent: openstack-tox-docs
     description: |
-      Run tox sphinx docs job with the nova dependency.
-    vars:
-      tox_install_siblings: true
+      Run tox docs job with the nova dependency.
     required-projects:
       - openstack/nova
 
@@ -14,8 +12,8 @@
     check:
       jobs:
         - build-openstack-releasenotes
-        - build-compute-hyperv-sphinx-docs
+        - compute-hyperv-openstack-tox-docs
     gate:
       jobs:
         - build-openstack-releasenotes
-        - build-compute-hyperv-sphinx-docs
+        - compute-hyperv-openstack-tox-docs

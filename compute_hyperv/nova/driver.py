@@ -181,9 +181,6 @@ class HyperVDriver(driver.ComputeDriver):
     def list_instances(self):
         return self._vmops.list_instances()
 
-    def estimate_instance_overhead(self, instance_info):
-        return self._vmops.estimate_instance_overhead(instance_info)
-
     def spawn(self, context, instance, image_meta, injected_files,
               admin_password, allocations, network_info=None,
               block_device_info=None):
@@ -374,7 +371,8 @@ class HyperVDriver(driver.ComputeDriver):
                                              instance, network_info)
 
     def finish_revert_migration(self, context, instance, network_info,
-                                block_device_info=None, power_on=True):
+                                migration, block_device_info=None,
+                                power_on=True):
         self._migrationops.finish_revert_migration(context, instance,
                                                    network_info,
                                                    block_device_info, power_on)

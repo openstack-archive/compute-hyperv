@@ -72,9 +72,11 @@ class HyperVClusterDriver(driver.HyperVDriver):
         self._clops.add_to_cluster(instance)
 
     def finish_revert_migration(self, context, instance, network_info,
-                                block_device_info=None, power_on=True):
+                                migration, block_device_info=None,
+                                power_on=True):
         super(HyperVClusterDriver, self).finish_revert_migration(
-            context, instance, network_info, block_device_info, power_on)
+            context, instance, network_info, migration,
+            block_device_info, power_on)
         self._clops.add_to_cluster(instance)
 
     def rollback_live_migration_at_destination(self, context, instance,

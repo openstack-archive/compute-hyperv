@@ -118,19 +118,6 @@ class VMOps(object):
     def list_instances(self):
         return self._vmutils.list_instances()
 
-    def estimate_instance_overhead(self, instance_info):
-        # NOTE(claudiub): When an instance starts, Hyper-V creates a VM memory
-        # file on the local disk. The file size is the same as the VM's amount
-        # of memory. Since disk_gb must be an integer, and memory is MB, round
-        # up from X512 MB.
-        # This applies only when the host is configured to save the instances
-        # when turning off.
-        disk_overhead = ((instance_info['memory_mb'] + 512) // units.Ki
-                          if not CONF.hyperv.instance_automatic_shutdown
-                          else 0)
-        return {'memory_mb': 0,
-                'disk_gb': disk_overhead}
-
     def get_info(self, instance):
         """Get information about the VM."""
         LOG.debug("get_info called for instance", instance=instance)

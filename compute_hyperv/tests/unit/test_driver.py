@@ -151,11 +151,6 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver.list_instances()
         self.driver._vmops.list_instances.assert_called_once_with()
 
-    def test_estimate_instance_overhead(self):
-        self.driver.estimate_instance_overhead(mock.sentinel.instance)
-        self.driver._vmops.estimate_instance_overhead.assert_called_once_with(
-            mock.sentinel.instance)
-
     @mock.patch.object(driver.HyperVDriver, '_recreate_image_meta')
     def test_spawn(self, mock_recreate_img_meta):
         self.driver.spawn(
@@ -486,8 +481,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
     def test_finish_revert_migration(self):
         self.driver.finish_revert_migration(
             mock.sentinel.context, mock.sentinel.instance,
-            mock.sentinel.network_info, mock.sentinel.block_device_info,
-            mock.sentinel.power_on)
+            mock.sentinel.network_info, mock.sentinel.migration,
+            mock.sentinel.block_device_info, mock.sentinel.power_on)
 
         finish_revert_migr = self.driver._migrationops.finish_revert_migration
         finish_revert_migr.assert_called_once_with(

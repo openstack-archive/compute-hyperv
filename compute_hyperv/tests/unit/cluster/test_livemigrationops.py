@@ -100,7 +100,6 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
 
         recover_method.assert_called_once_with(
             self._fake_context, mock_instance, dest,
-            mock.sentinel.block_migration,
             mock.sentinel.migrate_data)
 
     @mock.patch.object(base_livemigrationops.LiveMigrationOps,

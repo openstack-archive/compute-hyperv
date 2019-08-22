@@ -79,8 +79,7 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
 
                 LOG.debug("Calling live migration recover_method "
                           "for instance.", instance=instance_ref)
-                recover_method(context, instance_ref, dest, block_migration,
-                               migrate_data)
+                recover_method(context, instance_ref, dest, migrate_data)
 
         LOG.debug("Calling live migration post_method for instance.",
                   instance=instance_ref)

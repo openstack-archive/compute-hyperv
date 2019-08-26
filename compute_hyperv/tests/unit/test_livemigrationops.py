@@ -73,25 +73,21 @@ class LiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         else:
             migrate_data = None
 
+        self._livemigrops.live_migration(context=self.context,
+                                         instance_ref=mock_instance,
+                                         dest=fake_dest,
+                                         post_method=mock_post,
+                                         recover_method=mock_recover,
+                                         block_migration=(
+                                             mock.sentinel.block_migr),
+                                         migrate_data=migrate_data)
+
         if side_effect is os_win_exc.HyperVException:
-            self.assertRaises(os_win_exc.HyperVException,
-                              self._livemigrops.live_migration,
-                              self.context, mock_instance, fake_dest,
-                              mock_post, mock_recover,
-                              mock.sentinel.block_migr,
-                              migrate_data)
             mock_recover.assert_called_once_with(self.context, mock_instance,
                                                  fake_dest,
                                                  migrate_data)
+            mock_post.assert_not_called()
         else:
-            self._livemigrops.live_migration(context=self.context,
-                                             instance_ref=mock_instance,
-                                             dest=fake_dest,
-                                             post_method=mock_post,
-                                             recover_method=mock_recover,
-                                             block_migration=(
-                                                mock.sentinel.block_migr),
-                                             migrate_data=migrate_data)
             post_call_args = mock_post.call_args_list
             self.assertEqual(1, len(post_call_args))
 

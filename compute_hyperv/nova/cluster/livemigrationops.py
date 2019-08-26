@@ -20,7 +20,6 @@ from nova import exception
 from os_win import constants as os_win_const
 from os_win import utilsfactory
 from oslo_log import log as logging
-from oslo_utils import excutils
 
 from compute_hyperv.i18n import _
 import compute_hyperv.nova.conf
@@ -72,14 +71,17 @@ class ClusterLiveMigrationOps(livemigrationops.LiveMigrationOps):
                 dest,
                 CONF.hyperv.instance_live_migration_timeout)
         except Exception:
-            with excutils.save_and_reraise_exception():
-                self._check_failed_instance_migration(
-                    instance_ref,
-                    expected_state=os_win_const.CLUSTER_GROUP_ONLINE)
+            LOG.exception("Live migration failed. Attempting rollback.",
+                          instance=instance_ref)
+            # The recover method will update the migration state.
+            # We won't error out if we manage to recover the instance,
+            # which would otherwise end up in error state.
+            self._check_failed_instance_migration(
+                instance_ref,
+                expected_state=os_win_const.CLUSTER_GROUP_ONLINE)
 
-                LOG.debug("Calling live migration recover_method "
-                          "for instance.", instance=instance_ref)
-                recover_method(context, instance_ref, dest, migrate_data)
+            recover_method(context, instance_ref, dest, migrate_data)
+            return
 
         LOG.debug("Calling live migration post_method for instance.",
                   instance=instance_ref)

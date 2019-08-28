@@ -250,6 +250,9 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         c_handler = self.clusterops._serial_console_ops.start_console_handler
         c_handler.assert_called_once_with(mock.sentinel.instance_name)
 
+    @ddt.data({},
+              {'recreate_ports_on_failover': True})
+    @ddt.unpack
     @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')
     @mock.patch.object(clusterops.ClusterOps, '_failover_migrate_networks')
     @mock.patch.object(clusterops.ClusterOps, '_nova_failover_server')
@@ -257,10 +260,14 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
     def test_failover_same_node(self, mock_get_instance_by_name,
                                 mock_nova_failover_server,
                                 mock_failover_migrate_networks,
-                                mock_wait_pending_instance):
+                                mock_wait_pending_instance,
+                                recreate_ports_on_failover=False):
         # In some cases, the instances may bounce between hosts. We're testing
         # the case in which the instance is actually returning to the initial
         # host during the time in which we're processing events.
+        self.flags(recreate_ports_on_failover=recreate_ports_on_failover,
+                   group='hyperv')
+
         instance = mock_get_instance_by_name.return_value
         old_host = 'old_host'
         new_host = 'new_host'
@@ -275,7 +282,11 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         get_inst_nw_info.assert_called_once_with(self.clusterops._context,
                                                  instance)
         mock_nova_failover_server.assert_called_once_with(instance, old_host)
-        self.clusterops._vmops.unplug_vifs.assert_not_called()
+        if recreate_ports_on_failover:
+            self.clusterops._vmops.unplug_vifs.assert_called_once_with(
+                instance, get_inst_nw_info.return_value)
+        else:
+            self.clusterops._vmops.unplug_vifs.assert_not_called()
         self.clusterops._vmops.plug_vifs.assert_called_once_with(
             instance, get_inst_nw_info.return_value)
         self._placement.move_compute_node_allocations.assert_not_called()

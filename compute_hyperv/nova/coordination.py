@@ -20,6 +20,7 @@ import uuid
 
 import decorator
 from nova import exception
+from nova import utils
 from oslo_config import cfg
 from oslo_log import log
 from oslo_utils import timeutils
@@ -49,6 +50,7 @@ class Coordinator(object):
         self.started = False
         self.prefix = prefix
 
+    @utils.synchronized(name="coordinator_start")
     def start(self):
         if self.started:
             return

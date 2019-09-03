@@ -105,7 +105,10 @@ class ClusterOps(object):
         # filter out instances that are known to be on this host.
         nova_instances = [instance for instance in nova_instances if
                           self._this_node.upper() != instance.host.upper()]
+        instance_names = [instance.name for instance in nova_instances]
 
+        LOG.warning("Handling failovers that occurred while Nova was not "
+                    "running: %s", instance_names)
         for instance in nova_instances:
             utils.spawn_n(self._failover_migrate,
                           instance.name,
@@ -151,18 +154,17 @@ class ClusterOps(object):
         migrated_here = new_host.upper() == self._this_node.upper()
         migrated_from_here = old_host.upper() == self._this_node.upper()
 
+        if instance.task_state == task_states.MIGRATING:
+            LOG.debug('Instance %s is being migrated by Nova. This '
+                      'will not be treated as a failover.',
+                      instance_name)
+            return
+
         if not host_changed:
             LOG.warning("The source node is the same as the destination "
                         "node: %(host)s. The instance %(instance)s may have "
                         "bounced between hosts due to a failure.",
                         dict(host=old_host, instance=instance_name))
-
-        if instance.task_state == task_states.MIGRATING:
-            # In case of live migration triggered by the user, we get the
-            # event that the instance changed host but we do not want
-            # to treat it as a failover.
-            LOG.debug('Instance %s is live migrating.', instance_name)
-            return
 
         nw_info = self._network_api.get_instance_nw_info(self._context,
                                                          instance)

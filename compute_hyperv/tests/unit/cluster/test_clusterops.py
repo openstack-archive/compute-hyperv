@@ -178,7 +178,9 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
                                           'new_host')
 
         mock_LOG.debug.assert_called_once_with(
-            'Instance %s is live migrating.', mock.sentinel.instance_name)
+            'Instance %s is being migrated by Nova. This '
+            'will not be treated as a failover.',
+            mock.sentinel.instance_name)
 
     @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')
     @mock.patch.object(clusterops.ClusterOps, '_get_instance_by_name')

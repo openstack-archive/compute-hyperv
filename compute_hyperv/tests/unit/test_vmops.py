@@ -486,8 +486,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     mock_create_config_drive, mock_attach_config_drive,
                     mock_set_boot_order,
                     mock_power_on, mock_destroy, mock_plug_vifs,
-                    exists, configdrive_required, fail,
-                    fake_vm_gen=constants.VM_GEN_2):
+                    exists=False, configdrive_required=True, fail=None,
+                    fake_vm_gen=constants.VM_GEN_2,
+                    power_on=True):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         mock_image_meta = mock.MagicMock()
         root_device_info = mock.sentinel.ROOT_DEV_INFO
@@ -516,7 +517,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         else:
             self._vmops.spawn(self.context, mock_instance, mock_image_meta,
                               [mock.sentinel.FILE], mock.sentinel.PASSWORD,
-                              mock.sentinel.network_info, block_device_info)
+                              mock.sentinel.network_info, block_device_info,
+                              power_on=power_on)
             self._vmops._vmutils.vm_exists.assert_called_once_with(
                 mock_instance.name)
             self._vmops._pathutils.get_instance_dir.assert_called_once_with(
@@ -552,23 +554,28 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                     mock_instance, fake_config_drive_path, fake_vm_gen)
             mock_set_boot_order.assert_called_once_with(
                 mock_instance.name, fake_vm_gen, block_device_info)
-            mock_power_on.assert_called_once_with(
-                mock_instance,
-                network_info=mock.sentinel.network_info,
-                should_plug_vifs=False)
+            if power_on:
+                mock_power_on.assert_called_once_with(
+                    mock_instance,
+                    network_info=mock.sentinel.network_info,
+                    should_plug_vifs=False)
+            else:
+                mock_power_on.assert_not_called()
 
     def test_spawn(self):
-        self._test_spawn(exists=False, configdrive_required=True, fail=None)
+        self._test_spawn()
 
     def test_spawn_instance_exists(self):
-        self._test_spawn(exists=True, configdrive_required=True, fail=None)
+        self._test_spawn(exists=True)
 
     def test_spawn_create_instance_exception(self):
-        self._test_spawn(exists=False, configdrive_required=True,
-                         fail=os_win_exc.HyperVException)
+        self._test_spawn(fail=os_win_exc.HyperVException)
 
-    def test_spawn_not_required(self):
-        self._test_spawn(exists=False, configdrive_required=False, fail=None)
+    def test_spawn_cfgdrive_not_required(self):
+        self._test_spawn(configdrive_required=False)
+
+    def test_spawn_without_powering_on(self):
+        self._test_spawn(power_on=False)
 
     def test_spawn_no_admin_permissions(self):
         self._vmops._vmutils.check_admin_permissions.side_effect = (

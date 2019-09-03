@@ -287,7 +287,8 @@ class VMOps(object):
 
     @check_admin_permissions
     def spawn(self, context, instance, image_meta, injected_files,
-              admin_password, network_info, block_device_info=None):
+              admin_password, network_info, block_device_info=None,
+              power_on=True):
         """Create a new VM and start it."""
         LOG.info("Spawning new instance", instance=instance)
 
@@ -331,9 +332,10 @@ class VMOps(object):
             # vifs are already plugged in at this point. We waited on the vif
             # plug event previously when we created the instance. Skip the
             # plug vifs during power on in this case
-            self.power_on(instance,
-                          network_info=network_info,
-                          should_plug_vifs=False)
+            if power_on:
+                self.power_on(instance,
+                              network_info=network_info,
+                              should_plug_vifs=False)
         except Exception:
             with excutils.save_and_reraise_exception():
                 self.destroy(instance, network_info, block_device_info)

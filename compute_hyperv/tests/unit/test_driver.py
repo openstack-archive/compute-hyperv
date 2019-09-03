@@ -158,7 +158,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.image_meta, mock.sentinel.injected_files,
             mock.sentinel.admin_password, mock.sentinel.allocations,
             mock.sentinel.network_info,
-            mock.sentinel.block_device_info)
+            mock.sentinel.block_device_info,
+            mock.sentinel.power_on)
 
         mock_recreate_img_meta.assert_called_once_with(
             mock.sentinel.context, mock.sentinel.instance,
@@ -167,7 +168,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.context, mock.sentinel.instance,
             mock_recreate_img_meta.return_value, mock.sentinel.injected_files,
             mock.sentinel.admin_password, mock.sentinel.network_info,
-            mock.sentinel.block_device_info)
+            mock.sentinel.block_device_info,
+            mock.sentinel.power_on)
 
     def test_reboot(self):
         self.driver.reboot(

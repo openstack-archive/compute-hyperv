@@ -41,10 +41,10 @@ class HyperVClusterDriver(driver.HyperVDriver):
 
     def spawn(self, context, instance, image_meta, injected_files,
               admin_password, allocations, network_info=None,
-              block_device_info=None):
+              block_device_info=None, power_on=True):
         super(HyperVClusterDriver, self).spawn(
             context, instance, image_meta, injected_files, admin_password,
-            allocations, network_info, block_device_info)
+            allocations, network_info, block_device_info, power_on)
         self._clops.add_to_cluster(instance)
 
     def destroy(self, context, instance, network_info, block_device_info=None,

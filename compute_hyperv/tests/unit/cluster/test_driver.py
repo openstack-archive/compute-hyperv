@@ -74,13 +74,15 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
                           mock.sentinel.admin_pass,
                           mock.sentinel.allocations,
                           mock.sentinel.network_info,
-                          mock.sentinel.block_dev_info)
+                          mock.sentinel.block_dev_info,
+                          mock.sentinel.power_on)
 
         mock_superclass_spawn.assert_called_once_with(
             self.context, mock.sentinel.fake_instance,
             mock.sentinel.image_meta, mock.sentinel.injected_files,
             mock.sentinel.admin_pass, mock.sentinel.allocations,
-            mock.sentinel.network_info, mock.sentinel.block_dev_info)
+            mock.sentinel.network_info, mock.sentinel.block_dev_info,
+            mock.sentinel.power_on)
         self.driver._clops.add_to_cluster.assert_called_once_with(
             mock.sentinel.fake_instance)
 

@@ -183,10 +183,11 @@ class HyperVDriver(driver.ComputeDriver):
 
     def spawn(self, context, instance, image_meta, injected_files,
               admin_password, allocations, network_info=None,
-              block_device_info=None):
+              block_device_info=None, power_on=True):
         image_meta = self._recreate_image_meta(context, instance, image_meta)
         self._vmops.spawn(context, instance, image_meta, injected_files,
-                          admin_password, network_info, block_device_info)
+                          admin_password, network_info, block_device_info,
+                          power_on)
 
     def reboot(self, context, instance, network_info, reboot_type,
                block_device_info=None, bad_volumes_callback=None):

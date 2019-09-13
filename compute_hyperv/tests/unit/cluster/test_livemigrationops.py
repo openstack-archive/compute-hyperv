@@ -86,9 +86,7 @@ class ClusterLiveMigrationOpsTestCase(test_base.HyperVBaseTestCase):
         clustutils = self.livemigrops._clustutils
         clustutils.live_migrate_vm.side_effect = nova_test.TestingException
 
-        self.assertRaises(
-            nova_test.TestingException,
-            self.livemigrops.live_migration,
+        self.livemigrops.live_migration(
             self._fake_context, mock_instance, dest, mock.sentinel.post_method,
             recover_method,
             block_migration=mock.sentinel.block_migration,

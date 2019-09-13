@@ -21,7 +21,6 @@ from nova import exception
 from nova.objects import migrate_data as migrate_data_obj
 from os_win import utilsfactory
 from oslo_log import log as logging
-from oslo_utils import excutils
 
 from compute_hyperv.i18n import _
 from compute_hyperv.nova import block_device_manager
@@ -77,10 +76,13 @@ class LiveMigrationOps(object):
                 dest,
                 migrate_disks=not shared_storage)
         except Exception:
-            with excutils.save_and_reraise_exception():
-                LOG.debug("Calling live migration recover_method "
-                          "for instance: %s", instance_name)
-                recover_method(context, instance_ref, dest, migrate_data)
+            # The recover method will update the migration state.
+            # We won't error out if we manage to recover the instance,
+            # which would otherwise end up in error state.
+            LOG.exception("Live migration failed. Attempting rollback.",
+                          instance=instance_ref)
+            recover_method(context, instance_ref, dest, migrate_data)
+            return
 
         LOG.debug("Calling live migration post_method for instance: %s",
                   instance_name)

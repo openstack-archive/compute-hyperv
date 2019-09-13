@@ -116,6 +116,11 @@ class HyperVDriver(driver.ComputeDriver):
         # further driver initialisation.
         self._check_minimum_windows_version()
 
+        # We'll initialize coordination as early as possible, avoiding
+        # the risk of using locks before the mechanism is enabled.
+        if self.use_coordination:
+            coordination.COORDINATOR.start()
+
         super(HyperVDriver, self).__init__(virtapi)
 
         self._hostops = hostops.HostOps()
@@ -154,9 +159,6 @@ class HyperVDriver(driver.ComputeDriver):
         return False
 
     def init_host(self, host):
-        if self.use_coordination:
-            coordination.COORDINATOR.start()
-
         self._serialconsoleops.start_console_handlers()
 
         self._set_event_handler_callbacks()

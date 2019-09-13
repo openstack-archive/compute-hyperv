@@ -146,7 +146,7 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
             self.clusterops._vmops.list_instance_uuids.return_value)
         mock_spawn.assert_called_once_with(
             mock_failover_migrate,
-            mock_instance1.name, mock_instance1.host,
+            mock_instance1.name,
             self.clusterops._this_node)
 
     @mock.patch.object(clusterops.ClusterOps, '_wait_for_pending_instance')

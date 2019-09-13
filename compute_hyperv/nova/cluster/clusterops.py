@@ -111,7 +111,7 @@ class ClusterOps(object):
                     "running: %s", instance_names)
         for instance in nova_instances:
             utils.spawn_n(self._failover_migrate,
-                          instance.name, instance.host,
+                          instance.name,
                           self._this_node)
 
     @coordination.synchronized('failover-{instance_name}')

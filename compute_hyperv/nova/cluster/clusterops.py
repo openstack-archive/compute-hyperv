@@ -191,7 +191,10 @@ class ClusterOps(object):
                 LOG.exception("Could not update failed over instance '%s' "
                               "allocations.", instance)
 
+        if CONF.hyperv.recreate_ports_on_failover:
+            self._vmops.unplug_vifs(instance, nw_info)
         self._vmops.plug_vifs(instance, nw_info)
+
         self._serial_console_ops.start_console_handler(instance_name)
 
     def _wait_for_pending_instance(self, instance_name):

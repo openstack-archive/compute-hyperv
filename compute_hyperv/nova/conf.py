@@ -50,6 +50,11 @@ hyperv_opts = [
                min=1,
                help="The number of hours in which the max_failover_count "
                     "number of failovers can occur."),
+    cfg.BoolOpt('recreate_ports_on_failover',
+                default=True,
+                help="When enabled, the ports will be recreated for failed "
+                     "over instances. This ensures that we're not left with "
+                     "a stale port."),
     cfg.BoolOpt('auto_failback',
                 default=True,
                 help="Allow the VM the failback to its original host once it "

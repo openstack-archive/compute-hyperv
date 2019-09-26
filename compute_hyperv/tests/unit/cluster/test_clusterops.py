@@ -330,7 +330,8 @@ class ClusterOpsTestCase(test_base.HyperVBaseTestCase):
         mock_network_api.migrate_instance_start.assert_called_once_with(
             self.clusterops._context, mock_instance, fake_migration)
         mock_network_api.migrate_instance_finish.assert_called_once_with(
-            self.clusterops._context, mock_instance, fake_migration)
+            self.clusterops._context, mock_instance, fake_migration,
+            provider_mappings=None)
 
     @mock.patch.object(objects.Instance, 'get_by_uuid')
     def test_get_instance_by_name(self, mock_get_by_uuid):

@@ -224,8 +224,10 @@ class ClusterOps(object):
             self._context, instance, migration)
         self._network_api.setup_networks_on_host(
             self._context, instance, self._this_node)
+        # TODO(lpetrut): provide the actual port provider mappings.
         self._network_api.migrate_instance_finish(
-            self._context, instance, migration)
+            self._context, instance, migration,
+            provider_mappings=None)
         self._network_api.setup_networks_on_host(
             self._context, instance, self._this_node)
         self._network_api.setup_networks_on_host(

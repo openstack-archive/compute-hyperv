@@ -383,11 +383,10 @@ class VMOps(object):
         # already up will not undergo that transition, and for
         # anything that might be stale (cache-wise) assume it's
         # already up so we don't block on it.
-        if utils.is_neutron() and CONF.vif_plugging_timeout:
+        if CONF.vif_plugging_timeout:
             return [('network-vif-plugged', vif['id'])
                     for vif in network_info if vif.get('active') is False]
-        else:
-            return []
+        return []
 
     def create_instance(self, context, instance, network_info,
                         block_device_info, vm_gen, image_meta):

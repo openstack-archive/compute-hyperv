@@ -18,7 +18,6 @@ import abc
 
 from nova import exception
 from nova.i18n import _
-import nova.network
 from nova.network import model
 from nova.network import os_vif_util
 import os_vif
@@ -74,10 +73,7 @@ class HyperVVIFDriver(object):
         self._metricsutils = utilsfactory.get_metricsutils()
         self._netutils = utilsfactory.get_networkutils()
         self._vmutils = utilsfactory.get_vmutils()
-        if nova.network.is_neutron():
-            self._vif_plugin = HyperVNeutronVIFPlugin()
-        else:
-            self._vif_plugin = HyperVNovaNetworkVIFPlugin()
+        self._vif_plugin = HyperVNeutronVIFPlugin()
 
     def plug(self, instance, vif):
         vif_type = vif['type']

@@ -625,8 +625,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                           self._vmops._neutron_failed_callback,
                           mock.sentinel.event_name, mock.sentinel.instance)
 
-    @mock.patch.object(vmops.utils, 'is_neutron')
-    def test_get_neutron_events(self, mock_is_neutron):
+    def test_get_neutron_events(self):
         network_info = [{'id': mock.sentinel.vif_id1, 'active': True},
                         {'id': mock.sentinel.vif_id2, 'active': False},
                         {'id': mock.sentinel.vif_id3}]
@@ -634,16 +633,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         events = self._vmops._get_neutron_events(network_info)
         self.assertEqual([('network-vif-plugged', mock.sentinel.vif_id2)],
                          events)
-        mock_is_neutron.assert_called_once_with()
 
-    @mock.patch.object(vmops.utils, 'is_neutron')
-    def test_get_neutron_events_no_timeout(self, mock_is_neutron):
+    def test_get_neutron_events_no_timeout(self):
         self.flags(vif_plugging_timeout=0)
         network_info = [{'id': mock.sentinel.vif_id1, 'active': True}]
 
         events = self._vmops._get_neutron_events(network_info)
         self.assertEqual([], events)
-        mock_is_neutron.assert_called_once_with()
 
     @mock.patch.object(vmops.VMOps, 'configure_instance_metrics')
     @mock.patch.object(vmops.VMOps, 'update_vm_resources')

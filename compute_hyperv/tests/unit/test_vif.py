@@ -54,21 +54,6 @@ class HyperVVIFDriverTestCase(test_base.HyperVBaseTestCase):
         self._vmutils = self.vif_driver._vmutils
         self._metricsutils = self.vif_driver._metricsutils
 
-    @mock.patch.object(vif.nova.network, 'is_neutron')
-    def test_init_neutron(self, mock_is_neutron):
-        mock_is_neutron.return_value = True
-
-        driver = vif.HyperVVIFDriver()
-        self.assertIsInstance(driver._vif_plugin, vif.HyperVNeutronVIFPlugin)
-
-    @mock.patch.object(vif.nova.network, 'is_neutron')
-    def test_init_nova(self, mock_is_neutron):
-        mock_is_neutron.return_value = False
-
-        driver = vif.HyperVVIFDriver()
-        self.assertIsInstance(driver._vif_plugin,
-                              vif.HyperVNovaNetworkVIFPlugin)
-
     def test_plug(self):
         vif = {'type': model.VIF_TYPE_HYPERV}
         self.vif_driver.plug(mock.sentinel.instance, vif)

@@ -21,8 +21,6 @@ inline callbacks.
 
 """
 
-import os
-
 import eventlet
 eventlet.monkey_patch(os=False)
 
@@ -89,17 +87,15 @@ class NoDBTestCase(base.BaseTestCase):
 
     def setUp(self):
         """Run before each test method to initialize test environment."""
-        super(NoDBTestCase, self).setUp()
-        self.useFixture(mock_fixture.MockAutospecFixture())
-        self.useFixture(nova_fixtures.Timeout(
-            os.environ.get('OS_TEST_TIMEOUT', 0),
-            self.TIMEOUT_SCALING_FACTOR))
+        # Ensure BaseTestCase's ConfigureLogging fixture is disabled since
+        # we're using the one from Nova (StandardLogging).
+        with fixtures.EnvironmentVariable('OS_LOG_CAPTURE', '0'):
+            super(NoDBTestCase, self).setUp()
 
-        self.useFixture(fixtures.NestedTempfile())
-        self.useFixture(fixtures.TempHomeDir())
+        self.useFixture(mock_fixture.MockAutospecFixture())
+
         self.useFixture(log_fixture.get_logging_handle_error_fixture())
 
-        self.useFixture(nova_fixtures.OutputStreamCapture())
         self.useFixture(nova_fixtures.StandardLogging())
         self.useFixture(conf_fixture.ConfFixture(CONF))
 

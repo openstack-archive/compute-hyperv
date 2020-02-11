@@ -32,7 +32,7 @@ class HyperVBaseTestCase(test.NoDBTestCase):
         utilsfactory_patcher = mock.patch.object(
             utilsfactory, '_get_class', HyperVBaseTestCase._mock_get_class)
         utilsfactory_patcher.start()
-        self.addCleanup(utilsfactory_patcher.stop)
+        self.addCleanup(mock.patch.stopall)
 
         self._patch_autospec_classes()
 

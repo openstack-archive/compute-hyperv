@@ -407,6 +407,11 @@ class HyperVDriver(driver.ComputeDriver):
     def manage_image_cache(self, context, all_instances):
         self._imagecache.update(context, all_instances)
 
+    def cache_image(self, context, image_id):
+        image_path, fetched = self._imagecache.cache_image(
+            context, image_id)
+        return fetched
+
     def attach_interface(self, context, instance, image_meta, vif):
         self._vmops.attach_interface(context, instance, vif)
 

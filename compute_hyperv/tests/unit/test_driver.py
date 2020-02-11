@@ -545,6 +545,17 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver._imagecache.update.assert_called_once_with(
             mock.sentinel.context, mock.sentinel.all_instances)
 
+    def test_cache_image(self):
+        self.driver._imagecache.cache_image.return_value = (
+            mock.sentinel.image_path, mock.sentinel.fetched)
+
+        fetched = self.driver.cache_image(
+            mock.sentinel.context, mock.sentinel.image_id)
+
+        self.assertEqual(mock.sentinel.fetched, fetched)
+        self.driver._imagecache.cache_image.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.image_id)
+
     def test_attach_interface(self):
         mock_instance = fake_instance.fake_instance_obj(self.context)
         self.driver.attach_interface(

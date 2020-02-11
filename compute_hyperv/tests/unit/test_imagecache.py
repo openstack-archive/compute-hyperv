@@ -104,6 +104,13 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         self.imagecache._vhdutils.get_vhd_format.return_value = (
             constants.DISK_FORMAT_VHD)
 
+        mock.patch.object(imagecache.images, 'fetch').start()
+        mock.patch.object(imagecache.images, 'get_info').start()
+
+        self._mock_fetch = imagecache.images.fetch
+        self._mock_img_info = imagecache.images.get_info
+        self._mock_img_info.return_value = dict(disk_format=image_format)
+
         CONF.set_override('use_cow_images', use_cow)
 
         image_file_name = rescue_image_id or self.FAKE_IMAGE_REF
@@ -113,31 +120,51 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
                                        constants.DISK_FORMAT_VHD.lower())
         return (expected_path, expected_vhd_path)
 
-    @mock.patch.object(imagecache.images, 'fetch')
-    def test_get_cached_image_with_fetch(self, mock_fetch):
+    @ddt.data({},
+              {'exists': False, 'provide_img_type': False})
+    @ddt.unpack
+    def test_cache_image(self, exists=True, provide_img_type=True):
         (expected_path,
-         expected_image_path) = self._prepare_get_cached_image(False, False)
+         expected_image_path) = self._prepare_get_cached_image(
+            path_exists=exists)
+        img_type = constants.DISK_FORMAT_VHD if provide_img_type else None
+
+        ret_path, fetched = self.imagecache.cache_image(
+            self.context, self.FAKE_IMAGE_REF, img_type)
+
+        self.assertEqual(expected_image_path, ret_path)
+        self.assertEqual(not exists, fetched)
+
+        if not provide_img_type:
+            self._mock_img_info.assert_called_once_with(
+                self.context, self.FAKE_IMAGE_REF)
+
+    def test_get_cached_image_with_fetch(self):
+        (expected_path,
+         expected_image_path) = self._prepare_get_cached_image(
+            path_exists=False,
+            use_cow=False)
 
         result = self.imagecache.get_cached_image(self.context, self.instance)
         self.assertEqual(expected_image_path, result)
 
-        mock_fetch.assert_called_once_with(self.context, self.FAKE_IMAGE_REF,
-                                           expected_path,
-                                           self.instance.trusted_certs)
+        self._mock_fetch.assert_called_once_with(
+            self.context, self.FAKE_IMAGE_REF,
+            expected_path,
+            self.instance.trusted_certs)
         self.imagecache._vhdutils.get_vhd_format.assert_called_once_with(
             expected_path)
         self.imagecache._pathutils.rename.assert_called_once_with(
             expected_path, expected_image_path)
 
-    @mock.patch.object(imagecache.images, 'fetch')
-    def test_get_cached_image_with_fetch_exception(self, mock_fetch):
+    def test_get_cached_image_with_fetch_exception(self):
         (expected_path,
          expected_image_path) = self._prepare_get_cached_image(False, False)
 
         # path doesn't exist until fetched.
         self.imagecache._pathutils.exists.side_effect = [False, False, False,
             True]
-        mock_fetch.side_effect = exception.InvalidImageRef(
+        self._mock_fetch.side_effect = exception.InvalidImageRef(
             image_href=self.FAKE_IMAGE_REF)
 
         self.assertRaises(exception.InvalidImageRef,
@@ -164,8 +191,7 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
         mock_update_img_timestamp.assert_called_once_with(
             self.instance.image_ref)
 
-    @mock.patch.object(imagecache.images, 'fetch')
-    def test_cache_rescue_image_bigger_than_flavor(self, mock_fetch):
+    def test_cache_rescue_image_bigger_than_flavor(self):
         fake_rescue_image_id = 'fake_rescue_image_id'
 
         self.imagecache._vhdutils.get_vhd_info.return_value = {
@@ -179,10 +205,9 @@ class ImageCacheTestCase(test_base.HyperVBaseTestCase):
                           self.context, self.instance,
                           fake_rescue_image_id)
 
-        mock_fetch.assert_called_once_with(self.context,
-                                           fake_rescue_image_id,
-                                           expected_path,
-                                           self.instance.trusted_certs)
+        self._mock_fetch.assert_called_once_with(
+            self.context, fake_rescue_image_id, expected_path,
+            self.instance.trusted_certs)
         self.imagecache._vhdutils.get_vhd_info.assert_called_once_with(
             expected_vhd_path)
 

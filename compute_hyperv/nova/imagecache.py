@@ -102,42 +102,9 @@ class ImageCache(imagecache.ImageCacheManager):
     def get_cached_image(self, context, instance, rescue_image_id=None):
         image_id = rescue_image_id or instance.image_ref
         image_type = instance.system_metadata['image_disk_format']
-
-        base_image_dir = self._pathutils.get_base_vhd_dir()
-        base_image_path = os.path.join(base_image_dir, image_id)
-
-        lock_name = "%s-cache.lock" % image_id
-
-        @utils.synchronized(name=lock_name, external=True,
-                            lock_path=base_image_dir)
-        def fetch_image_if_not_existing():
-            image_path = None
-            for format_ext in ['vhd', 'vhdx', 'iso']:
-                test_path = base_image_path + '.' + format_ext
-                if self._pathutils.exists(test_path):
-                    image_path = test_path
-                    self._update_image_timestamp(image_id)
-                    break
-
-            if not image_path:
-                try:
-                    images.fetch(context, image_id, base_image_path,
-                                 instance.trusted_certs)
-                    if image_type == 'iso':
-                        format_ext = 'iso'
-                    else:
-                        format_ext = self._vhdutils.get_vhd_format(
-                            base_image_path)
-                    image_path = base_image_path + '.' + format_ext.lower()
-                    self._pathutils.rename(base_image_path, image_path)
-                except Exception:
-                    with excutils.save_and_reraise_exception():
-                        if self._pathutils.exists(base_image_path):
-                            self._pathutils.remove(base_image_path)
-
-            return image_path
-
-        image_path = fetch_image_if_not_existing()
+        trusted_certs = instance.trusted_certs
+        image_path, already_exists = self.cache_image(
+            context, image_id, image_type, trusted_certs)
 
         # Note: rescue images are not resized.
         is_vhd = image_path.split('.')[-1].lower() == 'vhd'
@@ -153,6 +120,50 @@ class ImageCache(imagecache.ImageCacheManager):
             self._verify_rescue_image(instance, rescue_image_id, image_path)
 
         return image_path
+
+    def cache_image(self, context, image_id,
+                    image_type=None, trusted_certs=None):
+        if not image_type:
+            image_info = images.get_info(context, image_id)
+            image_type = image_info['disk_format']
+
+        base_image_dir = self._pathutils.get_base_vhd_dir()
+        base_image_path = os.path.join(base_image_dir, image_id)
+
+        lock_name = "%s-cache.lock" % image_id
+
+        @utils.synchronized(name=lock_name, external=True,
+                            lock_path=base_image_dir)
+        def fetch_image_if_not_existing():
+            fetched = False
+            image_path = None
+            for format_ext in ['vhd', 'vhdx', 'iso']:
+                test_path = base_image_path + '.' + format_ext
+                if self._pathutils.exists(test_path):
+                    image_path = test_path
+                    self._update_image_timestamp(image_id)
+                    break
+
+            if not image_path:
+                try:
+                    images.fetch(context, image_id, base_image_path,
+                                 trusted_certs)
+                    fetched = True
+                    if image_type == 'iso':
+                        format_ext = 'iso'
+                    else:
+                        format_ext = self._vhdutils.get_vhd_format(
+                            base_image_path)
+                    image_path = base_image_path + '.' + format_ext.lower()
+                    self._pathutils.rename(base_image_path, image_path)
+                except Exception:
+                    with excutils.save_and_reraise_exception():
+                        if self._pathutils.exists(base_image_path):
+                            self._pathutils.remove(base_image_path)
+
+            return image_path, fetched
+
+        return fetch_image_if_not_existing()
 
     def _verify_rescue_image(self, instance, rescue_image_id,
                              rescue_image_path):

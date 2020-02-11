@@ -19,6 +19,7 @@ Management class for VM snapshot operations.
 import os
 
 from nova.compute import task_states
+from nova.compute import utils as compute_utils
 from nova import exception
 from nova.image import glance
 from nova import utils
@@ -46,8 +47,10 @@ class SnapshotOps(object):
         image_metadata = {"disk_format": image_format,
                           "container_format": "bare"}
         with self._pathutils.open(image_vhd_path, 'rb') as f:
-            glance_image_service.update(context, image_id, image_metadata, f,
-                                        purge_props=False)
+            with compute_utils.disk_ops_semaphore:
+                glance_image_service.update(context, image_id,
+                                            image_metadata, f,
+                                            purge_props=False)
 
     def snapshot(self, context, instance, image_id, update_task_state):
         # This operation is not fully preemptive at the moment. We're locking

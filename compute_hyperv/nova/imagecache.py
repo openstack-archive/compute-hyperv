@@ -18,6 +18,7 @@ Image caching and management.
 import os
 import re
 
+from nova.compute import utils as compute_utils
 from nova import exception
 from nova import utils
 from nova.virt import imagecache
@@ -146,9 +147,11 @@ class ImageCache(imagecache.ImageCacheManager):
 
             if not image_path:
                 try:
-                    images.fetch(context, image_id, base_image_path,
-                                 trusted_certs)
-                    fetched = True
+                    with compute_utils.disk_ops_semaphore:
+                        images.fetch(context, image_id, base_image_path,
+                                     trusted_certs)
+                        fetched = True
+
                     if image_type == 'iso':
                         format_ext = 'iso'
                     else:

@@ -22,7 +22,7 @@ from nova.compute import power_state
 from nova.compute import task_states
 from nova.compute import vm_states
 from nova import context
-from nova import network
+from nova.network import neutron
 from nova import objects
 from nova import utils
 from nova.virt import block_device
@@ -54,7 +54,7 @@ class ClusterOps(object):
         self._this_node = hostops.HostOps.get_hostname()
 
         self._context = context.get_admin_context()
-        self._network_api = network.API()
+        self._network_api = neutron.API()
         self._vmops = vmops.VMOps()
         self._serial_console_ops = serialconsoleops.SerialConsoleOps()
         self._placement = placement_utils.PlacementUtils()

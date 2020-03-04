@@ -23,7 +23,7 @@ import sys
 
 from nova import context as nova_context
 from nova import exception
-from nova import image
+from nova.image import glance
 from nova.virt import driver
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
@@ -136,7 +136,7 @@ class HyperVDriver(driver.ComputeDriver):
         self._rdpconsoleops = rdpconsoleops.RDPConsoleOps()
         self._serialconsoleops = serialconsoleops.SerialConsoleOps()
         self._imagecache = imagecache.ImageCache()
-        self._image_api = image.API()
+        self._image_api = glance.API()
         self._pathutils = pathutils.PathUtils()
         self._event_handler = eventhandler.InstanceEventHandler()
 

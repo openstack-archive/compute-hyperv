@@ -99,6 +99,7 @@ following protocols:
 * iSCSI
 * Fibre Channel
 * SMB - the volumes are stored as virtual disk images (e.g. VHD / VHDX)
+* RBD - starting with Ceph 16 (Pacific)
 
 .. note::
 

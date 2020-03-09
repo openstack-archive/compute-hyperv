@@ -84,7 +84,8 @@ class VolumeOps(object):
         self.volume_drivers = {
             constants.STORAGE_PROTOCOL_SMBFS: SMBFSVolumeDriver(),
             constants.STORAGE_PROTOCOL_ISCSI: ISCSIVolumeDriver(),
-            constants.STORAGE_PROTOCOL_FC: FCVolumeDriver()}
+            constants.STORAGE_PROTOCOL_FC: FCVolumeDriver(),
+            constants.STORAGE_PROTOCOL_RBD: RBDVolumeDriver()}
 
     @property
     def _vmops(self):
@@ -771,3 +772,9 @@ class SMBFSVolumeDriver(BaseVolumeDriver):
 class FCVolumeDriver(BaseVolumeDriver):
     _is_block_dev = True
     _protocol = constants.STORAGE_PROTOCOL_FC
+
+
+class RBDVolumeDriver(BaseVolumeDriver):
+    _is_block_dev = True
+    _protocol = constants.STORAGE_PROTOCOL_RBD
+    _extra_connector_args = dict(do_local_attach=True)

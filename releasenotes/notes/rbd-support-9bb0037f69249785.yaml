@@ -1,0 +1,5 @@
+features:
+  - |
+    The standard Hyper-V Nova driver can now attach RBD volumes. Note that the
+    cluster driver doesn't support RBD volumes yet. The minimum required
+    Ceph version is Ceph 16 (Pacific).

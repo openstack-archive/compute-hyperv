@@ -383,7 +383,7 @@ class HyperVDriver(driver.ComputeDriver):
 
     def finish_migration(self, context, migration, instance, disk_info,
                          network_info, image_meta, resize_instance,
-                         block_device_info=None, power_on=True):
+                         allocations, block_device_info=None, power_on=True):
         image_meta = self._recreate_image_meta(context, instance, image_meta)
         self._migrationops.finish_migration(context, migration, instance,
                                             disk_info, network_info,

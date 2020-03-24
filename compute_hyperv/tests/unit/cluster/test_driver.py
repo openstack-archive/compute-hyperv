@@ -129,13 +129,15 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
                                      mock.sentinel.network_info,
                                      mock.sentinel.image_meta,
                                      mock.sentinel.resize_instance,
+                                     mock.sentinel.allocations,
                                      mock.sentinel.block_dev_info,
                                      mock.sentinel.power_on)
         mock_superclass_finish_migration.assert_called_once_with(
             self.context, mock.sentinel.migration, mock.sentinel.fake_instance,
             mock.sentinel.disk_info, mock.sentinel.network_info,
             mock.sentinel.image_meta, mock.sentinel.resize_instance,
-            mock.sentinel.block_dev_info, mock.sentinel.power_on)
+            mock.sentinel.allocations, mock.sentinel.block_dev_info,
+            mock.sentinel.power_on)
         self.driver._clops.add_to_cluster.assert_called_once_with(
             mock.sentinel.fake_instance)
 

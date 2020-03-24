@@ -65,10 +65,11 @@ class HyperVClusterDriver(driver.HyperVDriver):
 
     def finish_migration(self, context, migration, instance, disk_info,
                          network_info, image_meta, resize_instance,
-                         block_device_info=None, power_on=True):
+                         allocations, block_device_info=None, power_on=True):
         super(HyperVClusterDriver, self).finish_migration(
             context, migration, instance, disk_info, network_info,
-            image_meta, resize_instance, block_device_info, power_on)
+            image_meta, resize_instance, allocations,
+            block_device_info, power_on)
         self._clops.add_to_cluster(instance)
 
     def finish_revert_migration(self, context, instance, network_info,

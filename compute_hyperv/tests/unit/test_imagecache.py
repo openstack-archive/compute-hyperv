@@ -14,10 +14,10 @@
 #    under the License.
 
 import os
+from unittest import mock
 
 import ddt
 import fixtures
-import mock
 from nova import exception
 from nova import objects
 from nova.tests.unit.objects import test_flavor

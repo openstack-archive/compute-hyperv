@@ -14,8 +14,8 @@
 #    under the License.
 
 import datetime
+from unittest import mock
 
-import mock
 from nova import context as nova_context
 from nova import exception
 from nova import objects

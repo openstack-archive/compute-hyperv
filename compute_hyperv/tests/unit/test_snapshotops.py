@@ -14,8 +14,8 @@
 #    under the License.
 
 import os
+from unittest import mock
 
-import mock
 from nova.compute import task_states
 from nova import exception
 from os_win import exceptions as os_win_exc

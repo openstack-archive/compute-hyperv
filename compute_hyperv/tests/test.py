@@ -23,10 +23,10 @@ inline callbacks.
 
 import eventlet
 eventlet.monkey_patch(os=False)
+import inspect
+from unittest import mock
 
 import fixtures
-import inspect
-import mock
 from nova.tests import fixtures as nova_fixtures
 from nova.tests.unit import conf_fixture
 from nova.tests.unit import policy_fixture
@@ -130,7 +130,6 @@ class NoDBTestCase(base.BaseTestCase):
     def patch(self, path, *args, **kwargs):
         patcher = mock.patch(path, *args, **kwargs)
         result = patcher.start()
-        self.addCleanup(patcher.stop)
         return result
 
     def assertPublicAPISignatures(self, baseinst, inst):

@@ -13,9 +13,9 @@
 #    under the License.
 
 import os
+from unittest import mock
 
 import ddt
-import mock
 from nova import block_device
 from nova import exception
 from nova.virt import driver

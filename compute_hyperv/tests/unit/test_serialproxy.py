@@ -13,9 +13,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import mock
-from nova import exception
 import socket
+from unittest import mock
+
+from nova import exception
 
 from compute_hyperv.nova import serialproxy
 from compute_hyperv.tests.unit import test_base

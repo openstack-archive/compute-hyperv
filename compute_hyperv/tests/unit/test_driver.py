@@ -13,14 +13,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-"""
-Unit tests for the Hyper-V Driver.
-"""
+"""Unit tests for the Hyper-V Driver."""
 
 import platform
 import sys
+from unittest import mock
 
-import mock
 from nova import exception
 from nova.image import glance
 from nova import safe_utils

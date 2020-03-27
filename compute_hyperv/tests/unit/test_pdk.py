@@ -13,12 +13,13 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import mock
+from unittest import mock
+
 from nova import exception
+from six.moves import builtins
 
 from compute_hyperv.nova import pdk
 from compute_hyperv.tests.unit import test_base
-from six.moves import builtins
 
 
 class PDKTestCase(test_base.HyperVBaseTestCase):

@@ -75,7 +75,8 @@ class HyperVClusterTestCase(test_base.HyperVBaseTestCase):
                           mock.sentinel.allocations,
                           mock.sentinel.network_info,
                           mock.sentinel.block_dev_info,
-                          mock.sentinel.power_on)
+                          mock.sentinel.power_on,
+                          mock.sentinel.accel_info)
 
         mock_superclass_spawn.assert_called_once_with(
             self.context, mock.sentinel.fake_instance,

@@ -175,7 +175,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver.reboot(
             mock.sentinel.context, mock.sentinel.instance,
             mock.sentinel.network_info, mock.sentinel.reboot_type,
-            mock.sentinel.block_device_info, mock.sentinel.bad_vol_callback)
+            mock.sentinel.block_device_info, mock.sentinel.bad_vol_callback,
+            mock.sentinel.accel_info)
 
         self.driver._vmops.reboot.assert_called_once_with(
             mock.sentinel.instance, mock.sentinel.network_info,
@@ -323,7 +324,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
     def test_power_on(self):
         self.driver.power_on(
             mock.sentinel.context, mock.sentinel.instance,
-            mock.sentinel.network_info, mock.sentinel.block_device_info)
+            mock.sentinel.network_info, mock.sentinel.block_device_info,
+            mock.sentinel.accel_info)
 
         self.driver._vmops.power_on.assert_called_once_with(
             mock.sentinel.instance, mock.sentinel.block_device_info,

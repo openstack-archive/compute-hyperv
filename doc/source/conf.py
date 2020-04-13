@@ -71,8 +71,6 @@ html_static_path = ['_static']
 # Output file base name for HTML help builder.
 htmlhelp_basename = '%sdoc' % project
 
-html_last_updated_fmt = '%Y-%m-%d %H:%M'
-
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto/manual]).

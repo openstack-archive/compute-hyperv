@@ -565,6 +565,29 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
         self.driver._vmops.attach_interface.assert_called_once_with(
             self.context, mock_instance, mock.sentinel.vif)
 
+    @mock.patch.object(driver.HyperVDriver, '_recreate_image_meta')
+    def test_rescue(self, mock_recreate_img_meta):
+        self.driver.rescue(
+            mock.sentinel.context, mock.sentinel.instance,
+            mock.sentinel.network_info, mock.sentinel.image_meta,
+            mock.sentinel.rescue_password, mock.sentinel.block_device_info)
+
+        mock_recreate_img_meta.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.instance,
+            mock.sentinel.image_meta)
+        self.driver._vmops.rescue_instance.assert_called_once_with(
+            mock.sentinel.context, mock.sentinel.instance,
+            mock.sentinel.network_info,
+            mock_recreate_img_meta.return_value,
+            mock.sentinel.rescue_password)
+
+    def test_unrescue(self):
+        self.driver.unrescue(
+            mock.sentinel.instance, mock.sentinel.network_info)
+
+        self.driver._vmops.unrescue_instance.assert_called_once_with(
+            mock.sentinel.instance)
+
     def _check_recreate_image_meta(self, mock_image_meta, image_ref='',
                                    instance_img_ref=''):
         system_meta = {'image_base_image_ref': instance_img_ref}

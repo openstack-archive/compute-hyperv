@@ -8,14 +8,13 @@
 
 - project:
     templates:
+      - build-release-notes-jobs-python3
       - check-requirements
       - openstack-lower-constraints-jobs
       - openstack-python3-ussuri-jobs
     check:
       jobs:
-        - build-openstack-releasenotes
         - compute-hyperv-openstack-tox-docs
     gate:
       jobs:
-        - build-openstack-releasenotes
         - compute-hyperv-openstack-tox-docs

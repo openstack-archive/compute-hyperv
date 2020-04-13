@@ -16,6 +16,7 @@
 import ast
 import re
 
+from hacking import core
 
 """
 Guidelines for writing new hacking checks
@@ -45,7 +46,7 @@ author_tag_re = (re.compile("^\s*#\s*@?(a|A)uthor:"),
                  re.compile("^\.\.\s+moduleauthor::"))
 asse_trueinst_re = re.compile(
                      r"(.)*assertTrue\(isinstance\((\w|\.|\'|\"|\[|\])+, "
-                     "(\w|\.|\'|\"|\[|\])+\)\)")
+                     r"(\w|\.|\'|\"|\[|\])+\)\)")
 asse_equal_type_re = re.compile(
                        r"(.)*assertEqual\(type\((\w|\.|\'|\"|\[|\])+\), "
                        "(\w|\.|\'|\"|\[|\])+\)")
@@ -145,6 +146,7 @@ class BaseASTChecker(ast.NodeVisitor):
         return False
 
 
+@core.flake8ext
 def import_no_db_in_virt(logical_line, filename):
     """Check for db calls from nova/virt
 
@@ -158,12 +160,14 @@ def import_no_db_in_virt(logical_line, filename):
             yield (0, "N307: nova.db import not allowed in nova/virt/*")
 
 
+@core.flake8ext
 def no_db_session_in_public_api(logical_line, filename):
     if "db/api.py" in filename:
         if session_check.match(logical_line):
             yield (0, "N309: public db api methods may not accept session")
 
 
+@core.flake8ext
 def use_timeutils_utcnow(logical_line, filename):
     # tools are OK to use the standard datetime module
     if "/tools/" in filename:
@@ -194,6 +198,7 @@ def _get_virt_name(regex, data):
     return driver
 
 
+@core.flake8ext
 def import_no_virt_driver_import_deps(physical_line, filename):
     """Check virt drivers' modules aren't imported by other drivers
 
@@ -213,6 +218,7 @@ def import_no_virt_driver_import_deps(physical_line, filename):
         return (0, "N311: importing code from other virt drivers forbidden")
 
 
+@core.flake8ext
 def import_no_virt_driver_config_deps(physical_line, filename):
     """Check virt drivers' config vars aren't used by other drivers
 
@@ -231,6 +237,7 @@ def import_no_virt_driver_config_deps(physical_line, filename):
         return (0, "N312: using config vars from other virt drivers forbidden")
 
 
+@core.flake8ext
 def capital_cfg_help(logical_line, tokens):
     msg = "N313: capitalize help string"
 
@@ -242,20 +249,7 @@ def capital_cfg_help(logical_line, tokens):
                     yield(0, msg)
 
 
-def no_vi_headers(physical_line, line_number, lines):
-    """Check for vi editor configuration in source files.
-
-    By default vi modelines can only appear in the first or
-    last 5 lines of a source file.
-
-    N314
-    """
-    # NOTE(gilliard): line_number is 1-indexed
-    if line_number <= 5 or line_number > len(lines) - 5:
-        if vi_header_re.match(physical_line):
-            return 0, "N314: Don't put vi configuration in source files"
-
-
+@core.flake8ext
 def assert_true_instance(logical_line):
     """Check for assertTrue(isinstance(a, b)) sentences
 
@@ -265,6 +259,7 @@ def assert_true_instance(logical_line):
         yield (0, "N316: assertTrue(isinstance(a, b)) sentences not allowed")
 
 
+@core.flake8ext
 def assert_equal_type(logical_line):
     """Check for assertEqual(type(A), B) sentences
 
@@ -274,6 +269,7 @@ def assert_equal_type(logical_line):
         yield (0, "N317: assertEqual(type(A), B) sentences not allowed")
 
 
+@core.flake8ext
 def assert_equal_none(logical_line):
     """Check for assertEqual(A, None) or assertEqual(None, A) sentences
 
@@ -286,6 +282,7 @@ def assert_equal_none(logical_line):
                "sentences not allowed")
 
 
+@core.flake8ext
 def no_translate_logs(logical_line):
     """Check for 'LOG.*(_('
 
@@ -302,6 +299,7 @@ def no_translate_logs(logical_line):
         yield(0, "C312: Log messages should not be translated!")
 
 
+@core.flake8ext
 def no_import_translation_in_tests(logical_line, filename):
     """Check for 'from nova.i18n import _'
     N337
@@ -312,6 +310,7 @@ def no_import_translation_in_tests(logical_line, filename):
             yield(0, "N337 Don't import translation in tests")
 
 
+@core.flake8ext
 def no_setting_conf_directly_in_tests(logical_line, filename):
     """Check for setting CONF.* attributes directly in tests
 
@@ -328,12 +327,14 @@ def no_setting_conf_directly_in_tests(logical_line, filename):
                       "forbidden. Use self.flags(option=value) instead")
 
 
+@core.flake8ext
 def no_mutable_default_args(logical_line):
     msg = "N322: Method's default argument shouldn't be mutable!"
     if mutable_default_args.match(logical_line):
         yield (0, msg)
 
 
+@core.flake8ext
 def check_explicit_underscore_import(logical_line, filename):
     """Check for explicit import of the _ function
 
@@ -354,6 +355,7 @@ def check_explicit_underscore_import(logical_line, filename):
         yield(0, "N323: Found use of _() without explicit import of _ !")
 
 
+@core.flake8ext
 def use_jsonutils(logical_line, filename):
     # the code below that path is not meant to be executed from neutron
     # tree where jsonutils module is present, so don't enforce its usage
@@ -375,6 +377,7 @@ def use_jsonutils(logical_line, filename):
                 yield (pos, msg % {'fun': f[:-1]})
 
 
+@core.flake8ext
 def check_api_version_decorator(logical_line, previous_logical, blank_before,
                                 filename):
     msg = ("N332: the api_version decorator must be the first decorator"
@@ -394,6 +397,8 @@ class CheckForStrUnicodeExc(BaseASTChecker):
     catch it.
     """
 
+    name = "check_for_str_unicode_exc"
+    version = "1.0"
     CHECK_DESC = ('N325 str() and unicode() cannot be used on an '
                   'exception.  Remove or use six.text_type()')
 
@@ -429,6 +434,8 @@ class CheckForTransAdd(BaseASTChecker):
     string to give the translators the most information.
     """
 
+    name = "check_for_trans_add"
+    version = "1.0"
     CHECK_DESC = ('N326 Translated messages cannot be concatenated.  '
                   'String should be included in translated message.')
 
@@ -443,6 +450,7 @@ class CheckForTransAdd(BaseASTChecker):
         super(CheckForTransAdd, self).generic_visit(node)
 
 
+@core.flake8ext
 def check_oslo_namespace_imports(logical_line, blank_before, filename):
     if re.match(oslo_namespace_imports, logical_line):
         msg = ("N333: '%s' must be used instead of '%s'.") % (
@@ -461,6 +469,7 @@ def check_oslo_namespace_imports(logical_line, blank_before, filename):
         yield(0, msg)
 
 
+@core.flake8ext
 def assert_true_or_false_with_in(logical_line):
     """Check for assertTrue/False(A in B), assertTrue/False(A not in B),
     assertTrue/False(A in B, message) or assertTrue/False(A not in B, message)
@@ -476,6 +485,7 @@ def assert_true_or_false_with_in(logical_line):
                   "contents.")
 
 
+@core.flake8ext
 def assert_raises_regexp(logical_line):
     """Check for usage of deprecated assertRaisesRegexp
 
@@ -487,6 +497,7 @@ def assert_raises_regexp(logical_line):
                   "of assertRaisesRegexp")
 
 
+@core.flake8ext
 def dict_constructor_with_list_copy(logical_line):
     msg = ("N336: Must use a dict comprehension instead of a dict constructor"
            " with a sequence of key-value pairs."
@@ -495,6 +506,7 @@ def dict_constructor_with_list_copy(logical_line):
         yield (0, msg)
 
 
+@core.flake8ext
 def assert_equal_in(logical_line):
     """Check for assertEqual(A in B, True), assertEqual(True, A in B),
     assertEqual(A in B, False) or assertEqual(False, A in B) sentences
@@ -507,30 +519,3 @@ def assert_equal_in(logical_line):
         yield (0, "N338: Use assertIn/NotIn(A, B) rather than "
                   "assertEqual(A in B, True/False) when checking collection "
                   "contents.")
-
-
-def factory(register):
-    register(import_no_db_in_virt)
-    register(no_db_session_in_public_api)
-    register(use_timeutils_utcnow)
-    register(import_no_virt_driver_import_deps)
-    register(import_no_virt_driver_config_deps)
-    register(capital_cfg_help)
-    register(no_vi_headers)
-    register(no_import_translation_in_tests)
-    register(assert_true_instance)
-    register(assert_equal_type)
-    register(assert_equal_none)
-    register(assert_raises_regexp)
-    register(no_translate_logs)
-    register(no_setting_conf_directly_in_tests)
-    register(no_mutable_default_args)
-    register(check_explicit_underscore_import)
-    register(use_jsonutils)
-    register(check_api_version_decorator)
-    register(CheckForStrUnicodeExc)
-    register(CheckForTransAdd)
-    register(check_oslo_namespace_imports)
-    register(assert_true_or_false_with_in)
-    register(dict_constructor_with_list_copy)
-    register(assert_equal_in)

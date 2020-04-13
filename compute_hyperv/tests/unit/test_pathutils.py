@@ -14,9 +14,9 @@
 
 import os
 import time
+from unittest import mock
 
 import ddt
-import mock
 from nova import exception
 from os_win import exceptions as os_win_exc
 from oslo_utils import fileutils

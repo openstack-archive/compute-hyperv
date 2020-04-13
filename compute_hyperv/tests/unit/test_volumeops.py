@@ -16,9 +16,9 @@
 
 import contextlib
 import os
+from unittest import mock
 
 import ddt
-import mock
 from nova.compute import task_states
 from nova import exception
 from nova import test

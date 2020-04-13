@@ -13,10 +13,10 @@
 #    under the License.
 
 import os
+from unittest import mock
 
 import ddt
 from eventlet import timeout as etimeout
-import mock
 from nova.compute import task_states
 from nova.compute import vm_states
 from nova import exception

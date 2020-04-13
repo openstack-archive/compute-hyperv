@@ -13,11 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-"""
-Unit tests for the Hyper-V RDPConsoleOps.
-"""
+"""Unit tests for the Hyper-V RDPConsoleOps."""
 
-import mock
+from unittest import mock
 
 from compute_hyperv.nova import rdpconsoleops
 from compute_hyperv.tests.unit import test_base

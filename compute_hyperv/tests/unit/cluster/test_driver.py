@@ -15,7 +15,7 @@
 
 """Unit tests for the Hyper-V Cluster Driver."""
 
-import mock
+from unittest import mock
 
 from nova import safe_utils
 from nova.virt import driver as nova_base_driver

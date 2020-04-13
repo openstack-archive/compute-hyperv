@@ -12,9 +12,9 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+from unittest import mock
 
 import ddt
-import mock
 from nova import exception
 from nova.objects import migrate_data as migrate_data_obj
 from os_win import exceptions as os_win_exc

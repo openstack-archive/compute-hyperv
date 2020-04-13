@@ -13,9 +13,9 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+from unittest import mock
 
 import ddt
-import mock
 from nova import exception
 from nova.network import model
 from os_win import constants as os_win_const

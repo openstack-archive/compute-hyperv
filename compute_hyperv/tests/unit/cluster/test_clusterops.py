@@ -13,8 +13,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+from unittest import mock
+
 import ddt
-import mock
 from nova.compute import power_state
 from nova.compute import task_states
 from nova.compute import vm_states

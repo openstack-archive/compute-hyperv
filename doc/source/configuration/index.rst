@@ -77,6 +77,15 @@ Alternatively, CSVs can be used:
     [DEFAULT]
     instances_path = C:\ClusterStorage\Volume1\OpenStack\Instances
 
+When the compute hosts are using different CSVs, Nova must be configured not
+to delete unused images since its image caching mechanism can't properly track
+the image file usage in this case.
+
+.. code-block:: ini
+
+    [image_cache]
+    remove_unused_base_images = False
+
 
 Block Storage (Cinder) configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

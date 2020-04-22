@@ -6,4 +6,5 @@ compute_hyperv Release Notes
    :maxdepth: 1
 
    unreleased
+   ussuri
    train

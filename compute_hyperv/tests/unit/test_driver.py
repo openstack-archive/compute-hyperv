@@ -493,8 +493,8 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
             mock.sentinel.context, mock.sentinel.migration,
             mock.sentinel.instance, mock.sentinel.disk_info,
             mock.sentinel.network_info, mock.sentinel.image_meta,
-            mock.sentinel.resize_instance, mock.sentinel.block_device_info,
-            mock.sentinel.power_on)
+            mock.sentinel.resize_instance, mock.sentinel.allocations,
+            mock.sentinel.block_device_info, mock.sentinel.power_on)
 
         mock_recreate_img_meta.assert_called_once_with(
             mock.sentinel.context, mock.sentinel.instance,

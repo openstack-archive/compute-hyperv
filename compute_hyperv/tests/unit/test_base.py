@@ -15,8 +15,6 @@
 #    under the License.
 from unittest import mock
 
-import eventlet.hubs as hubs
-import monotonic
 from os_win import utilsfactory
 from oslo_utils import importutils
 
@@ -52,11 +50,3 @@ class HyperVBaseTestCase(test.NoDBTestCase):
                 mocked_class)
             patcher.start()
             self.addCleanup(patcher.stop)
-
-
-class MonotonicTestCase(test.NoDBTestCase):
-    def test_monotonic(self):
-        import nova  # noqa
-
-        hub = hubs.get_hub()
-        self.assertEqual(monotonic.monotonic, hub.clock)

@@ -209,7 +209,7 @@ class ImageCache(imagecache.ImageCacheManager):
             return []
 
         backing_files = [base_file]
-        resize_re = re.compile('%s_[0-9]+$' % image)
+        resize_re = re.compile('%s_[0-9]+$' % image, re.IGNORECASE)
         for img in self.unexplained_images:
             match = resize_re.match(img)
             if match:

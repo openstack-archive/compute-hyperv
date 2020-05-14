@@ -134,7 +134,7 @@ class MigrationOps(object):
 
     def _revert_migration_files(self, instance):
         revert_path = instance.system_metadata['backup_location']
-        instance_path = revert_path.rstrip('_revert')
+        instance_path = re.sub('_revert$', '', revert_path)
 
         # the instance dir might still exist, if the destination node kept
         # the files on the original node.
@@ -252,7 +252,8 @@ class MigrationOps(object):
             # CSVs, local paths, and shares are fine.
             # NOTE(claudiub): get rid of the final _revert part of the path.
             # rstrip can remove more than _revert, which is not desired.
-            inst_dir = source_inst_dir.rsplit('_revert', 1)[0]
+            inst_dir = re.sub('_revert$', '', source_inst_dir)
+
             LOG.warning(
                 'Host is configured not to copy disks on cold migration, but '
                 'the instance will not be able to start with the remote path: '
@@ -263,7 +264,7 @@ class MigrationOps(object):
         else:
             # make a copy on the source node's configured location.
             # strip the _revert from the source backup dir.
-            inst_dir = source_inst_dir.rsplit('_revert', 1)[0]
+            inst_dir = re.sub('_revert$', '', source_inst_dir)
             self._pathutils.check_dir(inst_dir, create_dir=True)
 
         export_path = self._pathutils.get_export_dir(
@@ -345,7 +346,7 @@ class MigrationOps(object):
         (disk_files, volume_drives) = self._vmutils.get_vm_storage_paths(
             instance.name)
 
-        pattern = re.compile('configdrive|eph|root')
+        pattern = re.compile('configdrive|eph|root', re.IGNORECASE)
         for disk_file in disk_files:
             disk_name = os.path.basename(disk_file)
             if not pattern.match(disk_name):
@@ -356,7 +357,7 @@ class MigrationOps(object):
             if not os.path.exists(expected_disk_path):
                 raise exception.DiskNotFound(location=expected_disk_path)
 
-            if expected_disk_path != disk_file:
+            if expected_disk_path.lower() != disk_file.lower():
                 LOG.debug("Updating VM disk location from %(src)s to %(dest)s",
                           {'src': disk_file, 'dest': expected_disk_path,
                            'instance': instance})

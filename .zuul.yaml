@@ -11,9 +11,9 @@
 - project:
     templates:
       - openstack-lower-constraints-jobs
+      - release-notes-jobs-python3
     check:
       jobs:
-        - build-openstack-releasenotes
         - build-compute-hyperv-sphinx-docs
     gate:
       jobs:

@@ -56,9 +56,10 @@ project = u'compute_hyperv'
 copyright = u'2017, Cloudbase Solutions'
 
 # openstackdocstheme options
-repository_name = 'openstack/compute-hyperv'
-bug_project = 'compute-hyperv'
-bug_tag = ''
+openstackdocs_repo_name = 'openstack/compute-hyperv'
+openstackdocs_auto_name = False
+openstackdocs_bug_project = 'compute-hyperv'
+openstackdocs_bug_tag = ''
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -100,7 +101,7 @@ exclude_patterns = []
 # show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = 'native'
 
 # A list of ignored prefixes for module index sorting.
 # modindex_common_prefix = []

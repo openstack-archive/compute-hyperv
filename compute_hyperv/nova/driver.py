@@ -24,6 +24,7 @@ import sys
 from nova import context as nova_context
 from nova import exception
 from nova.image import glance
+from nova import objects
 from nova.virt import driver
 from os_win import exceptions as os_win_exc
 from os_win import utilsfactory
@@ -42,6 +43,7 @@ from compute_hyperv.nova import serialconsoleops
 from compute_hyperv.nova import snapshotops
 from compute_hyperv.nova import vmops
 from compute_hyperv.nova import volumeops
+
 
 LOG = logging.getLogger(__name__)
 
@@ -426,7 +428,11 @@ class HyperVDriver(driver.ComputeDriver):
         self._vmops.rescue_instance(context, instance, network_info,
                                     image_meta, rescue_password)
 
-    def unrescue(self, instance, network_info):
+    def unrescue(
+        self,
+        context: nova_context.RequestContext,
+        instance: 'objects.Instance',
+    ):
         self._vmops.unrescue_instance(instance)
 
     def host_maintenance_mode(self, host, mode):

@@ -583,7 +583,7 @@ class HyperVDriverTestCase(test_base.HyperVBaseTestCase):
 
     def test_unrescue(self):
         self.driver.unrescue(
-            mock.sentinel.instance, mock.sentinel.network_info)
+            mock.sentinel.context, mock.sentinel.instance)
 
         self.driver._vmops.unrescue_instance.assert_called_once_with(
             mock.sentinel.instance)

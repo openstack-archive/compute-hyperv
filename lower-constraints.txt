@@ -33,7 +33,7 @@ netifaces==0.10.6
 openstackdocstheme==2.2.1
 os-brick==2.2.0
 os-client-config==1.29.0
-os-win==3.0.0
+os-win==5.2.0
 oslo.concurrency==3.26.0
 oslo.config==5.2.0
 oslo.context==2.20.0

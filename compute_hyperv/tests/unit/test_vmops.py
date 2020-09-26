@@ -722,6 +722,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
         mock_update_vm_resources.assert_called_once_with(
             mock_instance, mock.sentinel.vm_gen, mock.sentinel.image_meta)
 
+    @mock.patch.object(vmops.version, 'product_string')
     @mock.patch.object(vmops.VMOps, '_attach_pci_devices')
     @mock.patch.object(vmops.VMOps, '_set_instance_disk_qos_specs')
     @mock.patch.object(vmops.VMOps, '_get_instance_dynamic_memory_ratio')
@@ -732,6 +733,7 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
                                    mock_get_dynamic_memory_ratio,
                                    mock_set_qos_specs,
                                    mock_attach_pci_devices,
+                                   mock_product_string,
                                    pci_requests=None,
                                    instance_automatic_shutdown=False):
         self.flags(instance_automatic_shutdown=instance_automatic_shutdown,
@@ -768,7 +770,8 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
             dynamic_memory_ratio,
             configuration_root_dir=mock.sentinel.instance_path,
             host_shutdown_action=host_shutdown_action,
-            vnuma_enabled=True)
+            vnuma_enabled=True,
+            chassis_asset_tag=mock_product_string.return_value)
         mock_set_qos_specs.assert_called_once_with(mock_instance,
                                                    mock.sentinel.is_resize)
         mock_attach_pci_devices.assert_called_once_with(

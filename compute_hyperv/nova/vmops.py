@@ -764,7 +764,7 @@ class VMOps(object):
 
         inst_md = instance_metadata.InstanceMetadata(
                       instance, content=injected_files, extra_md=extra_md,
-                      network_info=network_info, request_context=context)
+                      network_info=network_info)
 
         configdrive_path_iso = self._pathutils.get_configdrive_path(
             instance.name, constants.DVD_FORMAT, rescue=rescue)

@@ -30,6 +30,7 @@ from nova import exception
 from nova import objects
 from nova.objects import fields
 from nova import utils
+from nova import version
 from nova.virt import configdrive
 from nova.virt import event as virtevent
 from nova.virt import hardware
@@ -470,7 +471,8 @@ class VMOps(object):
                                 dynamic_memory_ratio,
                                 configuration_root_dir=instance_path,
                                 host_shutdown_action=host_shutdown_action,
-                                vnuma_enabled=vnuma_enabled)
+                                vnuma_enabled=vnuma_enabled,
+                                chassis_asset_tag=version.product_string())
 
         self._set_instance_disk_qos_specs(instance, is_resize)
         self._attach_pci_devices(instance, is_resize)

@@ -189,13 +189,14 @@ class PathUtils(pathutils.PathUtils):
                                      self.get_ephemeral_vhd_path,
                                      eph_name)
 
-    def get_root_vhd_path(self, instance_name, format_ext, rescue=False):
+    def get_root_vhd_path(self, instance_name, format_ext=None, rescue=False):
         instance_path = self.get_instance_dir(instance_name)
         image_name = 'root'
         if rescue:
             image_name += '-rescue'
-        return os.path.join(instance_path,
-                            image_name + '.' + format_ext.lower())
+        if format_ext:
+            image_name += '.' + format_ext.lower()
+        return os.path.join(instance_path, image_name)
 
     def get_configdrive_path(self, instance_name, format_ext,
                              remote_server=None, rescue=False):

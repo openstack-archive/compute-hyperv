@@ -185,7 +185,9 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
     def _prepare_create_root_device_mocks(self, use_cow_images, vhd_format,
                                        vhd_size):
-        mock_instance = fake_instance.fake_instance_obj(self.context)
+        mock_instance = fake_instance.fake_instance_obj(
+            self.context,
+            expected_attrs=['trusted_certs'])
         mock_instance.flavor.root_gb = self.FAKE_SIZE
         self.flags(use_cow_images=use_cow_images)
         self._vmops._vhdutils.get_vhd_info.return_value = {'VirtualSize':
@@ -243,13 +245,13 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
 
         if not vhd_already_exists:
             differencing_vhd.assert_called_with(fake_root_path, fake_vhd_path)
-            self._vmops._vhdutils.get_vhd_info.assert_called_once_with(
-                fake_vhd_path)
 
             if vhd_format is constants.DISK_FORMAT_VHD:
                 self.assertFalse(get_size.called)
                 self.assertFalse(self._vmops._vhdutils.resize_vhd.called)
             else:
+                self._vmops._vhdutils.get_vhd_info.assert_called_once_with(
+                    fake_root_path)
                 get_size.assert_called_once_with(fake_vhd_path,
                                                  root_vhd_internal_size)
                 self._vmops._vhdutils.resize_vhd.assert_called_once_with(
@@ -339,6 +341,44 @@ class VMOpsTestCase(test_base.HyperVBaseTestCase):
     def test_create_root_vhdx_size_less_than_internal(self):
         self._test_create_root_vhd_exception(
             vhd_format=constants.DISK_FORMAT_VHD)
+
+    def test_create_uncached_root_vhd(self):
+        mock_instance = self._prepare_create_root_device_mocks(
+            use_cow_images=False, vhd_format=constants.DISK_FORMAT_VHDX,
+            vhd_size=(self.FAKE_SIZE - 1))
+        mock_instance.vm_state = vm_states.SHELVED_OFFLOADED
+
+        base_root_path = 'root'
+        exp_root_path = 'root.vhdx'
+        self._vmops._pathutils.get_root_vhd_path.return_value = base_root_path
+        self._vmops._imagecache.append_image_format.return_value = (
+            exp_root_path)
+        root_vhd_internal_size = mock_instance.flavor.root_gb * units.Gi
+        get_size = self._vmops._vhdutils.get_internal_vhd_size_by_file_size
+
+        ret_val = self._vmops._create_root_vhd(
+            context=self.context,
+            instance=mock_instance)
+
+        self.assertEqual(exp_root_path, ret_val)
+        self._vmops._imagecache.get_cached_image.assert_not_called()
+        self._vmops._pathutils.get_root_vhd_path.assert_called_with(
+            mock_instance.name, None, False)
+
+        self._vmops._imagecache.fetch.assert_called_once_with(
+            self.context, mock_instance.image_ref, base_root_path,
+            mock_instance.trusted_certs)
+        self._vmops._imagecache.get_image_format.assert_called_once_with(
+            self.context, mock_instance.image_ref, mock_instance)
+        self._vmops._imagecache.append_image_format.assert_called_once_with(
+            base_root_path,
+            self._vmops._imagecache.get_image_format.return_value)
+
+        get_size.assert_called_once_with(exp_root_path,
+                                         root_vhd_internal_size)
+        self._vmops._vhdutils.resize_vhd.assert_called_once_with(
+            exp_root_path, root_vhd_internal_size,
+            is_file_max_size=False)
 
     def test_is_resize_needed_exception(self):
         inst = mock.MagicMock()

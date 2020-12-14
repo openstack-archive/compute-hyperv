@@ -156,55 +156,73 @@ class VMOps(object):
 
     def _create_root_vhd(self, context, instance, rescue_image_id=None):
         is_rescue_vhd = rescue_image_id is not None
+        cache_image = instance.vm_state != vm_states.SHELVED_OFFLOADED
 
-        base_vhd_path = self._imagecache.get_cached_image(context, instance,
-                                                          rescue_image_id)
-        base_vhd_info = self._vhdutils.get_vhd_info(base_vhd_path)
-        base_vhd_size = base_vhd_info['VirtualSize']
-        format_ext = base_vhd_path.split('.')[-1]
-        root_vhd_path = self._pathutils.get_root_vhd_path(instance.name,
-                                                          format_ext,
-                                                          is_rescue_vhd)
-
-        if os.path.exists(root_vhd_path):
-            LOG.info("Root vhd '%s' already exists. Reusing it.",
-                     root_vhd_path)
-            return root_vhd_path
-
-        root_vhd_size = instance.flavor.root_gb * units.Gi
+        if cache_image:
+            base_vhd_path = self._imagecache.get_cached_image(context,
+                                                              instance,
+                                                              rescue_image_id)
+            format_ext = base_vhd_path.split('.')[-1]
+            root_vhd_path = self._pathutils.get_root_vhd_path(instance.name,
+                                                              format_ext,
+                                                              is_rescue_vhd)
+            if os.path.exists(root_vhd_path):
+                LOG.info("Root vhd '%s' already exists. Reusing it.",
+                         root_vhd_path)
+                return root_vhd_path
+        else:
+            LOG.debug("Unshelving instance, avoiding image cache.")
+            base_vhd_path = None
+            root_vhd_path = self._pathutils.get_root_vhd_path(
+                instance.name,
+                None,
+                is_rescue_vhd)
+            self._imagecache.fetch(
+                context, instance.image_ref, root_vhd_path,
+                instance.trusted_certs)
+            glance_img_fmt = self._imagecache.get_image_format(
+                context, instance.image_ref, instance)
+            root_vhd_path = self._imagecache.append_image_format(
+                root_vhd_path, glance_img_fmt)
 
         try:
-            if CONF.use_cow_images:
-                LOG.debug("Creating differencing VHD. Parent: "
-                          "%(base_vhd_path)s, Target: %(root_vhd_path)s",
-                          {'base_vhd_path': base_vhd_path,
-                           'root_vhd_path': root_vhd_path},
-                          instance=instance)
-                self._vhdutils.create_differencing_vhd(root_vhd_path,
-                                                       base_vhd_path)
-                vhd_type = self._vhdutils.get_vhd_format(base_vhd_path)
-                if vhd_type == constants.DISK_FORMAT_VHD:
-                    # The base image has already been resized. As differencing
-                    # vhdx images support it, the root image will be resized
-                    # instead if needed.
-                    return root_vhd_path
-            else:
-                LOG.debug("Copying VHD image %(base_vhd_path)s to target: "
-                          "%(root_vhd_path)s",
-                          {'base_vhd_path': base_vhd_path,
-                           'root_vhd_path': root_vhd_path},
-                          instance=instance)
-                self._pathutils.copyfile(base_vhd_path, root_vhd_path)
+            if cache_image:
+                # When unshelving instances, we're using temporary snapshots
+                # that shouln't be cached.
+                if CONF.use_cow_images:
+                    LOG.debug("Creating differencing VHD. Parent: "
+                              "%(base_vhd_path)s, Target: %(root_vhd_path)s",
+                              {'base_vhd_path': base_vhd_path,
+                               'root_vhd_path': root_vhd_path},
+                              instance=instance)
+                    self._vhdutils.create_differencing_vhd(root_vhd_path,
+                                                           base_vhd_path)
+                    vhd_type = self._vhdutils.get_vhd_format(base_vhd_path)
+                    if vhd_type == constants.DISK_FORMAT_VHD:
+                        # The base image has already been resized. As
+                        # differencing vhdx images support it, the root image
+                        # will be resized instead if needed.
+                        return root_vhd_path
+                else:
+                    LOG.debug("Copying VHD image %(base_vhd_path)s to target: "
+                              "%(root_vhd_path)s",
+                              {'base_vhd_path': base_vhd_path,
+                               'root_vhd_path': root_vhd_path},
+                              instance=instance)
+                    self._pathutils.copyfile(base_vhd_path, root_vhd_path)
 
-            root_vhd_internal_size = (
+            root_vhd_info = self._vhdutils.get_vhd_info(root_vhd_path)
+            root_vhd_size = root_vhd_info['VirtualSize']
+            flavor_size = instance.flavor.root_gb * units.Gi
+            flavor_internal_size = (
                 self._vhdutils.get_internal_vhd_size_by_file_size(
-                    base_vhd_path, root_vhd_size))
+                    base_vhd_path or root_vhd_path, flavor_size))
 
             if not is_rescue_vhd and self._is_resize_needed(
-                    root_vhd_path, base_vhd_size,
-                    root_vhd_internal_size, instance):
+                    root_vhd_path, root_vhd_size,
+                    flavor_internal_size, instance):
                 self._vhdutils.resize_vhd(root_vhd_path,
-                                          root_vhd_internal_size,
+                                          flavor_internal_size,
                                           is_file_max_size=False)
         except Exception:
             with excutils.save_and_reraise_exception():

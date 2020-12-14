@@ -102,7 +102,7 @@ class ImageCache(imagecache.ImageCacheManager):
 
     def get_cached_image(self, context, instance, rescue_image_id=None):
         image_id = rescue_image_id or instance.image_ref
-        image_type = instance.system_metadata['image_disk_format']
+        image_type = self.get_image_format(context, image_id, instance)
         trusted_certs = instance.trusted_certs
         image_path, already_exists = self.cache_image(
             context, image_id, image_type, trusted_certs)
@@ -122,11 +122,37 @@ class ImageCache(imagecache.ImageCacheManager):
 
         return image_path
 
+    def fetch(self, context, image_id, path, trusted_certs=None):
+        with compute_utils.disk_ops_semaphore:
+            images.fetch(context, image_id, path, trusted_certs)
+
+    def append_image_format(self, path, image_type, do_rename=True):
+        if image_type == 'iso':
+            format_ext = 'iso'
+        else:
+            # Historically, the Hyper-V driver allowed VHDX images registered
+            # as VHD. We'll continue to do so for now.
+            format_ext = self._vhdutils.get_vhd_format(path)
+        new_path = path + '.' + format_ext.lower()
+
+        if do_rename:
+            self._pathutils.rename(path, new_path)
+
+        return new_path
+
+    def get_image_format(self, context, image_id, instance=None):
+        image_format = None
+        if instance:
+            image_format = instance.system_metadata['image_disk_format']
+        if not image_format:
+            image_info = images.get_info(context, image_id)
+            image_format = image_info['disk_format']
+        return image_format
+
     def cache_image(self, context, image_id,
                     image_type=None, trusted_certs=None):
         if not image_type:
-            image_info = images.get_info(context, image_id)
-            image_type = image_info['disk_format']
+            image_type = self.get_image_format(context, image_id)
 
         base_image_dir = self._pathutils.get_base_vhd_dir()
         base_image_path = os.path.join(base_image_dir, image_id)
@@ -147,18 +173,11 @@ class ImageCache(imagecache.ImageCacheManager):
 
             if not image_path:
                 try:
-                    with compute_utils.disk_ops_semaphore:
-                        images.fetch(context, image_id, base_image_path,
-                                     trusted_certs)
-                        fetched = True
-
-                    if image_type == 'iso':
-                        format_ext = 'iso'
-                    else:
-                        format_ext = self._vhdutils.get_vhd_format(
-                            base_image_path)
-                    image_path = base_image_path + '.' + format_ext.lower()
-                    self._pathutils.rename(base_image_path, image_path)
+                    self.fetch(context, image_id, base_image_path,
+                               trusted_certs)
+                    fetched = True
+                    image_path = self.append_image_format(
+                        base_image_path, image_type)
                 except Exception:
                     with excutils.save_and_reraise_exception():
                         if self._pathutils.exists(base_image_path):

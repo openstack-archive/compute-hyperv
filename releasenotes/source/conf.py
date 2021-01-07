@@ -52,8 +52,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'compute_hyperv'
-copyright = u'2017, Cloudbase Solutions'
+project = 'compute_hyperv'
+copyright = '2017, Cloudbase Solutions'
 
 # openstackdocstheme options
 openstackdocs_repo_name = 'openstack/compute-hyperv'
@@ -213,8 +213,8 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     ('index', 'compute_hypervReleaseNotes.tex',
-     u'compute_hyperv  Release Notes Documentation',
-     u'Cloudbase Solutions', 'manual'),
+     'compute_hyperv  Release Notes Documentation',
+     'Cloudbase Solutions', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -244,8 +244,8 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'compute_hypervrereleasenotes',
-     u'compute_hyperv  Release Notes Documentation',
-     [u'Cloudbase Solutions'], 1)
+     'compute_hyperv  Release Notes Documentation',
+     ['Cloudbase Solutions'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -259,8 +259,8 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     ('index', 'compute_hyperv ReleaseNotes',
-     u'compute_hyperv Release Notes Documentation',
-     u'Cloudbase Solutions', 'compute_hypervReleaseNotes',
+     'compute_hyperv Release Notes Documentation',
+     'Cloudbase Solutions', 'compute_hypervReleaseNotes',
      'OpenStack Nova Hyper-V Driver.',
      'Miscellaneous'),
 ]

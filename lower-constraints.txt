@@ -1,7 +1,7 @@
 coverage==5.2.1
 ddt==1.2.1
 debtcollector==1.19.0
-eventlet==0.22.0
+eventlet==0.26.1
 mock==3.0.0
 netaddr==0.7.18
 openstackdocstheme==2.2.1

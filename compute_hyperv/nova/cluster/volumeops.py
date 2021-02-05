@@ -32,10 +32,11 @@ class ClusterVolumeOps(volumeops.VolumeOps):
     def _get_volume_driver(self, connection_info):
         driver_type = connection_info.get('driver_volume_type')
         if driver_type in [constants.STORAGE_PROTOCOL_ISCSI,
-                           constants.STORAGE_PROTOCOL_FC]:
+                           constants.STORAGE_PROTOCOL_FC,
+                           constants.STORAGE_PROTOCOL_RBD]:
             err_msg = (
                 "The Hyper-V Cluster driver does not currently support "
-                "passthrough disks (e.g. iSCSI/FC disks). The reason is "
+                "passthrough disks (e.g. iSCSI/FC/RBD disks). The reason is "
                 "that the volumes need to be available on the destination "
                 "host side during an unexpected instance failover. In order "
                 "to leverage your storage backend, you may either use the "

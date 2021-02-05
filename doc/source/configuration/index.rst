@@ -103,8 +103,8 @@ make sure to enable the following config option:
 
 This will ensure that the available paths are actually leveraged. Also, before
 attempting any volume connection, it will ensure that the MPIO service is
-enabled and that passthrough block devices (iSCSI / FC) are claimed by MPIO.
-SMB backed volumes are not affected by this option.
+enabled and that iSCSI and Fibre Channel block devices are claimed by MPIO.
+SMB and RBD volumes are not affected by this option.
 
 In some cases, Nova may fail to attach volumes due to transient connectivity
 issues. The following options specify how many and how often retries should be

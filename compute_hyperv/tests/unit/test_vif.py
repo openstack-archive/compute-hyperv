@@ -68,28 +68,10 @@ class HyperVVIFDriverTestCase(test_base.HyperVBaseTestCase):
     def test_plug_ovs(self, mock_nova_to_osvif_vif,
                       mock_nova_to_osvif_instance,
                       mock_enable_metrics, mock_os_vif):
-        self.flags(enable_instance_metrics_collection=True,
-                   group='hyperv')
-
         vif = {'type': model.VIF_TYPE_OVS}
-        osvif_instance = mock_nova_to_osvif_instance.return_value
-        vif_obj = mock_nova_to_osvif_vif.return_value
-
-        self.vif_driver.plug(mock.sentinel.instance, vif)
-
-        mock_nova_to_osvif_vif.assert_called_once_with(vif)
-        mock_nova_to_osvif_instance.assert_called_once_with(
-            mock.sentinel.instance)
-        connect_vnic = self.vif_driver._netutils.connect_vnic_to_vswitch
-        connect_vnic.assert_called_once_with(
-            CONF.hyperv.vswitch_name, vif_obj.id)
-        mock_os_vif.plug.assert_called_once_with(
-            vif_obj, osvif_instance)
-
-        self._netutils.add_metrics_collection_acls.assert_called_once_with(
-            vif_obj.id)
-        mock_enable_metrics.assert_called_once_with(
-            osvif_instance.name, vif_obj.id)
+        self.assertRaises(exception.VirtualInterfacePlugException,
+                          self.vif_driver.plug,
+                          mock.sentinel.instance, vif)
 
     @ddt.data(True, False)
     def test_enable_metrics(self, vm_running):

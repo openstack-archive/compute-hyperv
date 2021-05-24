@@ -15,13 +15,10 @@ https://cloudbase.it/openstack-hyperv-driver/
 
 The MSI can optionally include the installation and / or configuration of:
 
-* Neutron L2 agents: Neutron Hyper-V Agent, Neutron OVS Agent (if OVS is
-  installed on the compute node).
+* Neutron Hyper-V Agent
 * Ceilometer Polling Agent.
 * Windows Services for the mentioned agents.
 * Live migration feature (if the compute node is joined in an AD).
-* OVS vSwitch extension, OVS bridge, OVS tunnel IP (if OVS is installed, and
-  Neutron OVS Agent is used).
 * Free RDP
 * iSCSI Initiator
 
@@ -44,7 +41,7 @@ configurations are:
   configuration files are installed. By default, they are installed in:
   ``%ProgramFiles%\Cloudbase Solutions\OpenStack\Nova``
 * SKIPNOVACONF: Installs the MSI without doing any of the other actions:
-  creating configuration files, services, vSwitches, OVS bridges, etc.
+  creating configuration files, services, vSwitches, etc.
 
 Example:
 

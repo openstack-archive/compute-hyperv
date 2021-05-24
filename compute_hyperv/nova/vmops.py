@@ -334,7 +334,6 @@ class VMOps(object):
                 # waiting will occur after the instance is created.
                 self.create_instance(context, instance, network_info,
                                      block_device_info, vm_gen, image_meta)
-                # This is supported starting from OVS version 2.5
                 self.plug_vifs(instance, network_info)
 
             self.update_device_metadata(context, instance)

@@ -16,8 +16,7 @@ running the following:
     nova service-list
 
 The output should contain the Hyper-V host's ``nova-compute`` service and
-Neutron L2 agent (either a Neutron Hyper-V Agent, or a Neutron OVS Agent) as
-alive / running.
+Neutron L2 agent as alive / running.
 
 Starting with Ocata, Nova cells became mandatory. Make sure that the newly
 added Hyper-V compute node is mapped into a Nova cell, otherwise Nova will not
@@ -89,5 +88,4 @@ installed, the Neutron Server service will have to be restarted.
 
 Additionally, keep in mind that the Neutron Hyper-V Agent only supports the
 following network types: local, flat, VLAN. Ports with any other network
-type will result in a PortBindingFailure exception. If tunneling is desired,
-the Neutron OVS Agent should be used instead.
+type will result in a PortBindingFailure exception.

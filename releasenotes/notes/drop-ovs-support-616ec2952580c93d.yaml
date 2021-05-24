@@ -1,0 +1,6 @@
+---
+deprecations:
+  - |
+    Windows OVS support is no longer maintained. The Neutron OVS agent no longer
+    starts on Windows either since Wallaby. Please consider using the
+    networking-hyperv Neutron ML2 agent instead.

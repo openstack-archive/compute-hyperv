@@ -8,7 +8,7 @@ openstackdocstheme==2.2.1
 os-brick==4.3.1
 os-win==5.4.0
 oslo.concurrency==4.4.0
-oslo.config==6.8.0
+oslo.config==8.6.0
 oslo.context==3.1.1
 oslo.i18n==5.0.1
 oslo.log==4.4.0

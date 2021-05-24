@@ -28,8 +28,6 @@ from unittest import mock
 
 import fixtures
 from nova.tests import fixtures as nova_fixtures
-from nova.tests.unit import conf_fixture
-from nova.tests.unit import policy_fixture
 from oslo_log.fixture import logging_error as log_fixture
 from oslo_log import log as logging
 from oslotest import base
@@ -98,14 +96,14 @@ class NoDBTestCase(base.BaseTestCase):
         self.useFixture(log_fixture.get_logging_handle_error_fixture())
 
         self.useFixture(nova_fixtures.StandardLogging())
-        self.useFixture(conf_fixture.ConfFixture(CONF))
+        self.useFixture(nova_fixtures.ConfFixture(CONF))
 
         # NOTE(blk-u): WarningsFixture must be after the Database fixture
         # because sqlalchemy-migrate messes with the warnings filters.
         self.useFixture(nova_fixtures.WarningsFixture())
 
         self.addCleanup(self._clear_attrs)
-        self.policy = self.useFixture(policy_fixture.PolicyFixture())
+        self.policy = self.useFixture(nova_fixtures.PolicyFixture())
 
         self.useFixture(nova_fixtures.PoisonFunctions())
 

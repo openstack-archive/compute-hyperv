@@ -18,7 +18,7 @@ Communication
 
 We recommend using the standard communication channels, such as the OpenStack
 mailing list or IRC channels. The official IRC channel (#openstack-hyper-v) is
-not archived at the moment, so we recommend using #openstack-dev.
+not archived at the moment, so we recommend using #openstack-dev on OFTC.
 
 Please include one of the following tags when using the OpenStack mailing
 list:

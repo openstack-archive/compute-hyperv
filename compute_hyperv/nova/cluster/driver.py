@@ -48,7 +48,7 @@ class HyperVClusterDriver(driver.HyperVDriver):
         self._clops.add_to_cluster(instance)
 
     def destroy(self, context, instance, network_info, block_device_info=None,
-                destroy_disks=True):
+                destroy_disks=True, destroy_secrets=True):
         self._clops.remove_from_cluster(instance)
         super(HyperVClusterDriver, self).destroy(
             context, instance, network_info, block_device_info,

@@ -10,7 +10,7 @@
     templates:
       - build-release-notes-jobs-python3
       - check-requirements
-      - openstack-python3-yoga-jobs
+      - openstack-python3-zed-jobs
     check:
       jobs:
         - compute-hyperv-openstack-tox-docs

@@ -98,8 +98,10 @@ class CoordinatorTestCase(test_base.HyperVBaseTestCase):
         self.assertFalse(agent.started)
 
 
-@mock.patch.object(coordination.COORDINATOR, 'get_lock')
 class CoordinationTestCase(test_base.HyperVBaseTestCase):
+    MOCK_TOOZ = False
+
+    @mock.patch.object(coordination.COORDINATOR, 'get_lock')
     def test_synchronized(self, get_lock):
         @coordination.synchronized('lock-{f_name}-{foo.val}-{bar[val]}')
         def func(foo, bar):

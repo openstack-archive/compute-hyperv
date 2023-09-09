@@ -1,16 +1,10 @@
-===============================
-compute-hyperv
-===============================
+This project is no longer maintained.
+  
+The contents of this repository are still available in the Git
+source code management system.  To see the contents of this
+repository before it reached its end of life, please check out the
+previous commit with "git checkout HEAD^1".
 
-Hyper-V Nova Driver
-
-* Free software: Apache license
-* Documentation: https://docs.openstack.org/nova/pike/admin/configuration/hypervisors.html
-* Source: http://git.openstack.org/cgit/openstack/compute-hyperv
-* Bugs: http://bugs.launchpad.net/compute-hyperv
-* Release Notes: https://docs.openstack.org/releasenotes/compute-hyperv
-
-Features
---------
-
-* TODO
+For any further questions, please email
+openstack-discuss@lists.openstack.org or join #openstack-dev on
+OFTC.
